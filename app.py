@@ -14,12 +14,17 @@ from google.oauth2 import service_account
 from spotify_logic import load_album_data, get_albums_by_artist, extract_album_id
 from google.oauth2.service_account import Credentials
 # Setup
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+import json
+from google.oauth2.service_account import Credentials
+import gspread
+
 creds_info = json.loads(os.environ['GOOGLE_SERVICE_ACCOUNT_JSON'])
-creds = Credentials.from_service_account_file(
+
+creds = Credentials.from_service_account_info(
     creds_info,
     scopes=["https://www.googleapis.com/auth/spreadsheets"]
 )
+
 client = gspread.authorize(creds)
 SPREADSHEET_ID = '15E4b-DWSYP9AzbAzSviqkW-jEOktbimPlmhNIs_d5jc'
 SHEET_NAME = "Sheet1"
