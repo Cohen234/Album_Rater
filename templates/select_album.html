@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Albums by {{ artist_name }}</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      animation: bgfade 15s infinite alternate;
+      background: linear-gradient(-45deg, #ffecd2, #fcb69f, #a1c4fd, #c2e9fb);
+      background-size: 400% 400%;
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
+    }
+
+    @keyframes bgfade {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    h1 {
+      text-align: center;
+      margin: 20px 0;
+      color: #333;
+    }
+
+    .album-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      column-gap: 20px;
+      row-gap: 40px;
+      padding: 20px 40px;
+      width: 100vw;
+      box-sizing: border-box;
+    }
+
+    .album-card {
+      background: rgba(255, 255, 255, 0.85);
+      padding: 12px;
+      border-radius: 12px;
+      text-align: center;
+      box-shadow: 0 0 12px rgba(0, 0, 0, 0.15);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      height: 100%;
+    }
+
+    .album-card img {
+      width: 100%;
+      border-radius: 10px;
+      flex-grow: 1;
+      object-fit: cover;
+      margin-bottom: 12px;
+    }
+
+    .album-name {
+      font-weight: bold;
+      margin: 0 0 8px 0;
+      font-size: 1em;
+      color: #222;
+      min-height: 2.5em; /* fix height so text lines up */
+    }
+
+    .stars {
+      font-size: 36px;
+      color: gold;
+      margin: 4px 0;
+      user-select: none;
+    }
+
+    .stats {
+      font-size: 0.9em;
+      color: #555;
+      margin-top: 6px;
+      line-height: 1.3;
+    }
+
+    button {
+      margin-top: 12px;
+      padding: 8px 14px;
+      font-size: 0.95em;
+      border-radius: 8px;
+      border: none;
+      background-color: #fcb69f;
+      color: #fff;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    button:hover {
+      background-color: #f99a77;
+    }
+  </style>
+</head>
+<body>
+  <h1>{{ artist_name }}</h1>
+
+  <div class="album-grid">
+  {% for album in albums %}
+    <div class="album-card">
+      <form action="{{ url_for('view_album') }}" method="post" style="display: flex; flex-direction: column; height: 100%;">
+        <input type="hidden" name="album_url" value="{{ album.url }}">
+        <img src="{{ album.image }}" alt="{{ album.name }}">
+
+        <h3 class="album-name" title="{{ album.name }}">
+          {{ album.name }}
+          {% if album.stats and album.stats.ranking_status == "paused" %}
+            <span title="Paused" style="color: orange; font-size: 1.2rem; margin-left: 0.5rem;">⏸️</span>
+          {% endif %}
+        </h3>
+
+        {% if album.stats %}
+          <div class="stars" aria-label="Ranking stars">
+            {% set count = album.stats.finalized_rank_count or 0 %}
+            {% if count >= 5 %}
+              ★ ★ ★
+            {% elif count >= 3 %}
+              ★ ★ ☆
+            {% elif count >= 1 %}
+              ★ ☆ ☆
+            {% else %}
+              ☆ ☆ ☆
+            {% endif %}
+          </div>
+          <div class="stats">
+            Last Ranked: {{ album.stats.last_final_rank_date.split(" ")[0] if album.stats.last_final_rank_date }}<br>
+            Latest Score: {{ album.stats.last_final_avg_rank if album.stats.last_final_avg_rank else "N/A" }}
+          </div>
+        {% else %}
+          <div class="stars">☆ ☆ ☆</div>
+          <div class="stats">Not ranked yet</div>
+        {% endif %}
+
+        <button type="submit">Rank Album</button>
+      </form>
+    </div>
+  {% endfor %}
+</div>
+</body>
+</html>

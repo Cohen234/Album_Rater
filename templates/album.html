@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>{{ album.album_name }}</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      /* Background gradient with dominant album color */
+      background: {{ bg_color }};
+      background: linear-gradient(120deg, {{ bg_color }}, #ffffff);
+      transition: background 1.5s ease-in-out;
+    }
+
+    .header-container {
+      display: flex;
+      align-items: flex-start;
+      padding: 1rem 2rem;
+      position: relative;
+      max-width: 900px;
+      margin: auto;
+      gap: 2rem; /* space between album art and album info */
+    }
+
+    .album-art-container {
+      width: 160px;
+      display: flex;
+      justify-content: center; /* center album art horizontally inside this container */
+    }
+
+    .album-art {
+      width: 150px;
+      height: auto;
+      border-radius: 16px;
+      box-shadow: 0 0 12px rgba(0,0,0,0.2);
+      object-fit: contain;
+    }
+
+    .album-info {
+      flex: 1;
+      text-align: center; /* Center the title info horizontally */
+    }
+
+    .album-info h1 {
+      font-weight: bold;
+      margin: 0 0 0.25rem 0;
+      font-size: 2rem;
+    }
+
+    .album-info p {
+      margin: 0.15rem 0;
+      font-weight: normal;
+      color: #555;
+    }
+
+    /* Songs below, aligned left, with margin so it lines up with album info */
+    .songs-list {
+      max-width: 900px;
+      margin: 1rem auto 2rem auto;
+      padding-left: 2rem; /* align left margin with album info start */
+      text-align: left;
+    }
+
+    .track {
+      display: flex;
+      justify-content: space-between;
+      margin: 0.5rem 0;
+      padding: 0.5rem;
+      background: rgba(255, 255, 255, 0.7);
+      border-radius: 8px;
+      align-items: center;
+    }
+
+    .track span {
+      flex: 1;
+      font-weight: normal;
+    }
+
+    .track input[type="number"] {
+      width: 70px;
+      margin-left: 1rem;
+    }
+
+    .submit-btn {
+      margin-top: 1.5rem;
+      padding: 10px 20px;
+      font-size: 1.1rem;
+      background-color: #333;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      display: block;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    label {
+      display: block;
+      margin-top: 1rem;
+      text-align: center;
+      font-weight: bold;
+    }
+
+    select {
+      margin-left: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header with album art and info side-by-side -->
+  <div class="header-container">
+    <div class="album-art-container">
+      <img src="{{ album.album_cover_url }}" alt="{{ album.album_name }} cover" class="album-art" />
+    </div>
+
+    <div class="album-info">
+      <h1>{{ album.album_name }}</h1>
+      <p><strong>Artist:</strong> {{ album.artist_name }}</p>
+      <p><strong>Times Ranked:</strong> {{ stats.finalized_rank_count }}</p>
+      <p><strong>Latest Avg Rank:</strong> {{ stats.last_final_avg_rank }}</p>
+      <p><strong>Last Ranked:</strong> {{ stats.last_final_rank_date }}</p>
+    </div>
+  </div>
+
+  <!-- Songs list form below header -->
+  <form class="songs-list" action="/save_album" method="post">
+    <input type="hidden" name="album_name" value="{{ album.album_name }}">
+    <input type="hidden" name="artist_name" value="{{ album.artist_name }}">
+    {% for song in album.songs %}
+      <div class="track">
+        <span>{{ loop.index }}. {{ song.song_name }}</span>
+        <input type="number"
+           name="ranking_{{ loop.index0 }}"
+           min="1" max="10" step="0.1"
+           placeholder="Rank"
+           value="{{ saved_rankings[song.song_name] if saved_rankings and song.song_name in saved_rankings else '' }}">
+        <input type="hidden" name="song_name_{{ loop.index0 }}" value="{{ song.song_name }}">
+      </div>
+    {% endfor %}
+
+<div class="track">
+  <span><strong>Overall Album Score:</strong></span>
+  <input type="number"
+         name="overall_score"
+         min="1" max="10" step="0.1"
+         placeholder="Score"
+         value="{{ saved_overall_score if saved_overall_score else '' }}">
+</div>
+
+    <label>Status:
+      <select name="status">
+        <option value="final">Final</option>
+        <option value="paused">Paused</option>
+      </select>
+    </label>
+
+    <button class="submit-btn" type="submit">Save Rating</button>
+  </form>
+
+</body>
+</html>
