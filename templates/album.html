@@ -6,39 +6,37 @@
     body {
       margin: 0;
       font-family: 'Segoe UI', sans-serif;
-      /* Background gradient with dominant album color */
-      background: {{ bg_color }};
       background: linear-gradient(120deg, {{ bg_color }}, #ffffff);
       transition: background 1.5s ease-in-out;
     }
 
     .header-container {
       display: flex;
+      flex-wrap: wrap; /* allows column stacking on small screens */
       align-items: flex-start;
       padding: 1rem 2rem;
       position: relative;
       max-width: 900px;
       margin: auto;
-      gap: 2rem; /* space between album art and album info */
+      gap: 2rem;
     }
 
     .album-art-container {
       width: 160px;
       display: flex;
-      justify-content: center; /* center album art horizontally inside this container */
+      justify-content: center;
+      flex-shrink: 0;
     }
 
     .album-art {
       width: 150px;
-      height: auto;
       border-radius: 16px;
       box-shadow: 0 0 12px rgba(0,0,0,0.2);
-      object-fit: contain;
     }
 
     .album-info {
       flex: 1;
-      text-align: center; /* Center the title info horizontally */
+      text-align: center;
     }
 
     .album-info h1 {
@@ -53,11 +51,11 @@
       color: #555;
     }
 
-    /* Songs below, aligned left, with margin so it lines up with album info */
     .songs-list {
       max-width: 900px;
       margin: 1rem auto 2rem auto;
-      padding-left: 2rem; /* align left margin with album info start */
+      padding-left: 2rem;
+      padding-right: 2rem;
       text-align: left;
     }
 
@@ -69,6 +67,7 @@
       background: rgba(255, 255, 255, 0.7);
       border-radius: 8px;
       align-items: center;
+      flex-wrap: wrap;
     }
 
     .track span {
@@ -77,7 +76,7 @@
     }
 
     .track input[type="number"] {
-      width: 70px;
+      width: 100px;
       margin-left: 1rem;
     }
 
@@ -104,6 +103,70 @@
 
     select {
       margin-left: 0.5rem;
+    }
+
+    /* Phones (max width 480px) */
+    @media (max-width: 480px) {
+      .header-container {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+
+      .album-info h1 {
+        font-size: 1.4rem;
+      }
+
+      .songs-list {
+        padding-left: 1rem;
+        padding-right: 1rem;
+      }
+
+      .track {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .track input[type="number"] {
+        width: 100%;
+        margin: 0.5rem 0 0 0;
+      }
+
+      .submit-btn {
+        width: 100%;
+      }
+    }
+
+    /* Tablets (481px to 1023px) */
+    @media (min-width: 481px) and (max-width: 1023px) {
+      .album-info h1 {
+        font-size: 1.8rem;
+      }
+
+      .track input[type="number"] {
+        width: 80px;
+      }
+
+      .songs-list {
+        padding-left: 1.5rem;
+        padding-right: 1.5rem;
+      }
+    }
+
+    /* Laptops and larger (1024px+) */
+    @media (min-width: 1024px) {
+      .album-info h1 {
+        font-size: 2rem;
+      }
+
+      .track input[type="number"] {
+        width: 100px;
+      }
+
+      .songs-list {
+        padding-left: 2rem;
+        padding-right: 2rem;
+      }
     }
   </style>
 </head>
