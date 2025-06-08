@@ -89,19 +89,19 @@ def get_album_stats(album_name, artist_name, df=None):
     }
 @app.route("/submit_rankings", methods=["POST"])
 def submit_rankings():
-    album_name = request.form.get("album_name")
-    artist_name = request.form.get("artist_name")
+    album_name    = request.form.get("album_name", "").strip()
+    artist_name   = request.form.get("artist_name", "").strip()
     selected_rank_str = request.form.get("selected_rank", "").strip()
-    ranking_data_str = request.form.get("ranking_data", "").strip()
-    status = request.form.get("Ranking Status")
+    ranking_data_str  = request.form.get("ranking_data", "").strip()
+    status        = request.form.get("Ranking Status", "").strip()
 
-    # Validate selected_rank
+    # 1) Validate selected_rank
     try:
         selected_rank = float(selected_rank_str)
     except ValueError:
         return "Error: Invalid rank group selected.", 400
 
-    # Validate ranking_data
+    # 2) Validate ranking_data (which should be a JSON array of song names)
     try:
         ranking_data = json.loads(ranking_data_str)
     except json.JSONDecodeError:
@@ -110,41 +110,51 @@ def submit_rankings():
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     songs = []
 
-    # Assign sub-ranks based on order
+    # 3) Build new rows with sub‐ranks based on order
     sub_step = 0.5 / max(len(ranking_data), 1)
     for i, song_name in enumerate(ranking_data):
-        rank = selected_rank - 0.25 + (i + 0.5) * sub_step
+        rank_val = selected_rank - 0.25 + (i + 0.5) * sub_step
         songs.append({
-            "Album Name": album_name,
-            "Artist Name": artist_name,
-            "Song Name": song_name,
-            "Ranking": round(rank, 2),
+            "Album Name":    album_name,
+            "Artist Name":   artist_name,
+            "Song Name":     song_name,
+            "Ranking":       round(rank_val, 2),
             "Ranking Status": status,
-            "Ranked Date": now
+            "Ranked Date":   now
         })
 
-    # Google Sheets update logic
+    # 4) Read existing sheet
     sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
     df_existing = get_as_dataframe(sheet, evaluate_formulas=True).fillna("")
-    df_existing["Album Name"] = df_existing["Album Name"].str.strip().str.lower()
-    df_existing["Artist Name"] = df_existing["Artist Name"].str.strip().str.lower()
 
-    album_key = album_name.strip().lower()
+    # 5) Normalize text columns
+    df_existing["Album Name"]  = df_existing["Album Name"].astype(str).str.strip().str.lower()
+    df_existing["Artist Name"] = df_existing["Artist Name"].astype(str).str.strip().str.lower()
+    df_existing["Ranking Status"] = df_existing["Ranking Status"].astype(str).str.strip()
+
+    # 6) Coerce "Ranking" column to numeric so we can do >= / <=
+    df_existing["Ranking"] = pd.to_numeric(df_existing["Ranking"], errors="coerce")
+
+    album_key  = album_name.strip().lower()
     artist_key = artist_name.strip().lower()
 
-    # Remove existing entries in this rank group
+    # 7) Remove any existing rows in THIS exact (status, album, artist, and numeric‐ranking band)
+    lower = selected_rank - 0.25
+    upper = selected_rank + 0.25
+
     mask = ~(
         (df_existing["Album Name"] == album_key) &
         (df_existing["Artist Name"] == artist_key) &
         (df_existing["Ranking Status"] == status) &
-        (df_existing["Ranking"] >= selected_rank - 0.25) &
-        (df_existing["Ranking"] <= selected_rank + 0.25)
+        (df_existing["Ranking"].between(lower, upper))
     )
     df_filtered = df_existing[mask]
 
+    # 8) Append our newly built DataFrame of "songs"
     df_new = pd.DataFrame(songs)
     final_df = pd.concat([df_filtered, df_new], ignore_index=True)
 
+    # 9) Overwrite the sheet
     sheet.clear()
     set_with_dataframe(sheet, final_df)
 
@@ -243,6 +253,7 @@ def get_ranked_songs():
     # Normalize text columns for matching
     df["Album Name"]  = df["Album Name"].astype(str).str.strip().str.lower()
     df["Artist Name"] = df["Artist Name"].astype(str).str.strip().str.lower()
+    df["Ranking"] = pd.to_numeric(df["Ranking"], errors="coerce")
 
     album_key  = album_name.strip().lower()
     artist_key = artist_name.strip().lower()
