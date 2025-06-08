@@ -17,6 +17,7 @@ from google.oauth2.service_account import Credentials
 import json
 from google.oauth2.service_account import Credentials
 import gspread
+import traceback
 
 creds_info = json.loads(os.environ['GOOGLE_SERVICE_ACCOUNT_JSON'])
 
@@ -218,7 +219,7 @@ def view_album():
     album_cover_url = album["album_cover_url"]
     bg_color        = get_dominant_color(album_cover_url)
 
-    return render_template("album_ui.html",
+    return render_template("album.html",
         album={
             "album_name":        album_name,
             "artist_name":       artist_name,
