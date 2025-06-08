@@ -122,6 +122,11 @@
       font-size: 0.9rem;
       color: green;
     }
+    .rank-buttons button.rank-selected {
+      background-color: #a1c4fd;   /* pick any highlight color you like */
+      color: #ffffff;              /* white text, for contrast */
+      box-shadow: 0 0 6px rgba(0,0,0,0.2);
+    }
 
     select {
       margin-top: 1rem;
@@ -191,6 +196,16 @@
     document.getElementById('selected_rank').value = rank;
     currentRank = rank;
     document.getElementById('rankedList').innerHTML = ''; // Clear prior list
+    document.querySelectorAll('.rank-buttons button').forEach(btn => {
+      btn.classList.remove('rank-selected');
+    });
+
+    // 2) Add “rank-selected” to the one we just clicked:
+    const chosenBtn = Array.from(document.querySelectorAll('.rank-buttons button'))
+                          .find(btn => btn.textContent.trim() == rank.toString());
+    if (chosenBtn) {
+      chosenBtn.classList.add('rank-selected');
+    }
 
     fetch(`/get_ranked_songs?album_name={{ album.album_name }}&artist_name={{ album.artist_name }}&rank=${rank}`)
       .then(response => response.json())

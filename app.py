@@ -89,74 +89,78 @@ def get_album_stats(album_name, artist_name, df=None):
     }
 @app.route("/submit_rankings", methods=["POST"])
 def submit_rankings():
-    album_name    = request.form.get("album_name", "").strip()
-    artist_name   = request.form.get("artist_name", "").strip()
+    album_name = request.form.get("album_name")
+    artist_name = request.form.get("artist_name")
     selected_rank_str = request.form.get("selected_rank", "").strip()
-    ranking_data_str  = request.form.get("ranking_data", "").strip()
-    status        = request.form.get("Ranking Status", "").strip()
+    ranking_data_str = request.form.get("ranking_data", "").strip()
+    status = request.form.get("Ranking Status")  # e.g. "final" or "paused" or "prelim_only"
 
-    # 1) Validate selected_rank
+    # 1) Validate & parse
     try:
         selected_rank = float(selected_rank_str)
     except ValueError:
         return "Error: Invalid rank group selected.", 400
 
-    # 2) Validate ranking_data (which should be a JSON array of song names)
     try:
         ranking_data = json.loads(ranking_data_str)
     except json.JSONDecodeError:
         return "Error: Invalid song ranking data.", 400
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    songs = []
+    new_rows = []
 
-    # 3) Build new rows with sub‐ranks based on order
+    # 2) Build a list of dictionaries for each song in this “final” bucket
+    #    We map each song in ranking_data into a sub-rank between selected_rank−0.25 and +0.25
     sub_step = 0.5 / max(len(ranking_data), 1)
     for i, song_name in enumerate(ranking_data):
         rank_val = selected_rank - 0.25 + (i + 0.5) * sub_step
-        songs.append({
-            "Album Name":    album_name,
-            "Artist Name":   artist_name,
-            "Song Name":     song_name,
-            "Ranking":       round(rank_val, 2),
-            "Ranking Status": status,
-            "Ranked Date":   now
+        new_rows.append({
+            "Album Name": album_name,
+            "Artist Name": artist_name,
+            "Song Name": song_name,
+            "Ranking": round(rank_val, 2),
+            "Ranking Status": status,            # "final" or "paused" or "prelim_only"
+            "Ranked Date": now
         })
 
-    # 4) Read existing sheet
+    # 3) Open the Sheet and load existing contents
     sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
     df_existing = get_as_dataframe(sheet, evaluate_formulas=True).fillna("")
 
-    # 5) Normalize text columns
-    df_existing["Album Name"]  = df_existing["Album Name"].astype(str).str.strip().str.lower()
-    df_existing["Artist Name"] = df_existing["Artist Name"].astype(str).str.strip().str.lower()
-    df_existing["Ranking Status"] = df_existing["Ranking Status"].astype(str).str.strip()
+    # If the sheet is completely empty (no rows at all), create the right columns:
+    if df_existing.empty:
+        df_existing = pd.DataFrame(columns=[
+            "Album Name", "Artist Name", "Song Name", "Ranking", "Ranking Status", "Ranked Date"
+        ])
 
-    # 6) Coerce "Ranking" column to numeric so we can do >= / <=
+    # 4) Normalize text columns for filtering
+    df_existing["Album Name"] = (
+        df_existing["Album Name"].astype(str).str.strip().str.lower()
+    )
+    df_existing["Artist Name"] = (
+        df_existing["Artist Name"].astype(str).str.strip().str.lower()
+    )
+    # Make sure “Ranking” is numeric so comparisons work:
     df_existing["Ranking"] = pd.to_numeric(df_existing["Ranking"], errors="coerce")
 
-    album_key  = album_name.strip().lower()
+    album_key = album_name.strip().lower()
     artist_key = artist_name.strip().lower()
 
-    # 7) Remove any existing rows in THIS exact (status, album, artist, and numeric‐ranking band)
-    lower = selected_rank - 0.25
-    upper = selected_rank + 0.25
-
+    # 5) Build a mask to *drop any existing “final” rows* for this album/artist
+    #    (so that when we write our new “final” rows, they replace old ones)
     mask = ~(
         (df_existing["Album Name"] == album_key) &
         (df_existing["Artist Name"] == artist_key) &
-        (df_existing["Ranking Status"] == status) &
-        (df_existing["Ranking"].between(lower, upper))
+        (df_existing["Ranking Status"] == "final")
     )
-    df_filtered = df_existing[mask]
+    df_kept = df_existing[mask].copy()
 
-    # 8) Append our newly built DataFrame of "songs"
-    df_new = pd.DataFrame(songs)
-    final_df = pd.concat([df_filtered, df_new], ignore_index=True)
+    # 6) Concatenate the kept rows + our new “final” rows
+    df_to_write = pd.concat([df_kept, pd.DataFrame(new_rows)], ignore_index=True)
 
-    # 9) Overwrite the sheet
+    # 7) Clear the sheet and push the updated DataFrame back
     sheet.clear()
-    set_with_dataframe(sheet, final_df)
+    set_with_dataframe(sheet, df_to_write)
 
     return redirect(url_for("index"))
 @app.route('/')
