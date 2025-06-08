@@ -231,23 +231,38 @@ def load_albums_by_artist_route():
 
 @app.route('/view_album', methods=['POST'])
 def view_album():
-    # Must match method="post" from the form in select_album.html
+    # (1) Match method="post" from select_album.html
     album_url = request.form.get("album_url")
     if not album_url:
         return "Missing album_url", 400
 
+    # (2) Load Spotify data. Make sure load_album_data(...) returns something like:
+    #     {
+    #       "album_name": "The College Dropout",
+    #       "artist_name": "Kanye West",
+    #       "album_cover_url": "https://…jpg",
+    #       "songs": [
+    #           { "name": "We Don’t Care", "id": "…", … },
+    #           { "name": "Graduation Day", "id": "…", … },
+    #           …
+    #       ]
+    #     }
     album = load_album_data(album_url)
     album_name  = album["album_name"]
     artist_name = album["artist_name"]
 
+    # (3) Read the entire sheet once:
     sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
     df = get_as_dataframe(sheet, evaluate_formulas=True).fillna("")
 
-    album_key  = album_name.strip().lower()
-    artist_key = artist_name.strip().lower()
+    # (4) Normalize for matching
     df["Album Name"]  = df["Album Name"].astype(str).str.strip().str.lower()
     df["Artist Name"] = df["Artist Name"].astype(str).str.strip().str.lower()
 
+    album_key  = album_name.strip().lower()
+    artist_key = artist_name.strip().lower()
+
+    # (5) Find any paused rows for this album/artist
     paused_df = df[
         (df["Album Name"] == album_key) &
         (df["Artist Name"] == artist_key) &
@@ -255,26 +270,39 @@ def view_album():
     ]
 
     songs = []
+    # (6) If there are paused rows, use them (pull out Song Name + saved Ranking)
     for _, row in paused_df.iterrows():
         songs.append({
-            'song_name': row['Song Name'],
-            'prelim_rank': row['Ranking']
+            "song_name": row["Song Name"],
+            "prelim_rank": row["Ranking"]
         })
 
+    # (7) Otherwise, fall back to the raw track list from Spotify.
+    #     Each item in album["songs"] is a dict with at least a "name" key.
     if not songs:
-        songs_list = album["songs"]  # List of track names from Spotify
-        songs = [{'song_name': s, 'prelim_rank': ''} for s in songs_list]
+        songs = [
+            {"song_name": track["name"], "prelim_rank": ""}
+            for track in album["songs"]
+        ]
 
+    # (8) Get the album cover URL and compute a background color via ColorThief
     album_cover_url = album["album_cover_url"]
-    # Compute a background color or fallback to white
-    bg_color = get_album_stats(album_name, artist_name, df=df)['last_final_avg_rank'] or "#ffffff"
+    try:
+        bg_color = get_dominant_color(album_cover_url)
+    except Exception:
+        # If ColorThief fails for whatever reason, default to white
+        bg_color = "#ffffff"
 
-    return render_template("album.html", album={
-        'album_name': album_name,
-        'artist_name': artist_name,
-        'songs': songs,
-        'album_cover_url': album_cover_url
-    }, bg_color=bg_color)
+    # (9) Render album.html exactly the way the template expects:
+    return render_template("album.html",
+        album={
+            "album_name": album_name,
+            "artist_name": artist_name,
+            "songs": songs,
+            "album_cover_url": album_cover_url
+        },
+        bg_color=bg_color
+    )
 @app.route("/get_ranked_songs")
 def get_ranked_songs():
     """

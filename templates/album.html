@@ -1,4 +1,3 @@
-<!-- templates/album.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -11,7 +10,7 @@
       padding: 0;
       height: 100%;
       font-family: 'Segoe UI', sans-serif;
-      /* Use the bg_color passed in as a solid color (you can also do a gradient if desired) */
+      /* Use bg_color as a valid CSS color string (e.g. "rgb(123,45,67)") */
       background-color: {{ bg_color }};
       transition: background 1.5s ease-in-out;
       display: flex;
@@ -22,7 +21,7 @@
       display: flex;
       align-items: center;
       padding: 1rem;
-      background-color: rgba(255,255,255,0.8);
+      background-color: rgba(255, 255, 255, 0.8);
       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
       z-index: 10;
     }
@@ -112,10 +111,10 @@
       box-shadow: 0 0 6px rgba(0,0,0,0.2);
     }
 
-    /* Make the ranked-list area taller/bigger */
+    /* Make the “Ranked List” area taller/bigger */
     .ranked-list {
-      flex: 1;                   /* Fill vertical space within right-panel */
-      min-height: 300px;         /* Ensure it’s not too small */
+      flex: 1;            /* Fill vertical space in right-panel */
+      min-height: 300px;  /* Ensure it’s not too small */
       border: 2px dashed #aaa;
       border-radius: 8px;
       padding: 1rem;
@@ -125,7 +124,7 @@
 
     /* Container to hold the two submit buttons at the bottom */
     .submit-container {
-      margin-top: auto;          /* Push it to the bottom of right-panel */
+      margin-top: auto;   /* Push buttons to bottom */
       display: flex;
       flex-direction: column;
       gap: 0.75rem;
@@ -145,7 +144,6 @@
     .submit-btn.pause {
       background-color: #f0a500;
     }
-
     .submit-btn.pause:hover {
       background-color: #d18e00;
     }
@@ -153,7 +151,6 @@
     .submit-btn.final {
       background-color: #1f7a8c;
     }
-
     .submit-btn.final:hover {
       background-color: #155c65;
     }
@@ -183,10 +180,10 @@
     </div>
   </div>
 
-  <!-- One single form wraps both panels -->
+  <!-- One single form wrapping both panels -->
   <form action="{{ url_for('submit_rankings') }}" method="post" class="main-content">
 
-    <!-- Left Panel: List all tracks + preliminary‐rank inputs -->
+    <!-- Left Panel: Show all tracks + preliminary‐rank inputs -->
     <div class="left-panel">
       <h2>Album Songs</h2>
       <div id="trackList">
@@ -205,7 +202,7 @@
       </div>
     </div>
 
-    <!-- Right Panel: Rank‐group buttons, drop area, and final/pause buttons at bottom -->
+    <!-- Right Panel: Rank groups, drop area, and pause/submit buttons at bottom -->
     <div class="right-panel">
       <h2 style="margin-bottom: 0.2rem;">Select Rank Group</h2>
       <div class="rank-buttons">
@@ -217,13 +214,12 @@
       <h3>Rank Songs in Group</h3>
       <div class="ranked-list" id="rankedList"></div>
 
-      <!-- Hidden fields to pass album/artist & ranking data -->
+      <!-- Hidden fields to pass along album/artist & chosen data -->
       <input type="hidden" name="album_name"   value="{{ album.album_name }}" />
       <input type="hidden" name="artist_name"  value="{{ album.artist_name }}" />
       <input type="hidden" name="selected_rank" id="selected_rank" value="" />
       <input type="hidden" name="ranking_data" id="ranking_data" value="[]" />
 
-      <!-- Submit buttons sit at the very bottom of this panel -->
       <div class="submit-container">
         <button type="submit" name="status" value="paused" class="submit-btn pause">
           Pause &amp; Save
@@ -244,22 +240,23 @@
       currentRank = rank;
       document.getElementById('selected_rank').value = rank;
 
-      // Remove highlight from all rank-buttons
+      // Un‐highlight all rank-buttons
       document.querySelectorAll('.rank-buttons button').forEach(btn => {
         btn.classList.remove('rank-selected');
       });
 
-      // Highlight the clicked button
-      const chosenBtn = Array.from(document.querySelectorAll('.rank-buttons button'))
-                               .find(btn => btn.textContent.trim() === rank.toString());
+      // Highlight the clicked one
+      const chosenBtn = Array.from(
+        document.querySelectorAll('.rank-buttons button')
+      ).find(btn => btn.textContent.trim() === rank.toString());
       if (chosenBtn) {
         chosenBtn.classList.add('rank-selected');
       }
 
-      // Clear existing drop‐area contents
+      // Clear previously placed songs
       document.getElementById('rankedList').innerHTML = "";
 
-      // Fetch any already‐saved songs for that rank from the server
+      // Fetch any already‐saved songs for that rank
       fetch(`/get_ranked_songs?album_name={{ album.album_name }}&artist_name={{ album.artist_name }}&rank=${rank}`)
         .then(resp => resp.json())
         .then(data => {
@@ -299,10 +296,9 @@
       document.getElementById('ranking_data').value = JSON.stringify(arr);
     }
 
-    // Wire up initial drag events on page load
+    // Wire initial drag events on load
     updateDragEvents();
   </script>
 
 </body>
 </html>
-
