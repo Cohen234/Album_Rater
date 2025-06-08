@@ -268,7 +268,7 @@ def view_album():
         songs = [
             {"song_name": track, "prelim_rank": ""}
             for track in album["songs"]
-        ]
+            ]
 
     album_cover_url = album["album_cover_url"]
     try:
