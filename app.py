@@ -169,8 +169,11 @@ def load_albums_by_artist_route():
 @app.route('/view_album', methods=['GET'])
 def view_album():
     album_url = request.form['album_url']
-    album_name = request.args.get("album")
-    artist_name = request.args.get("artist")
+    if not album_url:
+        return "Missing album_url parameter", 400
+    album = load_album_data(album_url)
+    album_name = album["album_name"]
+    artist_name = album["artist_name"]
 
     sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
     df = get_as_dataframe(sheet, evaluate_formulas=True).fillna("")
