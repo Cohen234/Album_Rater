@@ -169,7 +169,7 @@
   <div class="album-grid">
   {% for album in albums %}
     <div class="album-card {% if loop.index > 4 %}mobile-hide{% endif %}">
-      <form action="{{ url_for('view_album') }}" method="post" style="display: flex; flex-direction: column; height: 100%;">
+      <form action="{{ url_for('view_album') }}" method="get" style="display: flex; flex-direction: column; height: 100%;">
         <input type="hidden" name="album_url" value="{{ album.url }}">
         <img src="{{ album.image }}" alt="{{ album.name }}">
 
