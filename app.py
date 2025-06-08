@@ -176,8 +176,6 @@ def view_album():
     df["Artist Name"] = df["Artist Name"].str.strip().str.lower()
 
     album_df = df[(df["Album Name"] == album_key) & (df["Artist Name"] == artist_key)]
-
-    # Get songs and prelim ranks from paused rows, fallback to empty prelim_rank if none
     paused_df = album_df[album_df["Ranking Status"] == "paused"]
 
     songs = []
@@ -187,7 +185,6 @@ def view_album():
             'prelim_rank': row['Ranking']
         })
 
-    # If no paused prelim ranks, fallback to all songs with prelim_rank blank
     if not songs:
         songs_list = album_df['Song Name'].unique()
         songs = [{'song_name': s, 'prelim_rank': ''} for s in songs_list]
