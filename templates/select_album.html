@@ -161,51 +161,51 @@
         width: 100px;
       }
     }
-  </style>
+    .paused-icon { color: orange; font-size: 1.2rem; margin-left: 0.5rem; }
+   </style>
 </head>
 <body>
   <h1>{{ artist_name }}</h1>
-
   <div class="album-grid">
-  {% for album in albums %}
-    <div class="album-card {% if loop.index > 4 %}mobile-hide{% endif %}">
-      <form action="{{ url_for('view_album') }}" method="get" style="display: flex; flex-direction: column; height: 100%;">
-        <input type="hidden" name="album_url" value="{{ album.url }}">
-        <img src="{{ album.image }}" alt="{{ album.name }}">
+    {% for album in albums %}
+      <div class="album-card {% if loop.index > 4 %}mobile-hide{% endif %}">
+        <form action="{{ url_for('view_album') }}" method="post" style="display: flex; flex-direction: column; height: 100%;">
+          <input type="hidden" name="album_url" value="{{ album.url }}">
+          <img src="{{ album.image }}" alt="{{ album.name }}">
 
-        <h3 class="album-name" title="{{ album.name }}">
-          {{ album.name }}
-          {% if album.stats and album.stats.ranking_status == "paused" %}
-            <span title="Paused" style="color: orange; font-size: 1.2rem; margin-left: 0.5rem;">⏸️</span>
-          {% endif %}
-        </h3>
-
-        {% if album.stats %}
-          <div class="stars" aria-label="Ranking stars">
-            {% set count = album.stats.finalized_rank_count or 0 %}
-            {% if count >= 5 %}
-              ★ ★ ★
-            {% elif count >= 3 %}
-              ★ ★ ☆
-            {% elif count >= 1 %}
-              ★ ☆ ☆
-            {% else %}
-              ☆ ☆ ☆
+          <h3 class="album-name" title="{{ album.name }}">
+            {{ album.name }}
+            {% if album.stats and album.stats.ranking_status == "paused" %}
+              <span class="paused-icon" title="Paused">⏸️</span>
             {% endif %}
-          </div>
-          <div class="stats">
-            Last Ranked: {{ album.stats.last_final_rank_date.split(" ")[0] if album.stats.last_final_rank_date }}<br>
-            Latest Score: {{ album.stats.last_final_avg_rank if album.stats.last_final_avg_rank else "N/A" }}
-          </div>
-        {% else %}
-          <div class="stars">☆ ☆ ☆</div>
-          <div class="stats">Not ranked yet</div>
-        {% endif %}
+          </h3>
 
-        <button type="submit">Rank Album</button>
-      </form>
-    </div>
-  {% endfor %}
-</div>
+          {% if album.stats %}
+            <div class="stars" aria-label="Ranking stars">
+              {% set avg = album.stats.last_final_avg_rank or 0 %}
+              {% if avg >= 8.5 %}
+                ★ ★ ★
+              {% elif avg >= 6.5 %}
+                ★ ★ ☆
+              {% elif avg >= 4.5 %}
+                ★ ☆ ☆
+              {% else %}
+                ☆ ☆ ☆
+              {% endif %}
+            </div>
+            <div class="stats">
+              Last Ranked: {{ album.stats.last_final_rank_date.split(" ")[0] if album.stats.last_final_rank_date }}<br>
+              Avg Score: {{ album.stats.last_final_avg_rank if album.stats.last_final_avg_rank else "N/A" }}
+            </div>
+          {% else %}
+            <div class="stars">☆ ☆ ☆</div>
+            <div class="stats">Not ranked yet</div>
+          {% endif %}
+
+          <button type="submit">Rank Album</button>
+        </form>
+      </div>
+    {% endfor %}
+  </div>
 </body>
 </html>

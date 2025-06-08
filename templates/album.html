@@ -145,14 +145,23 @@
     </div>
   </div>
 
-  <div class="main-content">
+  <!-- wrap left + right panels in ONE form -->
+  <form action="{{ url_for('submit_rankings') }}" method="post" class="main-content">
+
     <div class="left-panel">
       <h2>Album Songs</h2>
       <div id="trackList">
         {% for song in album.songs %}
           <div class="track-item" draggable="true" data-song="{{ song.song_name }}">
             <span>{{ loop.index }}. {{ song.song_name }}</span>
-            <input class="track-rank-input" type="number" name="prelim_rank_{{ song.song_name }}" min="1" max="10" step="0.5" value="{{ song.prelim_rank }}">
+            <!-- preliminary‐rank input (always sent, even if blank) -->
+            <input class="track-rank-input"
+                   type="number"
+                   name="prelim_rank_{{ song.song_name }}"
+                   min="0.5"
+                   max="10"
+                   step="0.5"
+                   value="{{ song.prelim_rank }}">
           </div>
         {% endfor %}
       </div>
@@ -169,60 +178,58 @@
       <h3>Rank Songs in Group</h3>
       <div class="ranked-list" id="rankedList"></div>
 
-      <form action="/submit_rankings" method="post">
-        <input type="hidden" name="album_name" value="{{ album.album_name }}">
-        <input type="hidden" name="artist_name" value="{{ album.artist_name }}">
-        <input type="hidden" name="selected_rank" id="selected_rank">
-        <input type="hidden" name="ranking_data" id="ranking_data">
+      <!-- Hidden fields to pass along album & artist, plus what group and order we chose -->
+      <input type="hidden" name="album_name" value="{{ album.album_name }}">
+      <input type="hidden" name="artist_name" value="{{ album.artist_name }}">
+      <input type="hidden" name="selected_rank" id="selected_rank" value="">
+      <input type="hidden" name="ranking_data" id="ranking_data" value="[]">
 
-        <label for="status">Status:
-          <select name="Ranking Status">
-            <option value="final">Final</option>
-            <option value="paused">Paused</option>
-            <option value="prelim_only">Preliminary Only</option>
-          </select>
-        </label>
-
-        <button type="submit" class="submit-btn">Submit Rankings</button>
-      </form>
+      <!-- Two separate submit buttons:
+           - Pause: status="paused"
+           - Submit Final: status="final" -->
+      <button type="submit" name="status" value="paused" class="submit-btn" style="background: #f0a500;">
+        Pause & Save
+      </button>
+      <button type="submit" name="status" value="final" class="submit-btn" style="background: #1f7a8c;">
+        Submit Final
+      </button>
     </div>
-  </div>
+
+  </form>
+
 
 <script>
   let draggedItem = null;
   let currentRank = null;
 
   function selectRankGroup(rank) {
-    document.getElementById('selected_rank').value = rank;
     currentRank = rank;
-    document.getElementById('rankedList').innerHTML = ''; // Clear prior list
+    document.getElementById('selected_rank').value = rank;
+
+    // Clear any previously‐selected button highlight
     document.querySelectorAll('.rank-buttons button').forEach(btn => {
       btn.classList.remove('rank-selected');
     });
 
-    // 2) Add “rank-selected” to the one we just clicked:
+    // Highlight the clicked button
     const chosenBtn = Array.from(document.querySelectorAll('.rank-buttons button'))
-                          .find(btn => btn.textContent.trim() == rank.toString());
+                             .find(btn => btn.textContent.trim() === rank.toString());
     if (chosenBtn) {
       chosenBtn.classList.add('rank-selected');
     }
 
+    // Fetch any already‐saved songs in that group (paused or final) from the server
+    document.getElementById('rankedList').innerHTML = "";
     fetch(`/get_ranked_songs?album_name={{ album.album_name }}&artist_name={{ album.artist_name }}&rank=${rank}`)
-      .then(response => response.json())
+      .then(resp => resp.json())
       .then(data => {
         data.songs.forEach(song => {
-          // Create a placeholder div in the right panel for each pre‐ranked song
           const div = document.createElement('div');
           div.className = 'track-item';
           div.draggable = true;
           div.dataset.song = song;
           div.textContent = song;
-
-          // Remove any input box if present (we only need the song name in the ranked area)
-          const existingInput = div.querySelector("input");
-          if (existingInput) existingInput.remove();
-
-          document.getElementById("rankedList").appendChild(div);
+          rankedList.appendChild(div);
         });
         updateDragEvents();
         updateRankingData();
@@ -231,51 +238,32 @@
 
   function updateDragEvents() {
     document.querySelectorAll('.track-item').forEach(item => {
-      item.addEventListener('dragstart', e => {
+      item.addEventListener('dragstart', () => {
         draggedItem = item;
       });
     });
   }
 
   const rankedList = document.getElementById('rankedList');
-  rankedList.addEventListener('dragover', e => {
-    e.preventDefault();
-  });
-
+  rankedList.addEventListener('dragover', e => e.preventDefault());
   rankedList.addEventListener('drop', () => {
-    if (!draggedItem) return;
-
-    // 1) Clone the draggedItem into the right panel, instead of removing it
-    const clone = draggedItem.cloneNode(true);
-    clone.classList.add("ranked-item");
-    // If the clone still has an <input>, remove it:
-    const inp = clone.querySelector("input");
-    if (inp) inp.remove();
-    rankedList.appendChild(clone);
-
-    // 2) On the original (left) item, append a checkmark if not already there
-    if (!draggedItem.querySelector(".checkmark")) {
-      const chk = document.createElement("span");
-      chk.className = "checkmark";
-      chk.textContent = " ✔️";
-      // you can style .checkmark in CSS if you want it smaller/colored
-      draggedItem.appendChild(chk);
+    if (draggedItem) {
+      rankedList.appendChild(draggedItem);
+      updateRankingData();
     }
-
-    // 3) Recompute the hidden JSON
-    updateRankingData();
   });
 
   function updateRankingData() {
     const items = document.querySelectorAll('#rankedList .track-item');
-    const data = Array.from(items).map(item => item.dataset.song);
-    document.getElementById('ranking_data').value = JSON.stringify(data);
+    const arr = Array.from(items).map(item => item.dataset.song);
+    document.getElementById('ranking_data').value = JSON.stringify(arr);
   }
 
-  // Initialize drag events on page load
+  // On first load, wire drag events onto the initial track items
   updateDragEvents();
 </script>
 
 </body>
+</html>
 </html>
 
