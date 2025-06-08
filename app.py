@@ -200,7 +200,7 @@ def view_album():
     album_cover_url = album_df.iloc[0].get('album_cover_url', '') if not album_df.empty else ''
     bg_color = album_df.iloc[0].get('bg_color', '#ffffff') if not album_df.empty else '#ffffff'
 
-    return render_template("album_ui.html", album={
+    return render_template("album.html", album={
         'album_name': album_name,
         'artist_name': artist_name,
         'songs': songs,
