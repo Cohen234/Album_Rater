@@ -1,17 +1,21 @@
+<!-- templates/album.html -->
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{{ album.album_name }}</title>
   <style>
-    body {
+    html, body {
       margin: 0;
+      padding: 0;
+      height: 100%;
       font-family: 'Segoe UI', sans-serif;
-      background: linear-gradient(120deg, {{ bg_color }}, #ffffff);
+      /* Use the bg_color passed in as a solid color (you can also do a gradient if desired) */
+      background-color: {{ bg_color }};
       transition: background 1.5s ease-in-out;
       display: flex;
       flex-direction: column;
-      height: 100vh;
-      overflow: hidden;
     }
 
     .header-container {
@@ -20,6 +24,7 @@
       padding: 1rem;
       background-color: rgba(255,255,255,0.8);
       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      z-index: 10;
     }
 
     .album-art-container {
@@ -48,6 +53,7 @@
       padding: 1rem;
       overflow-y: auto;
       flex: 1;
+      box-sizing: border-box;
     }
 
     .left-panel {
@@ -57,18 +63,20 @@
     .right-panel {
       background-color: rgba(245,245,245,0.8);
       border-left: 1px solid #ccc;
+      display: flex;
+      flex-direction: column;
     }
 
-    .track-item, .ranked-item {
+    .track-item {
       padding: 0.5rem;
       margin-bottom: 0.5rem;
       background: #fff;
       border-radius: 8px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-      cursor: grab;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      cursor: grab;
     }
 
     .track-rank-input {
@@ -95,42 +103,72 @@
       background-color: #333;
       color: white;
       cursor: pointer;
+      transition: background-color 0.2s ease;
     }
 
+    .rank-buttons button.rank-selected {
+      background-color: #a1c4fd;
+      color: #fff;
+      box-shadow: 0 0 6px rgba(0,0,0,0.2);
+    }
+
+    /* Make the ranked-list area taller/bigger */
     .ranked-list {
-      min-height: 200px;
+      flex: 1;                   /* Fill vertical space within right-panel */
+      min-height: 300px;         /* Ensure it’s not too small */
       border: 2px dashed #aaa;
       border-radius: 8px;
       padding: 1rem;
       background-color: #fff;
+      overflow-y: auto;
+    }
+
+    /* Container to hold the two submit buttons at the bottom */
+    .submit-container {
+      margin-top: auto;          /* Push it to the bottom of right-panel */
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      padding-top: 1rem;
     }
 
     .submit-btn {
-      margin-top: 1rem;
-      padding: 10px 20px;
+      padding: 12px 20px;
       font-size: 1.1rem;
-      background-color: #333;
       color: white;
       border: none;
       border-radius: 8px;
       cursor: pointer;
-      display: block;
-      width: 100%;
-    }
-    .checkmark {
-      margin-left: 0.5rem;
-      font-size: 0.9rem;
-      color: green;
-    }
-    .rank-buttons button.rank-selected {
-      background-color: #a1c4fd;   /* pick any highlight color you like */
-      color: #ffffff;              /* white text, for contrast */
-      box-shadow: 0 0 6px rgba(0,0,0,0.2);
+      transition: background-color 0.2s ease;
     }
 
-    select {
-      margin-top: 1rem;
-      font-size: 1rem;
+    .submit-btn.pause {
+      background-color: #f0a500;
+    }
+
+    .submit-btn.pause:hover {
+      background-color: #d18e00;
+    }
+
+    .submit-btn.final {
+      background-color: #1f7a8c;
+    }
+
+    .submit-btn.final:hover {
+      background-color: #155c65;
+    }
+
+    @media (max-width: 480px) {
+      .main-content {
+        flex-direction: column;
+      }
+      .left-panel, .right-panel {
+        flex: 100%;
+        max-height: 50vh;
+      }
+      .ranked-list {
+        min-height: 200px;
+      }
     }
   </style>
 </head>
@@ -145,16 +183,16 @@
     </div>
   </div>
 
-  <!-- wrap left + right panels in ONE form -->
+  <!-- One single form wraps both panels -->
   <form action="{{ url_for('submit_rankings') }}" method="post" class="main-content">
 
+    <!-- Left Panel: List all tracks + preliminary‐rank inputs -->
     <div class="left-panel">
       <h2>Album Songs</h2>
       <div id="trackList">
         {% for song in album.songs %}
           <div class="track-item" draggable="true" data-song="{{ song.song_name }}">
             <span>{{ loop.index }}. {{ song.song_name }}</span>
-            <!-- preliminary‐rank input (always sent, even if blank) -->
             <input class="track-rank-input"
                    type="number"
                    name="prelim_rank_{{ song.song_name }}"
@@ -167,6 +205,7 @@
       </div>
     </div>
 
+    <!-- Right Panel: Rank‐group buttons, drop area, and final/pause buttons at bottom -->
     <div class="right-panel">
       <h2 style="margin-bottom: 0.2rem;">Select Rank Group</h2>
       <div class="rank-buttons">
@@ -178,92 +217,92 @@
       <h3>Rank Songs in Group</h3>
       <div class="ranked-list" id="rankedList"></div>
 
-      <!-- Hidden fields to pass along album & artist, plus what group and order we chose -->
-      <input type="hidden" name="album_name" value="{{ album.album_name }}">
-      <input type="hidden" name="artist_name" value="{{ album.artist_name }}">
-      <input type="hidden" name="selected_rank" id="selected_rank" value="">
-      <input type="hidden" name="ranking_data" id="ranking_data" value="[]">
+      <!-- Hidden fields to pass album/artist & ranking data -->
+      <input type="hidden" name="album_name"   value="{{ album.album_name }}" />
+      <input type="hidden" name="artist_name"  value="{{ album.artist_name }}" />
+      <input type="hidden" name="selected_rank" id="selected_rank" value="" />
+      <input type="hidden" name="ranking_data" id="ranking_data" value="[]" />
 
-      <!-- Two separate submit buttons:
-           - Pause: status="paused"
-           - Submit Final: status="final" -->
-      <button type="submit" name="status" value="paused" class="submit-btn" style="background: #f0a500;">
-        Pause & Save
-      </button>
-      <button type="submit" name="status" value="final" class="submit-btn" style="background: #1f7a8c;">
-        Submit Final
-      </button>
+      <!-- Submit buttons sit at the very bottom of this panel -->
+      <div class="submit-container">
+        <button type="submit" name="status" value="paused" class="submit-btn pause">
+          Pause &amp; Save
+        </button>
+        <button type="submit" name="status" value="final" class="submit-btn final">
+          Submit Final
+        </button>
+      </div>
     </div>
 
   </form>
 
+  <script>
+    let draggedItem = null;
+    let currentRank = null;
 
-<script>
-  let draggedItem = null;
-  let currentRank = null;
+    function selectRankGroup(rank) {
+      currentRank = rank;
+      document.getElementById('selected_rank').value = rank;
 
-  function selectRankGroup(rank) {
-    currentRank = rank;
-    document.getElementById('selected_rank').value = rank;
+      // Remove highlight from all rank-buttons
+      document.querySelectorAll('.rank-buttons button').forEach(btn => {
+        btn.classList.remove('rank-selected');
+      });
 
-    // Clear any previously‐selected button highlight
-    document.querySelectorAll('.rank-buttons button').forEach(btn => {
-      btn.classList.remove('rank-selected');
-    });
+      // Highlight the clicked button
+      const chosenBtn = Array.from(document.querySelectorAll('.rank-buttons button'))
+                               .find(btn => btn.textContent.trim() === rank.toString());
+      if (chosenBtn) {
+        chosenBtn.classList.add('rank-selected');
+      }
 
-    // Highlight the clicked button
-    const chosenBtn = Array.from(document.querySelectorAll('.rank-buttons button'))
-                             .find(btn => btn.textContent.trim() === rank.toString());
-    if (chosenBtn) {
-      chosenBtn.classList.add('rank-selected');
-    }
+      // Clear existing drop‐area contents
+      document.getElementById('rankedList').innerHTML = "";
 
-    // Fetch any already‐saved songs in that group (paused or final) from the server
-    document.getElementById('rankedList').innerHTML = "";
-    fetch(`/get_ranked_songs?album_name={{ album.album_name }}&artist_name={{ album.artist_name }}&rank=${rank}`)
-      .then(resp => resp.json())
-      .then(data => {
-        data.songs.forEach(song => {
-          const div = document.createElement('div');
-          div.className = 'track-item';
-          div.draggable = true;
-          div.dataset.song = song;
-          div.textContent = song;
-          rankedList.appendChild(div);
+      // Fetch any already‐saved songs for that rank from the server
+      fetch(`/get_ranked_songs?album_name={{ album.album_name }}&artist_name={{ album.artist_name }}&rank=${rank}`)
+        .then(resp => resp.json())
+        .then(data => {
+          data.songs.forEach(songName => {
+            const div = document.createElement('div');
+            div.className = 'track-item';
+            div.draggable = true;
+            div.dataset.song = songName;
+            div.textContent = songName;
+            rankedList.appendChild(div);
+          });
+          updateDragEvents();
+          updateRankingData();
         });
-        updateDragEvents();
-        updateRankingData();
-      });
-  }
-
-  function updateDragEvents() {
-    document.querySelectorAll('.track-item').forEach(item => {
-      item.addEventListener('dragstart', () => {
-        draggedItem = item;
-      });
-    });
-  }
-
-  const rankedList = document.getElementById('rankedList');
-  rankedList.addEventListener('dragover', e => e.preventDefault());
-  rankedList.addEventListener('drop', () => {
-    if (draggedItem) {
-      rankedList.appendChild(draggedItem);
-      updateRankingData();
     }
-  });
 
-  function updateRankingData() {
-    const items = document.querySelectorAll('#rankedList .track-item');
-    const arr = Array.from(items).map(item => item.dataset.song);
-    document.getElementById('ranking_data').value = JSON.stringify(arr);
-  }
+    function updateDragEvents() {
+      document.querySelectorAll('.track-item').forEach(item => {
+        item.addEventListener('dragstart', () => {
+          draggedItem = item;
+        });
+      });
+    }
 
-  // On first load, wire drag events onto the initial track items
-  updateDragEvents();
-</script>
+    const rankedList = document.getElementById('rankedList');
+    rankedList.addEventListener('dragover', e => e.preventDefault());
+    rankedList.addEventListener('drop', () => {
+      if (draggedItem) {
+        rankedList.appendChild(draggedItem);
+        updateRankingData();
+      }
+    });
+
+    function updateRankingData() {
+      const items = document.querySelectorAll('#rankedList .track-item');
+      const arr = Array.from(items).map(item => item.dataset.song);
+      document.getElementById('ranking_data').value = JSON.stringify(arr);
+    }
+
+    // Wire up initial drag events on page load
+    updateDragEvents();
+  </script>
 
 </body>
-</html>
 </html>
 
