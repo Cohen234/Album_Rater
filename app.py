@@ -235,12 +235,14 @@ def view_album():
     if not album_url:
         return "Missing album_url", 400
 
+    # Step 1: fetch album info from Spotify
     album = load_album_data(album_url)
     album_name  = album["album_name"]
     artist_name = album["artist_name"]
 
+    # Step 2: load existing rows from Google Sheets
     sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
-    df = get_as_dataframe(sheet, evaluate_formulas=True).fillna("")
+    df    = get_as_dataframe(sheet, evaluate_formulas=True).fillna("")
 
     # Normalize for matching
     df["Album Name"]  = df["Album Name"].astype(str).str.strip().str.lower()
@@ -249,9 +251,9 @@ def view_album():
     album_key  = album_name.strip().lower()
     artist_key = artist_name.strip().lower()
 
-    # Find any paused rows
+    # Step 3: collect any “paused” rows for this album/artist
     paused_df = df[
-        (df["Album Name"] == album_key) &
+        (df["Album Name"]  == album_key) &
         (df["Artist Name"] == artist_key) &
         (df["Ranking Status"] == "paused")
     ]
@@ -263,12 +265,12 @@ def view_album():
             "prelim_rank": row["Ranking"]
         })
 
-    # If nothing paused, fall back to album["songs"], which is a list of strings
+    # Step 4: if there were no paused rows, fall back to the Spotify tracklist
     if not songs:
         songs = [
-            {"song_name": track, "prelim_rank": ""}
+            { "song_name": track["song_name"], "prelim_rank": "" }
             for track in album["songs"]
-            ]
+        ]
 
     album_cover_url = album["album_cover_url"]
     try:
@@ -278,13 +280,14 @@ def view_album():
 
     return render_template("album.html",
         album={
-            "album_name": album_name,
-            "artist_name": artist_name,
-            "songs": songs,
+            "album_name":      album_name,
+            "artist_name":     artist_name,
+            "songs":           songs,
             "album_cover_url": album_cover_url
         },
         bg_color=bg_color
     )
+
 
 @app.route("/get_ranked_songs")
 def get_ranked_songs():

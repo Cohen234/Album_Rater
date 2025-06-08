@@ -185,22 +185,22 @@
 
     <!-- Left Panel: Show all tracks + preliminary‐rank inputs -->
     <div class="left-panel">
-      <h2>Album Songs</h2>
-      <div id="trackList">
-        {% for song in album.songs %}
-          <div class="track-item" draggable="true" data-song="{{ song.song_name }}">
-            <span>{{ loop.index }}. {{ song.song_name }}</span>
-            <input class="track-rank-input"
-                   type="number"
-                   name="prelim_rank_{{ song.song_name }}"
-                   min="0.5"
-                   max="10"
-                   step="0.5"
-                   value="{{ song.prelim_rank }}">
-          </div>
-        {% endfor %}
+  <h2>Album Songs</h2>
+  <div id="trackList">
+    {% for song in album.songs %}
+      <div class="track-item" draggable="true" data-song="{{ song.song_name }}">
+        <span>{{ loop.index }}. {{ song.song_name }}</span>
+        <input class="track-rank-input"
+               type="number"
+               name="prelim_rank_{{ song.song_name }}"
+               min="0.5"
+               max="10"
+               step="0.5"
+               value="{{ song.prelim_rank }}">
       </div>
-    </div>
+    {% endfor %}
+  </div>
+</div>
 
     <!-- Right Panel: Rank groups, drop area, and pause/submit buttons at bottom -->
     <div class="right-panel">
