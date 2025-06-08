@@ -142,7 +142,7 @@
         {% for song in album.songs %}
           <div class="track-item" draggable="true" data-song="{{ song.song_name }}">
             <span>{{ loop.index }}. {{ song.song_name }}</span>
-            <input class="track-rank-input" type="number" name="prelim_rank_{{ song.song_name }}" min="1" max="10" step="0.5">
+            <input class="track-rank-input" type="number" name="prelim_rank_{{ song.song_name }}" min="1" max="10" step="0.5" value="{{ song.prelim_rank }}">
           </div>
         {% endfor %}
       </div>
@@ -169,6 +169,7 @@
           <select name="status">
             <option value="final">Final</option>
             <option value="paused">Paused</option>
+            <option value="prelim_only">Preliminary Only</option>
           </select>
         </label>
 
@@ -231,3 +232,4 @@
 
 </body>
 </html>
+

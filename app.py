@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, jsonify
 import gspread
 from gspread_dataframe import get_as_dataframe, set_with_dataframe
 from google.oauth2.service_account import Credentials
@@ -60,7 +60,7 @@ def get_album_stats(album_name, artist_name, df=None):
             'finalized_rank_count': 0,
             'last_final_avg_rank': None,
             'last_final_rank_date': None,
-            'ranking_status': None
+            '"Ranking Status"': None
         }
 
     # Check if there is any paused ranking status for this album
@@ -84,20 +84,32 @@ def get_album_stats(album_name, artist_name, df=None):
         'finalized_rank_count': finalized_count,
         'last_final_avg_rank': round(avg_rank, 2) if avg_rank else None,
         'last_final_rank_date': latest_date.strftime("%Y-%m-%d %H:%M:%S") if latest_date else None,
-        'ranking_status': "paused" if paused_exists else "final"
+        '"Ranking Status"': "paused" if paused_exists else "final"
     }
 @app.route("/submit_rankings", methods=["POST"])
 def submit_rankings():
     album_name = request.form.get("album_name")
     artist_name = request.form.get("artist_name")
-    selected_rank = float(request.form.get("selected_rank", 0))
-    ranking_data = json.loads(request.form.get("ranking_data", "[]"))
-    status = request.form.get("status")
+    selected_rank_str = request.form.get("selected_rank", "").strip()
+    ranking_data_str = request.form.get("ranking_data", "").strip()
+    status = request.form.get("Ranking Status")
+
+    # Validate selected_rank
+    try:
+        selected_rank = float(selected_rank_str)
+    except ValueError:
+        return "Error: Invalid rank group selected.", 400
+
+    # Validate ranking_data
+    try:
+        ranking_data = json.loads(ranking_data_str)
+    except json.JSONDecodeError:
+        return "Error: Invalid song ranking data.", 400
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     songs = []
 
-    # Assign sub-ranks based on the song's position in the list
+    # Assign sub-ranks based on order
     sub_step = 0.5 / max(len(ranking_data), 1)
     for i, song_name in enumerate(ranking_data):
         rank = selected_rank - 0.25 + (i + 0.5) * sub_step
@@ -110,7 +122,7 @@ def submit_rankings():
             "Ranked Date": now
         })
 
-    # Load, filter, and write to Google Sheets
+    # Google Sheets update logic
     sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
     df_existing = get_as_dataframe(sheet, evaluate_formulas=True).fillna("")
     df_existing["Album Name"] = df_existing["Album Name"].str.strip().str.lower()
@@ -119,7 +131,7 @@ def submit_rankings():
     album_key = album_name.strip().lower()
     artist_key = artist_name.strip().lower()
 
-    # Remove old paused entries for this group rank
+    # Remove existing entries in this rank group
     mask = ~(
         (df_existing["Album Name"] == album_key) &
         (df_existing["Artist Name"] == artist_key) &
@@ -150,143 +162,114 @@ def load_albums_by_artist_route():
 
     return render_template("select_album.html", artist_name=artist_name, albums=albums)
 
-@app.route("/view_album", methods=["GET", "POST"])
+@app.route("/album")
 def view_album():
-    album_url = request.form.get("album_url")
-    album = load_album_data(album_url)
+    album_name = request.args.get("album")
+    artist_name = request.args.get("artist")
 
-    # Load paused data
     sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
-    df = get_as_dataframe(sheet, evaluate_formulas=True)
-    df = df.dropna(subset=["Album Name", "Artist Name", "Song Name"])
+    df = get_as_dataframe(sheet, evaluate_formulas=True).fillna("")
 
-    def normalize(x): return x.strip().lower() if isinstance(x, str) else x
-    df["Album Name"] = df["Album Name"].apply(normalize)
-    df["Artist Name"] = df["Artist Name"].apply(normalize)
+    album_key = album_name.strip().lower()
+    artist_key = artist_name.strip().lower()
+    df["Album Name"] = df["Album Name"].str.strip().str.lower()
+    df["Artist Name"] = df["Artist Name"].str.strip().str.lower()
 
-    album_key = normalize(album["album_name"])
-    artist_key = normalize(album["artist_name"])
+    album_df = df[(df["Album Name"] == album_key) & (df["Artist Name"] == artist_key)]
 
-    paused_rows = df[
-        (df["Album Name"] == album_key) &
-        (df["Artist Name"] == artist_key) &
-        (df["Ranking Status"] == "paused")
-    ]
+    # Get songs and prelim ranks from paused rows, fallback to empty prelim_rank if none
+    paused_df = album_df[album_df["Ranking Status"] == "paused"]
 
-    saved_rankings = {
-        row["Song Name"]: row["Ranking"]
-        for _, row in paused_rows.iterrows()
-        if row["Song Name"] not in ["__ALBUM_OVERALL__", "__ALBUM_SESSION__"] and row["Ranking"] != ""
-    }
+    songs = []
+    for _, row in paused_df.iterrows():
+        songs.append({
+            'song_name': row['Song Name'],
+            'prelim_rank': row['Ranking']
+        })
 
-    overall_row = paused_rows[paused_rows["Song Name"] == "__ALBUM_OVERALL__"]
-    saved_overall_score = float(overall_row.iloc[0]["Ranking"]) if not overall_row.empty else ""
+    # If no paused prelim ranks, fallback to all songs with prelim_rank blank
+    if not songs:
+        songs_list = album_df['Song Name'].unique()
+        songs = [{'song_name': s, 'prelim_rank': ''} for s in songs_list]
 
-    bg_color = get_dominant_color(album["album_cover_url"])
-    stats = get_album_stats(album["album_name"], album["artist_name"], df)
+    album_cover_url = album_df.iloc[0].get('album_cover_url', '') if not album_df.empty else ''
+    bg_color = album_df.iloc[0].get('bg_color', '#ffffff') if not album_df.empty else '#ffffff'
 
-    return render_template(
-        "album.html",
-        album=album,
-        stats=stats,
-        saved_rankings=saved_rankings,
-        saved_overall_score=saved_overall_score,
-        bg_color=bg_color
-    )
+    return render_template("album_ui.html", album={
+        'album_name': album_name,
+        'artist_name': artist_name,
+        'songs': songs,
+        'album_cover_url': album_cover_url
+    }, bg_color=bg_color)
+@app.route("/get_ranked_songs")
+def get_ranked_songs():
+    album_name = request.args.get("album_name")
+    artist_name = request.args.get("artist_name")
+    rank = request.args.get("rank")
+    sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
 
+
+    df = pd.DataFrame(sheet.get_all_records())
+    rank_df = df[(df['Album Name'].str.strip().str.lower() == album_name.strip().lower()) &
+        (df['Artist Name'].str.strip().str.lower() == artist_name.strip().lower()) &
+        (df['rank_group'].astype(str).str.strip() == rank)]
+
+    # Prioritize paused rankings if present
+    songs = rank_df[rank_df["Ranking Status"] != 'final']['song_name'].tolist()
+    if not songs:
+        songs = rank_df[rank_df["Ranking Status"] == 'final']['song_name'].tolist()
+
+    return jsonify({'songs': songs})
 @app.route("/save_album", methods=["POST"])
 def save_album():
-    album_name = request.form.get('album_name')
-    artist_name = request.form.get('artist_name')
-    status = request.form.get('status')
-    overall_score = request.form.get('overall_score')
+    status = request.form.get("Ranking Status")
+    if status != "paused":
+        return "Only paused rankings can be saved here.", 400
 
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    songs = []
+    album_name = request.form.get("album_name")
+    artist_name = request.form.get("artist_name")
+    prelim_ranks = {key.replace("prelim_rank_", ""): float(value)
+                    for key, value in request.form.items() if key.startswith("prelim_rank_")}
 
-    i = 0
-    while True:
-        ranking = request.form.get(f"ranking_{i}")
-        song_name = request.form.get(f"song_name_{i}")
-        if not ranking or not song_name:
-            break
-        try:
-            rank_val = float(ranking)
-        except ValueError:
-            rank_val = ""
-        songs.append({
+    sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
+    df_existing = get_as_dataframe(sheet, evaluate_formulas=True).fillna("")
+
+    # Normalize keys for filtering
+    album_key = album_name.strip().lower()
+    artist_key = artist_name.strip().lower()
+    df_existing["Album Name"] = df_existing["Album Name"].str.strip().str.lower()
+    df_existing["Artist Name"] = df_existing["Artist Name"].str.strip().str.lower()
+
+    # Remove existing paused rows for this album and artist
+    mask = ~(
+        (df_existing["Album Name"] == album_key) &
+        (df_existing["Artist Name"] == artist_key) &
+        (df_existing["Ranking Status"] == "paused")
+    )
+    df_filtered = df_existing[mask]
+
+    # Create new paused rows with prelim ranks
+    new_rows = []
+    for song_name, rank in prelim_ranks.items():
+        new_rows.append({
             "Album Name": album_name,
             "Artist Name": artist_name,
             "Song Name": song_name,
-            "Ranking": rank_val,
-            "Ranking Status": status,
-            "Ranked Date": now
+            "Ranking": rank,
+            "Ranking Status": "paused",
+            "Ranked Date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "rank_group": ""  # empty because preliminary
         })
-        i += 1
 
-    # Add overall score and session marker
-    try:
-        overall_score_val = float(overall_score) if overall_score else ""
-    except ValueError:
-        overall_score_val = ""
+    df_new = pd.DataFrame(new_rows)
+    df_updated = pd.concat([df_filtered, df_new], ignore_index=True)
 
-    songs.append({
-        "Album Name": album_name,
-        "Artist Name": artist_name,
-        "Song Name": "__ALBUM_OVERALL__",
-        "Ranking": overall_score_val,
-        "Ranking Status": status,
-        "Ranked Date": now if overall_score else ""
-    })
-    songs.append({
-        "Album Name": album_name,
-        "Artist Name": artist_name,
-        "Song Name": "__ALBUM_SESSION__",
-        "Ranking": "",
-        "Ranking Status": status,
-        "Ranked Date": now
-    })
-
-    album_df = pd.DataFrame(songs)
-
-    sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
-    try:
-        df_existing = get_as_dataframe(sheet, evaluate_formulas=True)
-        if df_existing.empty:
-            df_existing = pd.DataFrame(columns=album_df.columns)
-    except Exception:
-        df_existing = pd.DataFrame(columns=album_df.columns)
-
-    def normalize(x): return x.strip().lower() if isinstance(x, str) else x
-    df_existing["Album Name"] = df_existing["Album Name"].apply(normalize)
-    df_existing["Artist Name"] = df_existing["Artist Name"].apply(normalize)
-
-    album_key = normalize(album_name)
-    artist_key = normalize(artist_name)
-
-    if status == "paused":
-        mask = ~(
-            (df_existing["Album Name"] == album_key) &
-            (df_existing["Artist Name"] == artist_key) &
-            (df_existing["Ranking Status"] == "paused")
-        )
-    else:
-        mask = ~(
-            (df_existing["Album Name"] == album_key) &
-            (df_existing["Artist Name"] == artist_key) &
-            (df_existing["Song Name"] != "__ALBUM_SESSION__")
-        )
-
-    df_keep = df_existing[mask]
-    new_df = pd.concat([df_keep, album_df], ignore_index=True)
+    # Clear sheet and write updated df
     sheet.clear()
-    set_with_dataframe(sheet, new_df)
+    set_with_dataframe(sheet, df_updated)
 
-    if status == "paused":
-        print(f"Album '{album_name}' paused and saved. Exiting...")
-        sys.exit(0)
+    return "Paused rankings saved successfully."
 
-    return redirect(url_for("index"))
 
 if __name__ == "__main__":
     import os
