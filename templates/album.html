@@ -34,7 +34,7 @@
     }
 
     .album-info h1 {
-      font-size: 1.5rem;
+      font-size: 2rem;
       margin: 0;
     }
 
@@ -66,14 +66,25 @@
       border-radius: 8px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.1);
       cursor: grab;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .track-rank-input {
+      margin-left: 1rem;
+      width: 50px;
     }
 
     .rank-buttons {
       display: flex;
       flex-wrap: wrap;
       gap: 0.5rem;
-      margin-bottom: 1rem;
-      overflow-x: auto;
+      margin: 0.5rem 0 1rem;
+      padding: 0.5rem;
+      background-color: #fff;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
 
     .rank-buttons button {
@@ -121,7 +132,6 @@
     </div>
     <div class="album-info">
       <h1>{{ album.album_name }}</h1>
-      <p><strong>Artist:</strong> {{ album.artist_name }}</p>
     </div>
   </div>
 
@@ -131,14 +141,15 @@
       <div id="trackList">
         {% for song in album.songs %}
           <div class="track-item" draggable="true" data-song="{{ song.song_name }}">
-            {{ loop.index }}. {{ song.song_name }}
+            <span>{{ loop.index }}. {{ song.song_name }}</span>
+            <input class="track-rank-input" type="number" name="prelim_rank_{{ song.song_name }}" min="1" max="10" step="0.5">
           </div>
         {% endfor %}
       </div>
     </div>
 
     <div class="right-panel">
-      <h2>Select Rank Group</h2>
+      <h2 style="margin-bottom: 0.2rem;">Select Rank Group</h2>
       <div class="rank-buttons">
         {% for rank in [1,1.5,2,2.5,3,3.5,4,4.5,5,5.5,6,6.5,7,7.5,8,8.5,9,9.5,10] %}
           <button type="button" onclick="selectRankGroup({{ rank }})">{{ rank }}</button>
@@ -174,14 +185,30 @@
     document.getElementById('selected_rank').value = rank;
     currentRank = rank;
     document.getElementById('rankedList').innerHTML = ''; // Clear list
-    // TODO: Optionally fetch and load previously ranked songs for this group via AJAX
+
+    fetch(`/get_ranked_songs?album_name={{ album.album_name }}&artist_name={{ album.artist_name }}&rank=${rank}`)
+      .then(response => response.json())
+      .then(data => {
+        data.songs.forEach(song => {
+          const div = document.createElement('div');
+          div.className = 'track-item';
+          div.draggable = true;
+          div.dataset.song = song;
+          div.textContent = song;
+          rankedList.appendChild(div);
+        });
+        updateDragEvents();
+        updateRankingData();
+      });
   }
 
-  document.querySelectorAll('.track-item').forEach(item => {
-    item.addEventListener('dragstart', () => {
-      draggedItem = item;
+  function updateDragEvents() {
+    document.querySelectorAll('.track-item').forEach(item => {
+      item.addEventListener('dragstart', () => {
+        draggedItem = item;
+      });
     });
-  });
+  }
 
   const rankedList = document.getElementById('rankedList');
   rankedList.addEventListener('dragover', (e) => e.preventDefault());
@@ -198,6 +225,8 @@
     const data = Array.from(items).map((item, index) => item.dataset.song);
     document.getElementById('ranking_data').value = JSON.stringify(data);
   }
+
+  updateDragEvents();
 </script>
 
 </body>
