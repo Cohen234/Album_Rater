@@ -86,7 +86,56 @@ def get_album_stats(album_name, artist_name, df=None):
         'last_final_rank_date': latest_date.strftime("%Y-%m-%d %H:%M:%S") if latest_date else None,
         'ranking_status': "paused" if paused_exists else "final"
     }
+@app.route("/submit_rankings", methods=["POST"])
+def submit_rankings():
+    album_name = request.form.get("album_name")
+    artist_name = request.form.get("artist_name")
+    selected_rank = float(request.form.get("selected_rank", 0))
+    ranking_data = json.loads(request.form.get("ranking_data", "[]"))
+    status = request.form.get("status")
 
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    songs = []
+
+    # Assign sub-ranks based on the song's position in the list
+    sub_step = 0.5 / max(len(ranking_data), 1)
+    for i, song_name in enumerate(ranking_data):
+        rank = selected_rank - 0.25 + (i + 0.5) * sub_step
+        songs.append({
+            "Album Name": album_name,
+            "Artist Name": artist_name,
+            "Song Name": song_name,
+            "Ranking": round(rank, 2),
+            "Ranking Status": status,
+            "Ranked Date": now
+        })
+
+    # Load, filter, and write to Google Sheets
+    sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
+    df_existing = get_as_dataframe(sheet, evaluate_formulas=True).fillna("")
+    df_existing["Album Name"] = df_existing["Album Name"].str.strip().str.lower()
+    df_existing["Artist Name"] = df_existing["Artist Name"].str.strip().str.lower()
+
+    album_key = album_name.strip().lower()
+    artist_key = artist_name.strip().lower()
+
+    # Remove old paused entries for this group rank
+    mask = ~(
+        (df_existing["Album Name"] == album_key) &
+        (df_existing["Artist Name"] == artist_key) &
+        (df_existing["Ranking Status"] == status) &
+        (df_existing["Ranking"] >= selected_rank - 0.25) &
+        (df_existing["Ranking"] <= selected_rank + 0.25)
+    )
+    df_filtered = df_existing[mask]
+
+    df_new = pd.DataFrame(songs)
+    final_df = pd.concat([df_filtered, df_new], ignore_index=True)
+
+    sheet.clear()
+    set_with_dataframe(sheet, final_df)
+
+    return redirect(url_for("index"))
 @app.route('/')
 def index():
     return render_template('index.html')
