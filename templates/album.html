@@ -117,6 +117,11 @@
       display: block;
       width: 100%;
     }
+    .checkmark {
+      margin-left: 0.5rem;
+      font-size: 0.9rem;
+      color: green;
+    }
 
     select {
       margin-top: 1rem;
@@ -185,18 +190,24 @@
   function selectRankGroup(rank) {
     document.getElementById('selected_rank').value = rank;
     currentRank = rank;
-    document.getElementById('rankedList').innerHTML = ''; // Clear list
+    document.getElementById('rankedList').innerHTML = ''; // Clear prior list
 
     fetch(`/get_ranked_songs?album_name={{ album.album_name }}&artist_name={{ album.artist_name }}&rank=${rank}`)
       .then(response => response.json())
       .then(data => {
         data.songs.forEach(song => {
+          // Create a placeholder div in the right panel for each pre‐ranked song
           const div = document.createElement('div');
           div.className = 'track-item';
           div.draggable = true;
           div.dataset.song = song;
           div.textContent = song;
-          rankedList.appendChild(div);
+
+          // Remove any input box if present (we only need the song name in the ranked area)
+          const existingInput = div.querySelector("input");
+          if (existingInput) existingInput.remove();
+
+          document.getElementById("rankedList").appendChild(div);
         });
         updateDragEvents();
         updateRankingData();
@@ -205,28 +216,48 @@
 
   function updateDragEvents() {
     document.querySelectorAll('.track-item').forEach(item => {
-      item.addEventListener('dragstart', () => {
+      item.addEventListener('dragstart', e => {
         draggedItem = item;
       });
     });
   }
 
   const rankedList = document.getElementById('rankedList');
-  rankedList.addEventListener('dragover', (e) => e.preventDefault());
+  rankedList.addEventListener('dragover', e => {
+    e.preventDefault();
+  });
 
   rankedList.addEventListener('drop', () => {
-    if (draggedItem) {
-      rankedList.appendChild(draggedItem);
-      updateRankingData();
+    if (!draggedItem) return;
+
+    // 1) Clone the draggedItem into the right panel, instead of removing it
+    const clone = draggedItem.cloneNode(true);
+    clone.classList.add("ranked-item");
+    // If the clone still has an <input>, remove it:
+    const inp = clone.querySelector("input");
+    if (inp) inp.remove();
+    rankedList.appendChild(clone);
+
+    // 2) On the original (left) item, append a checkmark if not already there
+    if (!draggedItem.querySelector(".checkmark")) {
+      const chk = document.createElement("span");
+      chk.className = "checkmark";
+      chk.textContent = " ✔️";
+      // you can style .checkmark in CSS if you want it smaller/colored
+      draggedItem.appendChild(chk);
     }
+
+    // 3) Recompute the hidden JSON
+    updateRankingData();
   });
 
   function updateRankingData() {
     const items = document.querySelectorAll('#rankedList .track-item');
-    const data = Array.from(items).map((item, index) => item.dataset.song);
+    const data = Array.from(items).map(item => item.dataset.song);
     document.getElementById('ranking_data').value = JSON.stringify(data);
   }
 
+  // Initialize drag events on page load
   updateDragEvents();
 </script>
 

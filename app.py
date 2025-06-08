@@ -230,23 +230,53 @@ def view_album():
     )
 @app.route("/get_ranked_songs")
 def get_ranked_songs():
-    album_name = request.args.get("album_name")
-    artist_name = request.args.get("artist_name")
-    rank = request.args.get("rank")
+    album_name  = request.args.get("album_name", "")
+    artist_name = request.args.get("artist_name", "")
+    try:
+        rank = float(request.args.get("rank", "0"))
+    except ValueError:
+        return jsonify({"songs": []})
+
     sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
+    df = get_as_dataframe(sheet, evaluate_formulas=True).fillna("")
 
+    # Normalize text columns for matching
+    df["Album Name"]  = df["Album Name"].astype(str).str.strip().str.lower()
+    df["Artist Name"] = df["Artist Name"].astype(str).str.strip().str.lower()
 
-    df = pd.DataFrame(sheet.get_all_records())
-    rank_df = df[(df['Album Name'].str.strip().str.lower() == album_name.strip().lower()) &
-        (df['Artist Name'].str.strip().str.lower() == artist_name.strip().lower()) &
-        (df['rank_group'].astype(str).str.strip() == rank)]
+    album_key  = album_name.strip().lower()
+    artist_key = artist_name.strip().lower()
 
-    # Prioritize paused rankings if present
-    songs = rank_df[rank_df["Ranking Status"] != 'final']['song_name'].tolist()
-    if not songs:
-        songs = rank_df[rank_df["Ranking Status"] == 'final']['song_name'].tolist()
+    # Filter down to just this album & artist
+    album_df = df[
+        (df["Album Name"] == album_key) &
+        (df["Artist Name"] == artist_key)
+    ]
 
-    return jsonify({'songs': songs})
+    # Convert "Ranking" to numeric (in case it's stored as string)
+    album_df["Ranking"] = pd.to_numeric(album_df["Ranking"], errors="coerce")
+
+    # Define the ±0.25 window around the chosen group
+    lower = rank - 0.25
+    upper = rank + 0.25
+
+    # Look for any “paused” rows first:
+    paused_slice = album_df[
+        (album_df["Ranking Status"] == "paused") &
+        (album_df["Ranking"].between(lower, upper))
+    ]
+
+    if not paused_slice.empty:
+        songs = paused_slice["Song Name"].tolist()
+    else:
+        # Otherwise, return whatever “final” rows fall in that range
+        final_slice = album_df[
+            (album_df["Ranking Status"] == "final") &
+            (album_df["Ranking"].between(lower, upper))
+        ]
+        songs = final_slice["Song Name"].tolist()
+
+    return jsonify({"songs": songs})
 @app.route("/save_album", methods=["POST"])
 def save_album():
     status = request.form.get("Ranking Status")
