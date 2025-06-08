@@ -168,7 +168,7 @@ def load_albums_by_artist_route():
 
 @app.route('/view_album', methods=['GET'])
 def view_album():
-    album_url = request.form['album_url']
+    album_url = request.args.get('album_url')
     if not album_url:
         return "Missing album_url parameter", 400
     album = load_album_data(album_url)
