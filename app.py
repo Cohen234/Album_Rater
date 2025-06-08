@@ -166,8 +166,9 @@ def load_albums_by_artist_route():
 
     return render_template("select_album.html", artist_name=artist_name, albums=albums)
 
-@app.route("/album")
+@app.route('/view_album', methods=['POST'])
 def view_album():
+    album_url = request.form['album_url']
     album_name = request.args.get("album")
     artist_name = request.args.get("artist")
 
