@@ -157,8 +157,12 @@ def load_albums_by_artist_route():
     artist_name = request.form['artist_name']
     albums = get_albums_by_artist(artist_name)
 
+    # Load spreadsheet only once
+    sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
+    df = get_as_dataframe(sheet, evaluate_formulas=True).fillna("")
+
     for album in albums:
-        album["stats"] = get_album_stats(album["name"], artist_name)
+        album["stats"] = get_album_stats(album["name"], artist_name, df=df)
 
     return render_template("select_album.html", artist_name=artist_name, albums=albums)
 
