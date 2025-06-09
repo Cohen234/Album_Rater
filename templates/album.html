@@ -189,7 +189,15 @@
   <div id="trackList">
     {% for song in album.songs %}
       <div class="track-item" draggable="true" data-song="{{ song.song_name }}">
-        <span>{{ loop.index }}. {{ song.song_name }}</span>
+        <span>
+          {{ loop.index }}. {{ song.song_name }}
+          {% if song.rank_count > 0 %}
+            {% for _ in range(song.rank_count) %}
+              ⭐
+            {% endfor %}
+          {% endif %}
+          <span id="checkmark-{{ song.song_name|replace(' ', '_') }}" style="color: green; font-weight: bold; display: none;">✓</span>
+        </span>
         <input class="track-rank-input"
                type="number"
                name="prelim_rank_{{ song.song_name }}"
@@ -270,6 +278,10 @@
           });
           updateDragEvents();
           updateRankingData();
+          const checkmark = document.getElementById(`checkmark-${songName.replace(/\s/g, "_")}`);
+          if (checkmark) {
+            checkmark.style.display = 'inline';
+          }
         });
     }
 
@@ -294,7 +306,17 @@
       const items = document.querySelectorAll('#rankedList .track-item');
       const arr = Array.from(items).map(item => item.dataset.song);
       document.getElementById('ranking_data').value = JSON.stringify(arr);
+
+  // Update check marks
+      document.querySelectorAll('.left-panel .track-item').forEach(item => {
+        const song = item.dataset.song;
+        const check = document.getElementById(`checkmark-${song.replace(/\s/g, "_")}`);
+        if (check) {
+          check.style.display = arr.includes(song) ? 'inline' : 'none';
+        }
+      });
     }
+
 
     // Wire initial drag events on load
     updateDragEvents();
