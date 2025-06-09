@@ -18,6 +18,7 @@ import json
 from google.oauth2.service_account import Credentials
 import gspread
 import traceback
+from collections import Counter
 
 creds_info = json.loads(os.environ['GOOGLE_SERVICE_ACCOUNT_JSON'])
 
@@ -257,12 +258,15 @@ def view_album():
         (df["Artist Name"] == artist_key) &
         (df["Ranking Status"] == "paused")
     ]
+    rank_counts = df["song name"].value_counts().to_dict()
 
     songs = []
     for _, row in paused_df.iterrows():
+        song_name = row["song name"]
         songs.append({
-            "song_name": row["Song Name"],
-            "prelim_rank": row["Ranking"]
+            "song_name": song_name,
+            "prelim_rank": row["ranking"],
+            "rank_count": rank_counts.get(song_name, 0)
         })
 
     # Step 4: if there were no paused rows, fall back to the Spotify tracklist
@@ -271,7 +275,6 @@ def view_album():
             { "song_name": track["song_name"], "prelim_rank": "" }
             for track in album["songs"]
         ]
-
     album_cover_url = album["album_cover_url"]
     try:
         bg_color = get_dominant_color(album_cover_url)
