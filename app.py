@@ -294,7 +294,28 @@ def view_album():
         bg_color=bg_color
     )
 
+@app.route("/finalize_rankings", methods=["POST"])
+def finalize_rankings():
+    data = request.get_json()
+    sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
+    existing_df = get_as_dataframe(sheet).fillna("")
 
+    rows_to_append = []
+    for rank, songs in data.items():
+        for position, song_name in enumerate(songs):
+            rows_to_append.append({
+                "song name": song_name,
+                "ranking": rank,
+                "position_in_group": position,
+                "Ranking Status": "finalized"
+            })
+
+    if rows_to_append:
+        new_df = pd.DataFrame(rows_to_append)
+        updated_df = pd.concat([existing_df, new_df], ignore_index=True)
+        set_with_dataframe(sheet, updated_df)
+
+    return jsonify({"status": "success"}), 200
 @app.route("/get_ranked_songs")
 def get_ranked_songs():
     """
