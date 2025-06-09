@@ -304,9 +304,9 @@ def finalize_rankings():
     for rank, songs in data.items():
         for position, song_name in enumerate(songs):
             rows_to_append.append({
-                "song name": song_name,
-                "ranking": rank,
-                "position_in_group": position,
+                "Song Name": song_name,
+                "Ranking": rank,
+                "Position In Group": position,
                 "Ranking Status": "finalized"
             })
 
