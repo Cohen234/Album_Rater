@@ -258,7 +258,7 @@ def view_album():
         (df["Artist Name"] == artist_key) &
         (df["Ranking Status"] == "paused")
     ]
-    rank_counts = df["song name"].value_counts().to_dict()
+    rank_counts = df["Song Name"].value_counts().to_dict()
 
     songs = []
     for _, row in paused_df.iterrows():
