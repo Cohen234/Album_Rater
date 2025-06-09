@@ -271,7 +271,11 @@ def view_album():
     # Step 4: if there were no paused rows, fall back to the Spotify tracklist
     if not songs:
         songs = [
-            { "song_name": track["song_name"], "prelim_rank": "" }
+            {
+                "song_name": track["song_name"],
+                "prelim_rank": "",
+                "rank_count": 0  # Add this!
+            }
             for track in album["songs"]
         ]
     album_cover_url = album["album_cover_url"]
