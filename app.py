@@ -297,6 +297,14 @@ def view_album():
 @app.route("/finalize_rankings", methods=["POST"])
 def finalize_rankings():
     data = request.get_json()
+    if not data:
+        return "Invalid data", 400
+
+    for rank_group, song_list in data.items():
+        try:
+            float_rank = float(rank_group)
+        except ValueError:
+            return f"Invalid rank group: {rank_group}", 400
     sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
     existing_df = get_as_dataframe(sheet).fillna("")
 

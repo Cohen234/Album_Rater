@@ -251,7 +251,20 @@
       const rankedListEl = document.getElementById('rankedList');
       rankedListEl.innerHTML = "";
 
-      // Load from queuedRankings if exists
+      // Un-highlight all rank-buttons
+      document.querySelectorAll('.rank-buttons button').forEach(btn => {
+        btn.classList.remove('rank-selected');
+      });
+
+      // Highlight the clicked one
+      const chosenBtn = Array.from(
+        document.querySelectorAll('.rank-buttons button')
+      ).find(btn => btn.textContent.trim() === rank.toString());
+      if (chosenBtn) {
+        chosenBtn.classList.add('rank-selected');
+      }
+
+      // Load from queuedRankings if already selected
       if (queuedRankings[rank]) {
         queuedRankings[rank].forEach(songName => {
           const div = document.createElement('div');
@@ -263,38 +276,8 @@
         });
         updateDragEvents();
         updateRankingData();
-        return; // Skip fetch if we already have this group locally
+        return;
       }
-
-      // Un‐highlight all rank-buttons
-      document.querySelectorAll('.rank-buttons button').forEach(btn => {
-        btn.classList.remove('rank-selected');
-      });
-      function submitFinalRanks() {
-        fetch("/finalize_rankings", {
-          method: "POST",
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(queuedRankings)
-        }).then(resp => {
-          if (resp.ok) {
-            alert("All rankings submitted!");
-            queuedRankings = {};  // Reset local storage
-          } else {
-            alert("Something went wrong.");
-          }
-        });
-      }
-
-      // Highlight the clicked one
-      const chosenBtn = Array.from(
-        document.querySelectorAll('.rank-buttons button')
-      ).find(btn => btn.textContent.trim() === rank.toString());
-      if (chosenBtn) {
-        chosenBtn.classList.add('rank-selected');
-      }
-
-      // Clear previously placed songs
-      document.getElementById('rankedList').innerHTML = "";
 
       // Fetch any already‐saved songs for that rank
       fetch(`/get_ranked_songs?album_name={{ album.album_name }}&artist_name={{ album.artist_name }}&rank=${rank}`)
@@ -306,15 +289,38 @@
             div.draggable = true;
             div.dataset.song = songName;
             div.textContent = songName;
-            rankedList.appendChild(div);
+            rankedListEl.appendChild(div);
+
+            // Show checkmark next to ranked song in left panel
+            const checkmark = document.getElementById(`checkmark-${songName.replace(/\s/g, "_")}`);
+            if (checkmark) {
+              checkmark.style.display = 'inline';
+            }
           });
           updateDragEvents();
           updateRankingData();
-          const checkmark = document.getElementById(`checkmark-${songName.replace(/\s/g, "_")}`);
-          if (checkmark) {
-            checkmark.style.display = 'inline';
-          }
         });
+    }
+
+    function submitFinalRanks() {
+      if (Object.keys(queuedRankings).length === 0) {
+        alert("No rankings to submit.");
+        return;
+      }
+
+      fetch("/finalize_rankings", {
+        method: "POST",
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(queuedRankings)
+      }).then(resp => {
+        if (resp.ok) {
+          alert("All rankings submitted!");
+          queuedRankings = {};
+          document.getElementById('rankedList').innerHTML = "";
+        } else {
+          resp.text().then(msg => alert("Error: " + msg));
+        }
+      });
     }
 
     function updateDragEvents() {
@@ -339,6 +345,7 @@
       const arr = Array.from(items).map(item => item.dataset.song);
       document.getElementById('ranking_data').value = JSON.stringify(arr);
       queuedRankings[currentRank] = arr;
+
       document.querySelectorAll('.left-panel .track-item').forEach(item => {
         const song = item.dataset.song;
         const check = document.getElementById(`checkmark-${song.replace(/\s/g, "_")}`);
@@ -348,10 +355,10 @@
       });
     }
 
-
     // Wire initial drag events on load
     updateDragEvents();
-  </script>
+</script>
+
 
 </body>
 </html>
