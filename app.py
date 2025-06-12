@@ -280,7 +280,13 @@ def load_album():
     try:
         album_id = request.form["album_id"]
         artist_name = request.form["artist_name"]
-        album_songs = load_album_data(album_id)
+        album_data = load_album_data(album_id)
+
+        # If load_album_data returns a single dict with keys like 'songs', fix it here
+        if isinstance(album_data, dict) and "songs" in album_data:
+            album_songs = album_data["songs"]
+        else:
+            album_songs = album_data
         previously_ranked = load_google_sheet_data()
 
         for song in previously_ranked:

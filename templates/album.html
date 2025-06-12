@@ -240,9 +240,8 @@
       </div>
     </div>
 
-    <!-- Previously Ranked Songs Section -->
   <div class="grouped-rankings">
-    <h2>Previously Ranked Songs</h2>
+    <h2>Rank Songs</h2>
 
     {% for group, songs in rank_groups.items() %}
       <div class="rank-group" data-rank="{{ group }}">
@@ -264,12 +263,13 @@
     <div id="unranked-songs">
       <h3>Unranked Songs</h3>
       <ul>
-        {% for song in new_songs %}
-          <li class="rank-song" data-song-id="{{ song.id }}">{{ song.name }}</li>
+        {% for group in rank_groups["?"] %}
+          <li class="rank-song" data-song-id="{{ group.id }}">
+            {{ group.name }}
+          </li>
         {% endfor %}
       </ul>
     </div>
-    {% endfor %}
   </div>
 
   </form>
