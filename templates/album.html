@@ -263,9 +263,9 @@
     <div id="unranked-songs">
       <h3>Unranked Songs</h3>
       <ul>
-        {% for group in rank_groups["?"] %}
-          <li class="rank-song" data-song-id="{{ group.id }}">
-            {{ group.name }}
+        {% for song in rank_groups["?"] %}
+          <li class="rank-song" data-song-id="{{ song.id }}">
+            {{ song.name }}
           </li>
         {% endfor %}
       </ul>

@@ -308,11 +308,8 @@ def load_album():
             if group in rank_groups:
                 rank_groups[group].append(song)
         for song in album_songs:
-            if not isinstance(song, dict):
-                print(f"⚠️ Unexpected song format: {song}")
-                continue  # Skip if not a dict
-
-            if song["id"] not in ranked_ids:
+            song["id"] = song.get("id") or song.get("track_id")  # Normalize to ensure "id" exists
+            if song["id"] and song["id"] not in ranked_ids:
                 song["already_ranked"] = False
                 song["rank_position"] = 999
                 rank_groups["?"].append(song)
