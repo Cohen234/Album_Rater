@@ -280,37 +280,42 @@ def load_album():
     album_id = request.form["album_id"]
     artist_name = request.form["artist_name"]
 
-    # 🔹 1. Load all album songs
+    # 1. Load album songs
     album_songs = load_album_data(album_id)
 
-    # 🔹 2. Load previously ranked songs from your database/Google Sheet
+    # 2. Load previously ranked songs
     previously_ranked = load_google_sheet_data()
 
-    # 🔹 3. Mark which songs are already ranked
-    ranked_ids = {song["id"] for song in previously_ranked}
-    for song in album_songs:
-        song["already_ranked"] = song["id"] in ranked_ids
+    # 3. Normalize IDs
+    for song in previously_ranked:
+        song["id"] = song.get("id") or song.get("track_id")
 
-    # 🔹 4. Create rank_groups dictionary
+    ranked_ids = {song["id"] for song in previously_ranked if song["id"]}
+
+    # 4. Prepare rank groups
     rank_groups = {f"{i/2:.1f}": [] for i in range(2, 21)}  # 1.0 to 10.0
+    rank_groups["?"] = []  # For unranked songs
 
-    # 🔹 5. Add previously ranked songs into correct rank_groups
+    # 5. Add previously ranked songs into their groups
     for song in previously_ranked:
         group = f"{float(song['rank_group']):.1f}"
         song["already_ranked"] = True
         if group in rank_groups:
             rank_groups[group].append(song)
 
-    # 🔹 6. Add unranked songs into a 'new_songs' list to let the user drag them in
-    unranked_songs = [s for s in album_songs if s["id"] not in ranked_ids]
+    # 6. Add unranked songs into the "?" group
+    for song in album_songs:
+        if song["id"] not in ranked_ids:
+            song["already_ranked"] = False
+            song["rank_position"] = 999  # Push to bottom of list
+            rank_groups["?"].append(song)
 
-    # 🔹 7. Sort songs in each group by their saved position
+    # 7. Sort all groups by rank_position
     for group in rank_groups:
         rank_groups[group].sort(key=lambda s: s.get("rank_position", 0))
 
-    return render_template("rank_album.html",
+    return render_template("album.html",
                            rank_groups=rank_groups,
-                           new_songs=unranked_songs,
                            artist_name=artist_name,
                            album_id=album_id)
 @app.route('/view_album', methods=['POST'])
