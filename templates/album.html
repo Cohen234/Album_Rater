@@ -190,12 +190,11 @@
       <div class="track-item" draggable="true" data-song="{{ song.song_name }}">
         <span>
           {{ loop.index }}. {{ song.song_name }}
-          {% if song.rank_count > 0 %}
-            {% for _ in range(song.rank_count) %}
-              ⭐
-            {% endfor %}
-            • Avg: {{ song.avg_rank }}
-            • Last: {{ song.latest_rank_date }}
+          {% for _ in range(song.get("rank_count", 0)) %}
+          ⭐
+          {% endfor %}
+          • Avg: {{ song.get("avg_rank", "N/A") }}
+          • Last: {{ song.get("latest_rank_date", "N/A") }}
             <span style="color: green; font-weight: bold;">✓</span>
           {% endif %}
         </span>
