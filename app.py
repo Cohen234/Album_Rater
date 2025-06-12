@@ -318,10 +318,16 @@ def load_album():
         for group in rank_groups:
             rank_groups[group].sort(key=lambda s: s.get("rank_position", 0))
 
+        album = {
+            "album_name": album_songs[0].get("album_name", "Unknown Album") if album_songs else "Unknown Album",
+            "album_cover_url": album_songs[0].get("album_cover_url", "") if album_songs else "",
+            "artist_name": artist_name,
+            "songs": album_songs
+        }
+
         return render_template("album.html",
-                               rank_groups=rank_groups,
-                               artist_name=artist_name,
-                               album_id=album_id)
+                               album=album,
+                               rank_groups=rank_groups)
 
     except Exception as e:
         import traceback
