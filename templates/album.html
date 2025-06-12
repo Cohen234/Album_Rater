@@ -307,6 +307,7 @@
         alert("No rankings to submit.");
         return;
       }
+      console.log("Submitting:", JSON.stringify(queuedRankings));
 
       fetch("/finalize_rankings", {
         method: "POST",
@@ -344,7 +345,7 @@
       const items = document.querySelectorAll('#rankedList .track-item');
       const arr = Array.from(items).map(item => item.dataset.song);
       document.getElementById('ranking_data').value = JSON.stringify(arr);
-      queuedRankings[currentRank] = arr;
+      queuedRankings[String(currentRank)] = arr;
 
       document.querySelectorAll('.left-panel .track-item').forEach(item => {
         const song = item.dataset.song;

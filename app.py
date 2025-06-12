@@ -300,11 +300,11 @@ def finalize_rankings():
     if not data:
         return "Invalid data", 400
 
-    for rank_group, song_list in data.items():
-        try:
-            float_rank = float(rank_group)
-        except ValueError:
-            return f"Invalid rank group: {rank_group}", 400
+    valid_ranks = {str(r) for r in [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10]}
+
+    for rank_group in data:
+        if str(rank_group) not in valid_ranks:
+            return f"Invalid rank group for final: {rank_group}", 400
     sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
     existing_df = get_as_dataframe(sheet).fillna("")
 
