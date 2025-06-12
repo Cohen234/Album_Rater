@@ -299,6 +299,7 @@ def finalize_rankings():
     data = request.get_json()
     if not data:
         return "Invalid data", 400
+    print("Received data in finalize_rankings:", data)
 
     valid_ranks = {str(r) for r in [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10]}
 
