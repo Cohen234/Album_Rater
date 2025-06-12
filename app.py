@@ -263,9 +263,9 @@ def view_album():
     songs = []
     for _, row in paused_df.iterrows():
         songs.append({
-            "song_name": row["song name"],
-            "prelim_rank": row["ranking"],
-            "rank_count": row.get("rank count", 0)  # Add this line
+            "song_name": row["Song Name"],
+            "prelim_rank": row["Ranking"],
+            "rank_count": row.get("Rank Count", 0)  # Add this line
         })
 
     # Step 4: if there were no paused rows, fall back to the Spotify tracklist
