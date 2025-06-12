@@ -195,6 +195,7 @@
           {% endfor %}
           • Avg: {{ song.get("avg_rank", "N/A") }}
           • Last: {{ song.get("latest_rank_date", "N/A") }}
+          {% if song.already_ranked %}
             <span style="color: green; font-weight: bold;">✓</span>
           {% endif %}
         </span>
