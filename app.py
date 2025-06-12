@@ -59,13 +59,6 @@ def get_dominant_color(image_url):
     return f"rgb({rgb[0]}, {rgb[1]}, {rgb[2]})"
 
 def get_album_stats(album_name, artist_name, df=None):
-    """
-    For the album grid, compute:
-    - total number of finalized (“final”) rows for this album
-    - average of **all** final Rankings for that album
-    - most recent final “Ranked Date”
-    - ranking_status = "paused" if any paused rows exist, else "final" if we have final rows, else None
-    """
     sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
     if df is None:
         df = get_as_dataframe(sheet, evaluate_formulas=True).fillna("")
@@ -284,22 +277,42 @@ def ranking_page():
     return render_template("album.html", group_bins=group_bins)
 @app.route("/load_album", methods=["POST"])
 def load_album():
-    artist_name = request.form["artist_name"]
     album_id = request.form["album_id"]
+    artist_name = request.form["artist_name"]
 
-    album = load_album_data(album_id)
-    sheet_rows = load_google_sheet_data()
-    merged_tracks = merge_album_with_rankings(album["songs"], sheet_rows, artist_name)
+    # 🔹 1. Load all album songs
+    album_songs = load_album_data(album_id)
 
-    album["songs"] = merged_tracks
-    bg_color = get_dominant_color(album["album_cover_url"])
-    group_bins = group_ranked_songs(sheet_rows)
+    # 🔹 2. Load previously ranked songs from your database/Google Sheet
+    previously_ranked = load_google_sheet_data()
 
-    return render_template("album.html",
-                           album=album,
-                           bg_color=bg_color,
-                           group_bins=group_bins)
+    # 🔹 3. Mark which songs are already ranked
+    ranked_ids = {song["id"] for song in previously_ranked}
+    for song in album_songs:
+        song["already_ranked"] = song["id"] in ranked_ids
 
+    # 🔹 4. Create rank_groups dictionary
+    rank_groups = {f"{i/2:.1f}": [] for i in range(2, 21)}  # 1.0 to 10.0
+
+    # 🔹 5. Add previously ranked songs into correct rank_groups
+    for song in previously_ranked:
+        group = f"{float(song['rank_group']):.1f}"
+        song["already_ranked"] = True
+        if group in rank_groups:
+            rank_groups[group].append(song)
+
+    # 🔹 6. Add unranked songs into a 'new_songs' list to let the user drag them in
+    unranked_songs = [s for s in album_songs if s["id"] not in ranked_ids]
+
+    # 🔹 7. Sort songs in each group by their saved position
+    for group in rank_groups:
+        rank_groups[group].sort(key=lambda s: s.get("rank_position", 0))
+
+    return render_template("rank_album.html",
+                           rank_groups=rank_groups,
+                           new_songs=unranked_songs,
+                           artist_name=artist_name,
+                           album_id=album_id)
 @app.route('/view_album', methods=['POST'])
 def view_album():
     album_url = request.form.get("album_url")

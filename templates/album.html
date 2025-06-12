@@ -244,22 +244,31 @@
   <div class="grouped-rankings">
     <h2>Previously Ranked Songs</h2>
 
-    {% for group, songs in group_bins.items() %}
-      {% if songs %}
-        <div class="rank-group">
-          <h3>Rank {{ group }}</h3>
-          <ul>
-            {% for song in songs %}
-              <li>
-                {{ song.title }} by {{ song.artist }} —
-                Score: {{ song.rank }}
-                {% if song.date %} ({{ song.date }}) {% endif %}
-                {% if song.position %} • Position: {{ song.position }} {% endif %}
-              </li>
-            {% endfor %}
-          </ul>
-        </div>
-      {% endif %}
+    {% for group, songs in rank_groups.items() %}
+      <div class="rank-group" data-rank="{{ group }}">
+        <h3>{{ group }}</h3>
+        <ul class="rank-list" data-rank="{{ group }}">
+          {% for song in songs %}
+            <li class="rank-song" data-song-id="{{ song.id }}">
+              {{ song.name }}
+              {% if song.already_ranked %}
+                ✅
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endfor %}
+
+    <!-- Optional: queue of unranked songs -->
+    <div id="unranked-songs">
+      <h3>Unranked Songs</h3>
+      <ul>
+        {% for song in new_songs %}
+          <li class="rank-song" data-song-id="{{ song.id }}">{{ song.name }}</li>
+        {% endfor %}
+      </ul>
+    </div>
     {% endfor %}
   </div>
 
