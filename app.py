@@ -235,8 +235,10 @@ def submit_rankings():
 def index():
     return render_template('index.html')
 def merge_album_with_rankings(album_tracks, sheet_rows, artist_name):
-    # sheet_rows = list of dicts from Google Sheet
-    for i, track_name in enumerate(album_tracks):
+    merged_tracks = []
+    for track in album_tracks:
+        # Handle both string and dict cases
+        track_name = track if isinstance(track, str) else track.get("song_name", "")
         tn_lower = track_name.strip().lower()
         artist_lower = artist_name.strip().lower()
 
@@ -257,16 +259,15 @@ def merge_album_with_rankings(album_tracks, sheet_rows, artist_name):
             latest_rank_date = None
             prelim_rank = ""
 
-        # Now convert back to dict for your template usage:
-        album_tracks[i] = {
+        merged_tracks.append({
             "song_name": track_name,
             "rank_count": rank_count,
             "avg_rank": avg_rank,
             "latest_rank_date": latest_rank_date,
             "prelim_rank": prelim_rank
-        }
+        })
 
-    return album_tracks
+    return merged_tracks
 def load_google_sheet_data():
     sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
     return sheet.get_all_records()
