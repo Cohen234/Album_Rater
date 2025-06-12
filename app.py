@@ -305,7 +305,7 @@ def load_album():
         for group in rank_groups:
             rank_groups[group].sort(key=lambda s: s.get("rank_position", 0))
 
-        return render_template("rank_album.html",
+        return render_template("album.html",
                                rank_groups=rank_groups,
                                artist_name=artist_name,
                                album_id=album_id)
