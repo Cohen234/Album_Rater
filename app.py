@@ -294,7 +294,7 @@ def load_albums_by_artist_route():
 
     # 5. Merge ranking metadata into each track
     for track in album_tracks:
-        track_name = track['name'].strip().lower()
+        track_name = track.strip().lower()
         artist_lower = artist_name.strip().lower()
 
         matches = [
