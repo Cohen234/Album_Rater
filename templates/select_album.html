@@ -204,6 +204,13 @@
 
           <button type="submit">Rank Album</button>
         </form>
+
+        <!-- ✅ New Select Album Form -->
+        <form action="{{ url_for('load_album') }}" method="post" style="margin-top: 8px;">
+          <input type="hidden" name="album_id" value="{{ album.id }}">
+          <input type="hidden" name="artist_name" value="{{ artist_name }}">
+          <button type="submit">Select Album</button>
+        </form>
       </div>
     {% endfor %}
   </div>

@@ -273,41 +273,32 @@ def load_google_sheet_data():
     return sheet.get_all_records()
 @app.route("/load_albums_by_artist", methods=["POST"])
 def load_albums_by_artist_route():
-    artist_name = request.form.get("artist_name", "").strip()
-
-    if not artist_name:
-        return "Artist name required.", 400
-
-    # 1. Get albums and songs from Spotify
+    artist_name = request.form["artist_name"]
     albums = get_albums_by_artist(artist_name)
-    if not albums:
-        return "No albums found.", 404
 
-    # 2. Select first album for simplicity
-    album = albums[0]  # You could let user pick instead
-
-    # 3. Get track list for album
-    album_tracks = load_album_data(album['id'])
-
-    # 4. Load past rankings from Google Sheet
-    sheet_rows = load_google_sheet_data()  # returns list of dicts
-    group_bins = group_ranked_songs(sheet_rows)
-
-    # 5. Merge ranking metadata into each track
-    album_tracks = merge_album_with_rankings(album_tracks, sheet_rows, artist_name)
-
-    # 6. Group previously ranked songs
-
-    return render_template("album.html", album={
-        "album_name": album['name'],
-        "artist_name": artist_name,
-        "album_cover_url": album['image'],
-        "songs": album_tracks}, group_bins=group_bins)
+    return render_template("select_album.html", artist_name=artist_name, albums=albums)
 @app.route("/ranking_page")
 def ranking_page():
     sheet_rows = load_google_sheet_data()
     group_bins = group_ranked_songs(sheet_rows)
     return render_template("album.html", group_bins=group_bins)
+@app.route("/load_album", methods=["POST"])
+def load_album():
+    artist_name = request.form["artist_name"]
+    album_id = request.form["album_id"]
+
+    album = load_album_data(album_id)
+    sheet_rows = load_google_sheet_data()
+    merged_tracks = merge_album_with_rankings(album["songs"], sheet_rows, artist_name)
+
+    album["songs"] = merged_tracks
+    bg_color = get_dominant_color(album["album_cover_url"])
+    group_bins = group_ranked_songs(sheet_rows)
+
+    return render_template("album.html",
+                           album=album,
+                           bg_color=bg_color,
+                           group_bins=group_bins)
 
 @app.route('/view_album', methods=['POST'])
 def view_album():
