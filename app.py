@@ -234,27 +234,37 @@ def submit_rankings():
 @app.route('/')
 def index():
     return render_template('index.html')
-def merge_album_with_rankings(album_tracks, sheet_rows):
+def merge_album_with_rankings(album_tracks, sheet_rows, artist_name):
     # sheet_rows = list of dicts from Google Sheet
-    for track in album_tracks:
-        track_name = track['name'].strip().lower()
-        artist_name = track['artist'].strip().lower()
+    for i, track_name in enumerate(album_tracks):
+        tn_lower = track_name.strip().lower()
+        artist_lower = artist_name.strip().lower()
 
-        # Find all matching rows in sheet
         matches = [
             row for row in sheet_rows
-            if row['Artist Name'].strip().lower() == artist_name and
-               row['Song Name'].strip().lower() == track_name
+            if row['Artist Name'].strip().lower() == artist_lower and
+               row['Song Name'].strip().lower() == tn_lower
         ]
 
         if matches:
-            track['rank_count'] = len(matches)
-            track['avg_rank'] = round(sum(float(r['Ranking']) for r in matches) / len(matches), 2)
-            track['latest_rank_date'] = max(r['Ranked Date'] for r in matches)
+            rank_count = len(matches)
+            avg_rank = round(sum(float(r['Ranking']) for r in matches) / rank_count, 2)
+            latest_rank_date = max(r['Ranked Date'] for r in matches)
+            prelim_rank = matches[-1]['Ranking']
         else:
-            track['rank_count'] = 0
-            track['avg_rank'] = None
-            track['latest_rank_date'] = None
+            rank_count = 0
+            avg_rank = None
+            latest_rank_date = None
+            prelim_rank = ""
+
+        # Now convert back to dict for your template usage:
+        album_tracks[i] = {
+            "song_name": track_name,
+            "rank_count": rank_count,
+            "avg_rank": avg_rank,
+            "latest_rank_date": latest_rank_date,
+            "prelim_rank": prelim_rank
+        }
 
     return album_tracks
 def load_google_sheet_data():
