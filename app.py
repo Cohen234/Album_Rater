@@ -291,7 +291,13 @@ def load_album():
         rank_groups["?"] = []
 
         for song in previously_ranked:
-            group = f"{float(song['rank_group']):.1f}"
+            group_value = song.get("rank_group")
+            if group_value is None:
+                continue  # skip if no rank_group — or you could add to "?" group if you prefer
+            try:
+                group = f"{float(group_value):.1f}"
+            except ValueError:
+                continue  # skip if not a number
             song["already_ranked"] = True
             if group in rank_groups:
                 rank_groups[group].append(song)
