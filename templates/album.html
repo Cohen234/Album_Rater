@@ -208,36 +208,33 @@
       </div>
     {% endfor %}
   </div>
-</div>
-
-    <!-- Right Panel: Rank groups, drop area, and pause/submit buttons at bottom -->
-    <div class="right-panel">
-      <h2 style="margin-bottom: 0.2rem;">Select Rank Group</h2>
-      <div class="rank-buttons">
-        {% for rank in [1,1.5,2,2.5,3,3.5,4,4.5,5,5.5,6,6.5,7,7.5,8,8.5,9,9.5,10] %}
-          <button type="button" onclick="selectRankGroup({{ rank }})">{{ rank }}</button>
-        {% endfor %}
-      </div>
-
-      <h3>Rank Songs in Group</h3>
-      <div class="ranked-list" id="rankedList"></div>
-
-      <!-- Hidden fields to pass along album/artist & chosen data -->
-      <input type="hidden" name="album_name"   value="{{ album.album_name }}" />
-      <input type="hidden" name="artist_name"  value="{{ album.artist_name }}" />
-      <input type="hidden" name="selected_rank" id="selected_rank" value="" />
-      <input type="hidden" name="ranking_data" id="ranking_data" value="[]" />
-
-      <!-- Submit Buttons -->
-      <div class="submit-container">
-        <button type="submit" name="status" value="paused" class="submit-btn pause">
-          Pause &amp; Save
-        </button>
-        <button type="submit" name="status" value="final" class="submit-btn final" onclick="submitFinalRanks()">
-          Submit Final
-        </button>
-      </div>
+  <div class="right-panel">
+    <h2 style="margin-bottom: 0.2rem;">Select Rank Group</h2>
+    <div class="rank-buttons">
+      {% for rank in [1,1.5,2,2.5,3,3.5,4,4.5,5,5.5,6,6.5,7,7.5,8,8.5,9,9.5,10] %}
+        <button type="button" onclick="selectRankGroup({{ rank }})">{{ rank }}</button>
+      {% endfor %}
     </div>
+
+    <h3>Rank Songs in Group</h3>
+    <div class="ranked-list" id="rankedList"></div>
+
+    <!-- Hidden fields to pass along album/artist & chosen data -->
+    <input type="hidden" name="album_name" value="{{ album.album_name }}" />
+    <input type="hidden" name="artist_name" value="{{ album.artist_name }}" />
+    <input type="hidden" name="selected_rank" id="selected_rank" value="" />
+    <input type="hidden" name="ranking_data" id="ranking_data" value="[]" />
+
+    <!-- Submit Buttons -->
+    <div class="submit-container">
+      <button type="submit" name="status" value="paused" class="submit-btn pause">
+        Pause &amp; Save
+      </button>
+      <button type="submit" name="status" value="final" class="submit-btn final" onclick="submitFinalRanks()">
+        Submit Final
+      </button>
+    </div>
+  </div>
 
   <div class="grouped-rankings">
     <h2>Rank Songs</h2>
@@ -259,20 +256,20 @@
     {% endfor %}
 
     <!-- Optional: queue of unranked songs -->
-    <div id="unranked-songs">
-      <h3>Unranked Songs</h3>
-      <ul>
-        {% for song in rank_groups["?"] %}
-          <li class="rank-song" data-song-id="{{ song.id }}">
-            {{ song.name }}
-          </li>
-        {% endfor %}
-      </ul>
-    </div>
+    {% if rank_groups.get("?") %}
+      <div id="unranked-songs">
+        <h3>Unranked Songs</h3>
+        <ul>
+          {% for song in rank_groups["?"] %}
+            <li class="rank-song" data-song-id="{{ song.id }}">
+              {{ song.name }}
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
   </div>
-
   </form>
-
   <script>
     let draggedItem = null;
     let currentRank = null;
