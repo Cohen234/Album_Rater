@@ -293,26 +293,7 @@ def load_albums_by_artist_route():
     group_bins = group_ranked_songs(sheet_rows)
 
     # 5. Merge ranking metadata into each track
-    for track in album_tracks:
-        track_name = track.strip().lower()
-        artist_lower = artist_name.strip().lower()
-
-        matches = [
-            row for row in sheet_rows
-            if row['Artist Name'].strip().lower() == artist_lower and
-               row['Song Name'].strip().lower() == track_name
-        ]
-
-        if matches:
-            track['rank_count'] = len(matches)
-            track['avg_rank'] = round(sum(float(r['Ranking']) for r in matches) / len(matches), 2)
-            track['latest_rank_date'] = max(r['Ranked Date'] for r in matches)
-            track['prelim_rank'] = matches[-1]['Ranking']
-        else:
-            track['rank_count'] = 0
-            track['avg_rank'] = None
-            track['latest_rank_date'] = None
-            track['prelim_rank'] = ""
+    album_tracks = merge_album_with_rankings(album_tracks, sheet_rows, artist_name)
 
     # 6. Group previously ranked songs
 
