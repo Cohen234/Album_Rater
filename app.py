@@ -32,7 +32,26 @@ SPREADSHEET_ID = '15E4b-DWSYP9AzbAzSviqkW-jEOktbimPlmhNIs_d5jc'
 SHEET_NAME = "Sheet1"
 
 app = Flask(__name__)
+def group_ranked_songs(sheet_rows):
+    group_bins = {round(x * 0.5, 1): [] for x in range(2, 21)}  # 1.0 to 10.0
 
+    for row in sheet_rows:
+        try:
+            rank = float(row["Ranking"])
+            group = round(rank * 2) / 2  # Ensure .5 steps
+            group = min(max(group, 1.0), 10.0)  # Clamp between 1.0 and 10.0
+
+            group_bins[group].append({
+                "artist": row["Artist Name"],
+                "title": row["Song Name"],
+                "rank": rank,
+                "date": row["Ranked Date"],
+                "position": row.get("Position In Group", None)
+            })
+        except:
+            continue  # skip if bad data
+
+    return group_bins
 def get_dominant_color(image_url):
     response = requests.get(image_url)
     color_thief = ColorThief(BytesIO(response.content))
@@ -215,20 +234,88 @@ def submit_rankings():
 @app.route('/')
 def index():
     return render_template('index.html')
+def merge_album_with_rankings(album_tracks, sheet_rows):
+    # sheet_rows = list of dicts from Google Sheet
+    for track in album_tracks:
+        track_name = track['name'].strip().lower()
+        artist_name = track['artist'].strip().lower()
 
-@app.route('/load_albums_by_artist', methods=['POST'])
-def load_albums_by_artist_route():
-    artist_name = request.form['artist_name']
-    albums = get_albums_by_artist(artist_name)
+        # Find all matching rows in sheet
+        matches = [
+            row for row in sheet_rows
+            if row['Artist Name'].strip().lower() == artist_name and
+               row['Song Name'].strip().lower() == track_name
+        ]
 
-    # Load spreadsheet only once
+        if matches:
+            track['rank_count'] = len(matches)
+            track['avg_rank'] = round(sum(float(r['Ranking']) for r in matches) / len(matches), 2)
+            track['latest_rank_date'] = max(r['Ranked Date'] for r in matches)
+        else:
+            track['rank_count'] = 0
+            track['avg_rank'] = None
+            track['latest_rank_date'] = None
+
+    return album_tracks
+def load_google_sheet_data():
     sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
-    df = get_as_dataframe(sheet, evaluate_formulas=True).fillna("")
+    return sheet.get_all_records()
+@app.route("/load_albums_by_artist", methods=["POST"])
+def load_albums_by_artist_route():
+    artist_name = request.form.get("artist_name", "").strip()
 
-    for album in albums:
-        album["stats"] = get_album_stats(album["name"], artist_name, df=df)
+    if not artist_name:
+        return "Artist name required.", 400
 
-    return render_template("select_album.html", artist_name=artist_name, albums=albums)
+    # 1. Get albums and songs from Spotify
+    albums = get_albums_by_artist(artist_name)
+    if not albums:
+        return "No albums found.", 404
+
+    # 2. Select first album for simplicity
+    album = albums[0]  # You could let user pick instead
+
+    # 3. Get track list for album
+    album_tracks = load_album_data(album['id'])
+
+    # 4. Load past rankings from Google Sheet
+    sheet_rows = load_google_sheet_data()  # returns list of dicts
+    group_bins = group_ranked_songs(sheet_rows)
+
+    # 5. Merge ranking metadata into each track
+    for track in album_tracks:
+        track_name = track['name'].strip().lower()
+        artist_lower = artist_name.strip().lower()
+
+        matches = [
+            row for row in sheet_rows
+            if row['Artist Name'].strip().lower() == artist_lower and
+               row['Song Name'].strip().lower() == track_name
+        ]
+
+        if matches:
+            track['rank_count'] = len(matches)
+            track['avg_rank'] = round(sum(float(r['Ranking']) for r in matches) / len(matches), 2)
+            track['latest_rank_date'] = max(r['Ranked Date'] for r in matches)
+            track['prelim_rank'] = matches[-1]['Ranking']
+        else:
+            track['rank_count'] = 0
+            track['avg_rank'] = None
+            track['latest_rank_date'] = None
+            track['prelim_rank'] = ""
+
+    # 6. Group previously ranked songs
+
+    return render_template("album.html", album={
+        "album_name": album['name'],
+        "artist_name": artist_name,
+        "album_cover_url": album['image'],
+        "songs": album_tracks}, group_bins=group_bins)
+@app.route("/ranking_page")
+def ranking_page():
+    sheet_rows = load_google_sheet_data()
+    group_bins = group_ranked_songs(sheet_rows)
+    return render_template("album.html", group_bins=group_bins)
 
 @app.route('/view_album', methods=['POST'])
 def view_album():

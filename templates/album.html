@@ -182,7 +182,6 @@
 
   <!-- One single form wrapping both panels -->
   <form action="{{ url_for('submit_rankings') }}" method="post" class="main-content">
-
     <!-- Left Panel: Show all tracks + preliminary‐rank inputs -->
     <div class="left-panel">
   <h2>Album Songs</h2>
@@ -195,8 +194,10 @@
             {% for _ in range(song.rank_count) %}
               ⭐
             {% endfor %}
+            • Avg: {{ song.avg_rank }}
+            • Last: {{ song.latest_rank_date }}
+            <span style="color: green; font-weight: bold;">✓</span>
           {% endif %}
-          <span id="checkmark-{{ song.song_name|replace(' ', '_') }}" style="color: green; font-weight: bold; display: none;">✓</span>
         </span>
         <input class="track-rank-input"
                type="number"
@@ -238,6 +239,29 @@
         </button>
       </div>
     </div>
+
+    <!-- Previously Ranked Songs Section -->
+  <div class="grouped-rankings">
+    <h2>Previously Ranked Songs</h2>
+
+    {% for group, songs in group_bins.items() %}
+      {% if songs %}
+        <div class="rank-group">
+          <h3>Rank {{ group }}</h3>
+          <ul>
+            {% for song in songs %}
+              <li>
+                {{ song.title }} by {{ song.artist }} —
+                Score: {{ song.rank }}
+                {% if song.date %} ({{ song.date }}) {% endif %}
+                {% if song.position %} • Position: {{ song.position }} {% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+    {% endfor %}
+  </div>
 
   </form>
 
