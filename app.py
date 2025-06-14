@@ -395,7 +395,7 @@ def view_album():
             "songs":           songs,
             "album_cover_url": album_cover_url
         },
-        bg_color=bg_color
+        bg_color=bg_color, album_name=album_name,album_art=album_cover_url
     )
 
 @app.route("/finalize_rankings", methods=["POST"])

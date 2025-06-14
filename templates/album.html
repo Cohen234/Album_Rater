@@ -169,94 +169,95 @@
     }
   </style>
 </head>
-<body>
+<body style="background-color: {{ bg_color }}; font-family: sans-serif;">
 
-  <div class="header-container">
-    <div class="album-art-container">
-      <img src="{{ album.album_cover_url }}" alt="{{ album.album_name }} cover" class="album-art">
+  <div class="header-container" style="display: flex; align-items: center; padding: 1rem;">
+    <div class="album-art-container" style="margin-right: 1rem;">
+      <img src="{{ album_art }}" alt="Album cover" class="w-24 h-24 rounded shadow-lg" />
     </div>
     <div class="album-info">
-      <h1>{{ album.album_name }}</h1>
+      <h1 class="text-3xl font-bold">{{ album_name }}</h1>
     </div>
   </div>
 
-  <!-- One single form wrapping both panels -->
-  <form action="{{ url_for('submit_rankings') }}" method="post" class="main-content">
-    <!-- Left Panel: Show all tracks + preliminary‐rank inputs -->
-    <div class="left-panel">
-  <h2>Album Songs</h2>
-  <div id="trackList">
-    {% for song in album.songs %}
-      <div class="track-item" draggable="true" data-song="{{ song.song_name }}">
-        <span>
-          {{ loop.index }}. {{ song.song_name }}
-          {% for _ in range(song.get("rank_count", 0)) %}
-          ⭐
-          {% endfor %}
-          • Avg: {{ song.get("avg_rank", "N/A") }}
-          • Last: {{ song.get("latest_rank_date", "N/A") }}
-          {% if song.already_ranked %}
-            <span style="color: green; font-weight: bold;">✓</span>
-          {% endif %}
-        </span>
-        <input class="track-rank-input"
-               type="number"
-               name="prelim_rank_{{ song.song_name }}"
-               min="0.5"
-               max="10"
-               step="0.5"
-               value="{{ song.prelim_rank }}">
+  <!-- Wrap both panels in a side-by-side flex container -->
+  <form action="{{ url_for('submit_rankings') }}" method="post" style="display: flex; gap: 2rem; padding: 1rem;">
+
+    <!-- 🟩 Left: Album Songs -->
+    <div class="left-panel" style="flex: 1;">
+      <h2>Album Songs</h2>
+      <div id="trackList">
+        {% for song in album.songs %}
+          <div class="track-item" draggable="true" data-song="{{ song.song_name }}" style="display: flex; align-items: center; justify-content: start; margin-bottom: 0.5rem;">
+            <input class="track-rank-input"
+                   type="number"
+                   name="prelim_rank_{{ song.song_name }}"
+                   min="0.5"
+                   max="10"
+                   step="0.5"
+                   value="{{ song.prelim_rank }}"
+                   style="width: 3rem; margin-right: 0.5rem;" />
+            <span>
+              {{ loop.index }}. {{ song["name"] }}
+              {% for _ in range(song.get("rank_count", 0)) %}
+              ⭐
+              {% endfor %}
+              {% if song.already_ranked %}
+                <span style="color: green; font-weight: bold;">✓</span>
+              {% endif %}
+            </span>
+          </div>
+        {% endfor %}
       </div>
-    {% endfor %}
-  </div>
-  <div class="right-panel">
-    <h2 style="margin-bottom: 0.2rem;">Select Rank Group</h2>
-    <div class="rank-buttons">
-      {% for rank in [1,1.5,2,2.5,3,3.5,4,4.5,5,5.5,6,6.5,7,7.5,8,8.5,9,9.5,10] %}
-        <button type="button" onclick="selectRankGroup({{ rank }})">{{ rank }}</button>
-      {% endfor %}
     </div>
 
-    <h3>Rank Songs in Group</h3>
-    <div class="ranked-list" id="rankedList"></div>
+    <!-- 🟦 Right: Ranking System -->
+    <div class="right-panel" style="flex: 1;">
+      <h2 style="margin-bottom: 0.2rem;">Select Rank Group</h2>
+      <div class="rank-buttons" style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+        {% for rank in [1,1.5,2,2.5,3,3.5,4,4.5,5,5.5,6,6.5,7,7.5,8,8.5,9,9.5,10] %}
+          <button type="button" onclick="selectRankGroup({{ rank }})">{{ rank }}</button>
+        {% endfor %}
+      </div>
 
-    <!-- Hidden fields to pass along album/artist & chosen data -->
-    <input type="hidden" name="album_name" value="{{ album.album_name }}" />
-    <input type="hidden" name="artist_name" value="{{ album.artist_name }}" />
-    <input type="hidden" name="selected_rank" id="selected_rank" value="" />
-    <input type="hidden" name="ranking_data" id="ranking_data" value="[]" />
+      <h3>Rank Songs in Group</h3>
+      <div class="ranked-list" id="rankedList" style="min-height: 150px; border: 1px solid #ccc; padding: 0.5rem; background: #fff; border-radius: 6px;"></div>
 
-    <!-- Submit Buttons -->
-    <div class="submit-container">
-      <button type="submit" name="status" value="paused" class="submit-btn pause">
-        Pause &amp; Save
-      </button>
-      <button type="submit" name="status" value="final" class="submit-btn final" onclick="submitFinalRanks()">
-        Submit Final
-      </button>
+      <!-- Hidden data -->
+      <input type="hidden" name="album_name" value="{{ album.album_name }}" />
+      <input type="hidden" name="artist_name" value="{{ album.artist_name }}" />
+      <input type="hidden" name="selected_rank" id="selected_rank" value="" />
+      <input type="hidden" name="ranking_data" id="ranking_data" value="[]" />
+
+      <!-- Submit Buttons -->
+      <div class="submit-container" style="margin-top: 1rem;">
+        <button type="submit" name="status" value="paused" class="submit-btn pause">
+          Pause &amp; Save
+        </button>
+        <button type="submit" name="status" value="final" class="submit-btn final" onclick="submitFinalRanks()">
+          Submit Final
+        </button>
+      </div>
     </div>
-  </div>
+  </form>
 
-  <div class="grouped-rankings">
+  <!-- ⬇️ Optional: Grouped Rankings Below Panels -->
+  <div class="grouped-rankings" style="padding: 1rem;">
     <h2>Rank Songs</h2>
-
     {% for group, songs in rank_groups.items() %}
-      <div class="rank-group" data-rank="{{ group }}">
+      <div class="rank-group" data-rank="{{ group }}" style="margin-bottom: 1rem;">
         <h3>{{ group }}</h3>
         <ul class="rank-list" data-rank="{{ group }}">
           {% for song in songs %}
             <li class="rank-song" data-song-id="{{ song.id }}">
               {{ song.name }}
-              {% if song.already_ranked %}
-                ✅
-              {% endif %}
+              {% if song.already_ranked %} ✅ {% endif %}
             </li>
           {% endfor %}
         </ul>
       </div>
     {% endfor %}
 
-    <!-- Optional: queue of unranked songs -->
     {% if rank_groups.get("?") %}
       <div id="unranked-songs">
         <h3>Unranked Songs</h3>
@@ -270,7 +271,7 @@
       </div>
     {% endif %}
   </div>
-  </form>
+
   <script>
     let draggedItem = null;
     let currentRank = null;
