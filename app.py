@@ -346,6 +346,7 @@ def view_album():
     # Step 1: fetch album info from Spotify
     album = load_album_data(album_url)
     album_name  = album["album_name"]
+    print(album_name)
     artist_name = album["artist_name"]
 
     # Step 2: load existing rows from Google Sheets
