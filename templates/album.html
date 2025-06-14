@@ -359,7 +359,18 @@
           const check = document.getElementById(`checkmark-${song.replace(/\s/g, "_")}`);
           if (check) {
             check.style.display = rankedSongs.has(song) ? 'inline' : 'none';
+
           }
+        document.addEventListener('DOMContentLoaded', function () {
+          updateDragEvents();
+
+          const rankedList = document.getElementById('rankedList');
+          rankedList.addEventListener('dragover', e => e.preventDefault());
+          rankedList.addEventListener('drop', () => {
+            if (draggedItem) {
+              rankedList.appendChild(draggedItem);
+              updateRankingData();
+            }
         });
       }
 

@@ -12,6 +12,7 @@ import os
 import json
 from google.oauth2 import service_account
 from spotify_logic import load_album_data, get_albums_by_artist, extract_album_id
+from utils.color_extractor import extract_dominant_color
 from google.oauth2.service_account import Credentials
 # Setup
 import json
@@ -386,20 +387,15 @@ def view_album():
             }
             for track in album["songs"]
         ]
-    album_cover_url = album["album_cover_url"]
-    try:
-        bg_color = get_dominant_color(album_cover_url)
-    except Exception:
-        bg_color = "#ffffff"
+    dominat_color = get_dominant_color(album["album_cover_url"])
 
     return render_template("album.html",
                            album={
                                "album_name": album_name,
                                "artist_name": artist_name,
                                "songs": songs,
-                               "album_cover_url": album_cover_url
                            },
-                           bg_color=bg_color
+                           bg_color=dominat_color
                            )
 
 
