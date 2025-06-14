@@ -1,354 +1,354 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{{ album.album_name }} — {{ album.artist_name }}</title>
-  <style>
-    /* make sure this is in your style block */
-    body, html {
-      margin: 0; padding: 0; height: 100%;
-      font-family: sans-serif;
-      background-color: {{ bg_color }};
-      transition: background 1s ease-in-out;
-    }
+    <meta charset="UTF-8">
+    <title>{{ album.album_name }} - {{ album.artist_name }} Ranking</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background-color: {{ bg_color }};
+            color: #eee;
+        }
+        header {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            background: rgba(0,0,0,0.5);
+        }
+        header img {
+            height: 100px;
+            margin-right: 20px;
+        }
+        header h1 {
+            margin: 0;
+            font-size: 24px;
+            text-align: left;
+        }
+        header h2 {
+            margin: 0 0 0 10px;
+            font-size: 18px;
+            font-weight: normal;
+            color: #ccc;
+        }
+        #container {
+            display: flex;
+            height: calc(100vh - 120px);
+        }
+        /* Left panel: song list */
+        #songListContainer {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background-color: rgba(0,0,0,0.7);
+        }
+        #songListContainer ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        #songListContainer li {
+            display: flex;
+            align-items: center;
+            background-color: #333;
+            margin: 5px 0;
+            padding: 10px;
+            border-radius: 4px;
+            cursor: grab;
+            transition: background 0.2s;
+        }
+        #songListContainer li:hover {
+            background-color: #444;
+        }
+        #songListContainer li.dragging {
+            opacity: 0.7;
+        }
+        #songListContainer .song-name {
+            flex: 1;
+        }
+        #songListContainer input[type=number] {
+            width: 60px;
+            margin-left: 10px;
+            background-color: #222;
+            color: #fff;
+            border: 1px solid #555;
+            border-radius: 3px;
+            text-align: center;
+        }
+        #songListContainer .checkmark {
+            color: #0f0;
+            font-size: 18px;
+            margin-left: 10px;
+        }
 
-    /* rank-selected highlight */
-    .rank-selected {
-      background-color: #ffcc00 !important;
-      color: #000     !important;
-    }
+        /* Right panel: ranking */
+        #rankContainer {
+            flex: 1.5;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            background-color: rgba(0,0,0,0.8);
+        }
+        #rankButtons {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        #rankButtons button {
+            padding: 10px;
+            background-color: #555;
+            color: #ddd;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: transform 0.1s, background 0.2s;
+        }
+        #rankButtons button:hover {
+            background-color: #666;
+            transform: scale(1.05);
+        }
+        #rankButtons button.active {
+            background-color: #ffcc00;
+            color: #000;
+        }
+        #rankedList {
+            flex: 1;
+            overflow-y: auto;
+            background-color: #222;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        #rankedList ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        #rankedList li {
+            background-color: #333;
+            margin: 5px 0;
+            padding: 10px;
+            border-radius: 4px;
+            cursor: grab;
+            transition: background 0.2s;
+        }
+        #rankedList li:hover {
+            background-color: #444;
+        }
+        #rankedList li.dragging {
+            opacity: 0.7;
+        }
+        #rankedList li.over {
+            border: 2px dashed #ffcc00;
+        }
 
-    /* basic header styling */
-    .header-container {
-      display: flex;
-      align-items: center;
-      padding: 1rem;
-      background: rgba(0,0,0,0.5);
-      color: white;
-    }
-    .header-container img {
-      height: 120px;
-      border-radius: 8px;
-      margin-right: 1rem;
-    }
-  </style>
+        /* Footer buttons */
+        #actions {
+            margin-top: 10px;
+            text-align: right;
+        }
+        #actions button {
+            padding: 10px 15px;
+            margin-left: 10px;
+            background-color: #0055aa;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        #actions button:hover {
+            background-color: #0066cc;
+        }
+    </style>
 </head>
 <body>
-  <!-- Header: cover + title -->
-  <div class="header-container">
-    <img src="{{ album.album_cover_url }}" alt="Cover for {{ album.album_name }}" />
-    <h1 style="margin:0;">
-      {{ album.album_name }}<br/>
-      <small>{{ album.artist_name }}</small>
-    </h1>
-  </div>
-  main {
-    flex: 1;
-    display: flex;
-    overflow: hidden;
-  }
-  /* Left Panel */
-  #left-panel {
-    width: 350px;
-    background: rgba(0, 0, 0, 0.6);
-    padding: 1rem;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-  }
-  #album-cover {
-    width: 100%;
-    max-width: 250px;
-    margin-bottom: 1rem;
-    border-radius: 10px;
-    box-shadow: 0 0 20px rgba(0,0,0,0.7);
-  }
-  .song-entry {
-    display: flex;
-    align-items: center;
-    margin-bottom: 0.6rem;
-  }
-  .prelim-rank-input {
-    width: 60px;
-    margin-right: 10px;
-    font-size: 1rem;
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-    border: none;
-  }
-  /* Right Panel */
-  #right-panel {
-    flex: 1;
-    background: rgba(0, 0, 0, 0.7);
-    padding: 1rem;
-    overflow-y: auto;
-  }
-  .rank-categories {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 1rem;
-  }
-  .rank-category {
-    flex: 1 1 40px;
-    text-align: center;
-    background: rgba(255,255,255,0.1);
-    cursor: pointer;
-    border-radius: 6px;
-    padding: 0.4rem 0;
-    user-select: none;
-    font-weight: bold;
-    transition: background-color 0.3s;
-  }
-  .rank-category.selected {
-    background: #ffcc00;
-    color: #000;
-  }
-  .drag-drop-list {
-    border: 2px dashed rgba(255,255,255,0.3);
-    min-height: 300px;
-    border-radius: 8px;
-    padding: 1rem;
-    color: white;
-  }
-  .drag-drop-item {
-    display: flex;
-    justify-content: flex-end;
-    padding: 0.5rem 1rem;
-    margin-bottom: 0.3rem;
-    background: rgba(255,255,255,0.1);
-    border-radius: 4px;
-    cursor: grab;
-  }
-  .drag-drop-item span.song-order {
-    width: 40px;
-    text-align: right;
-    margin-right: 10px;
-    font-weight: bold;
-  }
-  .drag-drop-item span.song-name {
-    flex: 1;
-    text-align: left;
-  }
-  /* Highlighted rank button */
-  .rank-selected {
-    background-color: #ffcc00 !important;
-    color: #000     !important;
-  }
-</style>
-</head>
-<body style="background-color: {{ bg_color }}; font-family: sans-serif; margin: 0;">
+    <header>
+        <img src="{{ album.album_cover_url }}" alt="Album Cover">
+        <div>
+            <h1>{{ album.album_name }}</h1>
+            <h2>{{ album.artist_name }}</h2>
+        </div>
+    </header>
+    <form id="rankingForm" method="post" action="{{ url_for('submit_rankings') }}">
+        <!-- Hidden metadata fields -->
+        <input type="hidden" name="album_name" value="{{ album.album_name }}">
+        <input type="hidden" name="artist_name" value="{{ album.artist_name }}">
+        <input type="hidden" id="selected_rank" name="selected_rank" value="">
+        <input type="hidden" id="ranking_data" name="ranking_data" value="">
+        <input type="hidden" id="action_type" name="action_type" value="">
 
-  <!-- Header -->
-  <div class="header-container" style="display: flex; align-items: center; padding: 1rem; background: rgba(0,0,0,0.5);">
-    <img src="{{ album.album_cover_url }}"
-         alt="Cover for {{ album.album_name }}"
-         style="height: 120px; border-radius: 8px; margin-right:1rem;"/>
-    <h1 style="color:white; margin:0;">
-      {{ album.album_name }} <small>{{ album.artist_name }}</small>
-    </h1>
-  </div>
+        <div id="container">
+            <!-- Left panel: Song list with preliminary ranks -->
+            <div id="songListContainer">
+                <ul id="songList">
+                    {% for song in album.songs %}
+                    <li class="draggable-song" draggable="true" data-song="{{ song.song_name }}">
+                        <span class="song-name">{{ song.song_name }}</span>
+                        <input type="number" min="0.5" max="10" step="0.5"
+                               name="prelim_rank_{{ loop.index }}"
+                               value="{{ song.prelim_rank if song.prelim_rank is defined else '' }}"
+                               title="Preliminary rank (0.5-10)">
+                        <span class="checkmark">{% if song.already_ranked %}✓{% endif %}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
 
-  <!-- Main Form -->
-  <form action="{{ url_for('submit_rankings') }}" method="post" style="display: flex; gap: 2rem; padding: 1rem;">
+            <!-- Right panel: Rank buttons and selected songs -->
+            <div id="rankContainer">
+                <div id="rankButtons">
+                    {% for i in range(2,21) %}
+                        {% set rank = '%.1f'|format(i/2) %}
+                        <button type="button" class="rank-button" data-rank="{{ rank }}">{{ rank }}</button>
+                    {% endfor %}
+                </div>
+                <div id="rankedList">
+                    <ul id="rankedSongsList">
+                        <!-- Dynamically filled with <li draggable="true">Song</li> -->
+                    </ul>
+                </div>
+                <div id="actions">
+                    <button type="button" id="pauseSaveBtn">Pause &amp; Save</button>
+                    <button type="button" id="finalRankBtn">Final Rank</button>
+                </div>
+            </div>
+        </div>
+    </form>
 
-    <!-- Left Panel -->
-    <div class="left-panel" style="flex: 1; max-width: 350px; overflow-y: auto; border-right: 1px solid #555; padding-right: 1rem;">
-      <h2>Album Songs</h2>
-      <div id="songList" style="display: flex; flex-direction: column; gap: 0.5rem;">
-        {% for song in album.songs %}
-          <div class="song-item" draggable="true"
-               data-song-name="{{ song.song_name|e }}"
-               data-song-id="{{ song.song_id|e }}"
-               style="display: flex; align-items: center; gap: 0.5rem; background: #222; padding: 0.4rem 0.6rem; border-radius: 6px; cursor: grab; color: white;">
-            <input type="number"
-                   class="prelim-rank-input"
-                   name="prelim_rank_{{ song.song_name|replace(' ', '_') }}"
-                   min="0.5" max="10" step="0.5"
-                   value="{{ song.prelim_rank or '' }}"
-                   style="width: 4rem; border-radius: 4px; border: none; padding: 0.2rem 0.4rem;" />
-            <span style="flex: 1;">
-              {{ loop.index }}. {{ song.song_name|e }}
-              {% for _ in range(song.get('rank_count', 0)) %}⭐{% endfor %}
-              {% if song.already_ranked %}
-                <span style="color: #0f0; font-weight: bold;">✓</span>
-              {% endif %}
-            </span>
-          </div>
-        {% endfor %}
-      </div>
-    </div>
+    <script>
+        // Handle rank button clicks
+        document.querySelectorAll('.rank-button').forEach(btn => {
+            btn.addEventListener('click', async function() {
+                // Mark active button
+                document.querySelectorAll('.rank-button').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                // Set selected rank hidden field
+                const rankValue = this.getAttribute('data-rank');
+                document.getElementById('selected_rank').value = rankValue;
 
-    <!-- Right Panel -->
-    <div class="right-panel" style="flex: 1; overflow-y: auto;">
-      <h2>Select Rank Group</h2>
-      <div id="rankGroups" style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
-        {% for rank in [1,1.5,2,2.5,3,3.5,4,4.5,5,5.5,6,6.5,7,7.5,8,8.5,9,9.5,10] %}
-          <button type="button"
-                  class="rank-btn"
-                  data-rank="{{ rank }}"
-                  style="background-color: #222; color: white; border: none; padding: 0.5rem 1rem; border-radius: 5px; cursor: pointer;">
-            {{ rank }}
-          </button>
-        {% endfor %}
-      </div>
+                // Fetch previously ranked songs for this rank group
+                const albumName = encodeURIComponent("{{ album.album_name }}");
+                const artistName = encodeURIComponent("{{ album.artist_name }}");
+                const response = await fetch(`/get_ranked_songs?album_name=${albumName}&artist_name=${artistName}&rank=${rankValue}`);
+                if (!response.ok) {
+                    console.error('Failed to load ranked songs:', response.status);
+                    return;
+                }
+                const data = await response.json();
+                // Populate ranked list
+                const rankedList = document.getElementById('rankedSongsList');
+                rankedList.innerHTML = '';
+                (data.songs || []).forEach(songName => {
+                    const li = document.createElement('li');
+                    li.textContent = songName;
+                    li.setAttribute('draggable', 'true');
+                    li.classList.add('draggable-song');
+                    rankedList.appendChild(li);
+                });
+            });
+        });
 
-      <h3>Ranked Songs (Drag to reorder or add)</h3>
-      <div id="rankedList" style="min-height: 300px; background: #111; border-radius: 8px; border: 2px dashed #444; padding: 0.5rem; color: white;">
-        <!-- Songs in the selected rank group will appear here -->
-      </div>
+        // Drag-and-drop logic
+        let draggingSong = null;
+        document.addEventListener('dragstart', function(e) {
+            if (e.target.classList.contains('draggable-song')) {
+                draggingSong = e.target;
+                e.target.classList.add('dragging');
+            }
+        });
+        document.addEventListener('dragend', function(e) {
+            if (e.target.classList.contains('draggable-song')) {
+                e.target.classList.remove('dragging');
+                draggingSong = null;
+                // Remove any temporary over classes
+                document.querySelectorAll('#rankedSongsList li').forEach(item => {
+                    item.classList.remove('over');
+                });
+            }
+        });
 
-      <!-- Hidden Inputs -->
-      <input type="hidden" name="album_name" value="{{ album.album_name }}">
-      <input type="hidden" name="artist_name" value="{{ album.artist_name }}">
-      <input type="hidden" name="selected_rank" id="selected_rank" value="">
-      <input type="hidden" name="ranking_data" id="ranking_data" value="[]">
+        const rankedListContainer = document.getElementById('rankedSongsList');
+        rankedListContainer.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            // Determine drop position
+            if (!draggingSong) return;
+            const afterElement = getDragAfterElement(rankedListContainer, e.clientY);
+            document.querySelectorAll('#rankedSongsList li').forEach(item => {
+                item.classList.remove('over');
+            });
+            if (afterElement) {
+                afterElement.classList.add('over');
+            }
+        });
+        rankedListContainer.addEventListener('drop', function(e) {
+            e.preventDefault();
+            if (!draggingSong) return;
+            const afterElement = getDragAfterElement(rankedListContainer, e.clientY);
+            if (afterElement) {
+                rankedListContainer.insertBefore(draggingSong, afterElement);
+                afterElement.classList.remove('over');
+            } else {
+                rankedListContainer.appendChild(draggingSong);
+            }
+        });
 
-      <!-- Buttons -->
-      <div style="margin-top: 1rem;">
-        <button type="submit" name="status" value="paused" style="background: orange; color: white; padding: 0.75rem 1.5rem; border: none; border-radius: 5px; font-weight: bold;">
-          Pause & Save
-        </button>
-        <button type="submit" name="status" value="final" onclick="prepareRankingData()" style="margin-left: 1rem; background: green; color: white; padding: 0.75rem 1.5rem; border: none; border-radius: 5px; font-weight: bold;">
-          Submit Final
-        </button>
-      </div>
-    </div>
-
-  </form>
-</body>
-
-  <script>
-  document.addEventListener('DOMContentLoaded', () => {
-    let draggedItem = null;
-    let currentRank = null;
-    const queuedRankings = {}; // { rank: [songName, ...] }
-
-    const rankedListEl = document.getElementById('rankedList');
-    const leftPanelItems = document.querySelectorAll('.left-panel .track-item');
-    const rankButtons    = document.querySelectorAll('.rank-buttons button');
-    const rankingDataIn  = document.getElementById('ranking_data');
-
-    // -- Utility: create a draggable div for a song --
-    function createDraggableSongDiv(songName) {
-      const div = document.createElement('div');
-      div.className         = 'track-item';
-      div.draggable         = true;
-      div.dataset.song      = songName;
-      div.innerHTML         = `<span>${songName}</span><span style="margin-left:auto;color:green;font-weight:bold;">✓</span>`;
-      attachDragStart(div);
-      return div;
-    }
-
-    // -- Highlight & load a rank group --
-    function selectRankGroup(rank) {
-      currentRank = rank;
-      // clear & highlight
-      rankedListEl.innerHTML = '';
-      rankButtons.forEach(btn => btn.classList.remove('rank-selected'));
-      const chosen = Array.from(rankButtons).find(b => b.textContent.trim() === rank.toString());
-      if (chosen) chosen.classList.add('rank-selected');
-
-      // load cached or fetch
-      if (queuedRankings[rank]) {
-        queuedRankings[rank].forEach(createDraggableSongDiv).forEach(el => rankedListEl.appendChild(el));
-        updateRankingData();
-      } else {
-        fetch(`/get_ranked_songs?album_name={{ album.album_name }}&artist_name={{ album.artist_name }}&rank=${rank}`)
-          .then(r => r.json())
-          .then(data => {
-            queuedRankings[rank] = data.songs.slice();  // initialize cache
-            data.songs.forEach(name => rankedListEl.appendChild(createDraggableSongDiv(name)));
-            updateRankingData();
-          });
-      }
-    }
-
-    // -- Attach dragstart to an element --
-    function attachDragStart(el) {
-      el.addEventListener('dragstart', e => {
-        draggedItem = el;
-        e.dataTransfer.effectAllowed = 'move';
-      });
-    }
-
-    // -- Install dragstart on all left-panel items --
-    leftPanelItems.forEach(item => {
-      item.setAttribute('draggable', true);
-      attachDragStart(item);
-    });
-
-    // -- Rank-button clicks --
-    rankButtons.forEach(btn => {
-      btn.addEventListener('click', () => selectRankGroup(btn.textContent.trim()));
-    });
-
-    // -- Dragover & drop on ranked list (insertion) --
-    rankedListEl.addEventListener('dragover', e => {
-      e.preventDefault();
-      if (!draggedItem) return;
-      const afterEl = getDragAfterElement(rankedListEl, e.clientY);
-      if (afterEl == null) rankedListEl.appendChild(draggedItem);
-      else rankedListEl.insertBefore(draggedItem, afterEl);
-    });
-    rankedListEl.addEventListener('drop', e => {
-      e.preventDefault();
-      updateRankingData();
-      draggedItem = null;
-    });
-
-    // -- Helper: find element to insert before --
-    function getDragAfterElement(container, y) {
-      const draggable = [...container.querySelectorAll('.track-item')].filter(el => el !== draggedItem);
-      return draggable.reduce((closest, child) => {
-        const box    = child.getBoundingClientRect();
-        const offset = y - box.top - box.height/2;
-        if (offset < 0 && offset > closest.offset) {
-          return { offset, element: child };
+        function getDragAfterElement(container, y) {
+            const draggableElements = [...container.querySelectorAll('li:not(.dragging)')];
+            return draggableElements.reduce((closest, child) => {
+                const rect = child.getBoundingClientRect();
+                const offset = y - rect.top - rect.height / 2;
+                if (offset < 0 && offset > closest.offset) {
+                    return { offset: offset, element: child };
+                } else {
+                    return closest;
+                }
+            }, { offset: Number.NEGATIVE_INFINITY }).element;
         }
-        return closest;
-      }, { offset: Number.NEGATIVE_INFINITY }).element || null;
-    }
 
-    // -- Update queuedRankings + hidden input + checkmarks --
-    function updateRankingData() {
-      if (currentRank === null) return;
-      const songs = [...rankedListEl.children].map(el => el.dataset.song);
-      queuedRankings[currentRank] = songs;
-      rankingDataIn.value = JSON.stringify(queuedRankings);
+        // Handle Final Rank submission
+        document.getElementById('finalRankBtn').addEventListener('click', function() {
+            document.getElementById('action_type').value = 'final';
+            // Collect songs in ranked list
+            const rankGroup = parseFloat(document.getElementById('selected_rank').value);
+            const items = Array.from(document.querySelectorAll('#rankedSongsList li'));
+            const n = items.length;
+            const rankingData = [];
+            if (n > 0 && !isNaN(rankGroup)) {
+                if (n === 1) {
+                    // Single song gets center rank
+                    const songName = items[0].textContent;
+                    rankingData.push({ song: songName, score: rankGroup.toFixed(2) });
+                } else {
+                    // Distribute within ±0.25
+                    const step = 0.5 / (n - 1);
+                    for (let i = 0; i < n; i++) {
+                        const offset = -0.25 + step * i;
+                        const finalScore = (rankGroup + offset).toFixed(2);
+                        rankingData.push({ song: items[i].textContent, score: finalScore });
+                    }
+                }
+            }
+            document.getElementById('ranking_data').value = JSON.stringify(rankingData);
+            document.getElementById('rankingForm').submit();
+        });
 
-      // toggle checkmarks on left-panel
-      const allRanked = new Set(Object.values(queuedRankings).flat());
-      leftPanelItems.forEach(item => {
-        const name  = item.dataset.song;
-        let checkEl = item.querySelector('.checkmark');
-        if (!checkEl) {
-          checkEl = document.createElement('span');
-          checkEl.className = 'checkmark';
-          checkEl.textContent = '✓';
-          checkEl.style = 'margin-left:auto;color:green;font-weight:bold;display:none;';
-          item.appendChild(checkEl);
-        }
-        checkEl.style.display = allRanked.has(name) ? 'inline' : 'none';
-      });
-    }
-
-    // -- Submission override for final button (if you need it) --
-    window.submitFinalRanks = function() {
-      if (Object.keys(queuedRankings).length === 0) {
-        alert('No rankings to submit.');
-        return false;
-      }
-      // you can either let the form submit normally (with hidden input)
-      // or do a fetch here. If form submission, return true.
-      return true;
-    };
-
-    // initialize nothing selected yet
-  });
-  </script>
-
-
+        // Handle Pause & Save submission (preliminary only)
+        document.getElementById('pauseSaveBtn').addEventListener('click', function() {
+            document.getElementById('action_type').value = 'pause';
+            const rankingData = [];
+            document.querySelectorAll('#songList li').forEach((li, index) => {
+                const input = li.querySelector('input[type=number]');
+                if (input && input.value) {
+                    rankingData.push({
+                        song: li.getAttribute('data-song'),
+                        prelim_rank: parseFloat(input.value)
+                    });
+                }
+            });
+            document.getElementById('ranking_data').value = JSON.stringify(rankingData);
+            document.getElementById('rankingForm').submit();
+        });
+    </script>
 </body>
 </html>

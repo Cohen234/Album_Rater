@@ -388,19 +388,19 @@ def view_album():
         ]
     cover_url = album["album_cover_url"]
     bg_color = get_dominant_color(cover_url)
+    album_data = {
+        "album_name": album_name,
+        "artist_name": artist_name,
+        "album_cover_url": cover_url,
+        "url": album_url,  # if you need url for the “back” form
+        "image": cover_url,  # alias if your template still uses album.image
+        "songs": songs,
+        "bg_color": bg_color
+    }
 
     # 2. Pass cover_url **and** the other album fields through
     return render_template(
-        "album.html",
-        album={
-            "album_name": album_name,
-            "artist_name": artist_name,
-            "album_cover_url": cover_url,
-            "url": album_url,  # if you need url for the “back” form
-            "image": cover_url,  # alias if your template still uses album.image
-            "songs": songs,
-        },
-        bg_color=bg_color
+        "album.html", album=album_data
     )
 
 
