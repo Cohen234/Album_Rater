@@ -52,8 +52,9 @@ def group_ranked_songs(sheet_rows):
             continue  # skip if bad data
 
     return group_bins
-def get_dominant_color(image_url):
-    response = requests.get(image_url)
+def get_dominant_color():
+    album_url = request.form.get("album_url")
+    response = requests.get(album_url)
     color_thief = ColorThief(BytesIO(response.content))
     rgb = color_thief.get_color(quality=1)
     return f"rgb({rgb[0]}, {rgb[1]}, {rgb[2]})"
@@ -395,7 +396,7 @@ def view_album():
             "songs":           songs,
             "album_cover_url": album_cover_url
         },
-        bg_color=bg_color, album_name=album_name,album_art=album_cover_url
+        bg_color=bg_color, album_name=album_name,album_art= album[album_cover_url]
     )
 
 @app.route("/finalize_rankings", methods=["POST"])
