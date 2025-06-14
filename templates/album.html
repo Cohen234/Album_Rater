@@ -2,245 +2,595 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>{{ album.album_name }} by {{ album.artist_name }} – Ranking</title>
+    <title>{{ album.album_name }} - {{ album.artist_name }} Ranking</title>
     <style>
         body {
-            background-color: {{ album.bg_color }};
-            font-family: Arial, sans-serif;
             margin: 0;
-            padding: 0;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            color: #eee;
+            min-height: 100vh;
         }
+
         header {
-            text-align: center;
-            padding: 20px;
-        }
-        img.album-cover {
-            display: block;
-            margin: 0 auto 20px auto;
-            max-width: 300px;
-            max-height: 300px;
-        }
-        .container {
             display: flex;
-            flex-wrap: wrap;
+            align-items: center;
+            padding: 20px;
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid #333;
+        }
+
+        header img {
+            height: 120px;
+            width: 120px;
+            object-fit: cover;
+            border-radius: 8px;
+            margin-right: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        header .album-info h1 {
+            margin: 0 0 5px 0;
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        header .album-info h2 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: normal;
+            color: #bbb;
+        }
+
+        #container {
+            display: flex;
+            height: calc(100vh - 180px);
+            gap: 20px;
             padding: 20px;
         }
-        .left-panel, .rank-panel {
-            padding: 10px;
+
+        /* Left panel: song list */
+        #songListContainer {
+            flex: 1;
+            background: rgba(0,0,0,0.4);
+            border-radius: 12px;
+            padding: 20px;
+            overflow-y: auto;
         }
-        .left-panel {
-            flex: 1 1 300px;
-            max-width: 400px;
-            margin-right: 20px;
+
+        #songListContainer h3 {
+            margin: 0 0 15px 0;
+            color: #fff;
+            font-size: 18px;
         }
-        .rank-panel {
-            flex: 2 1 500px;
+
+        #songList {
+            list-style: none;
+            padding: 0;
+            margin: 0;
         }
+
         .song-item {
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            margin-bottom: 5px;
-            padding: 5px;
-            border: 1px solid #ccc;
+            background: linear-gradient(135deg, #333 0%, #444 100%);
+            margin: 8px 0;
+            padding: 12px;
+            border-radius: 8px;
+            cursor: grab;
+            transition: all 0.2s ease;
+            border-left: 4px solid transparent;
         }
+
+        .song-item:hover {
+            background: linear-gradient(135deg, #444 0%, #555 100%);
+            transform: translateX(4px);
+        }
+
         .song-item.dragging {
-            opacity: 0.5;
+            opacity: 0.7;
+            transform: rotate(5deg);
         }
-        .track-num {
-            width: 30px;
-            text-align: right;
-            margin-right: 10px;
+
+        .song-item.ranked {
+            border-left-color: #4CAF50;
         }
+
         .song-name {
-            flex-grow: 1;
-            margin-right: 10px;
+            flex: 1;
+            font-weight: 500;
         }
-        .prelim-input {
+
+        .prelim-rank-input {
             width: 60px;
+            margin: 0 10px;
+            padding: 4px 8px;
+            background: rgba(0,0,0,0.6);
+            color: #fff;
+            border: 1px solid #555;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 14px;
         }
+
+        .prelim-rank-input:focus {
+            border-color: #4CAF50;
+            outline: none;
+        }
+
         .checkmark {
-            color: green;
-            margin-left: 5px;
+            color: #4CAF50;
+            font-size: 18px;
+            font-weight: bold;
+            margin-left: 10px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
         }
-        #rank-buttons {
-            margin-bottom: 10px;
+
+        .song-item.ranked .checkmark {
+            opacity: 1;
         }
-        #rank-buttons button {
-            margin: 2px;
-            padding: 8px;
+
+        /* Right panel: ranking */
+        #rankContainer {
+            flex: 1.5;
+            background: rgba(0,0,0,0.4);
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
         }
-        #rank-buttons .active {
-            background-color: #007bff;
-            color: white;
+
+        #rankContainer h3 {
+            margin: 0 0 15px 0;
+            color: #fff;
+            font-size: 18px;
         }
-        #ranked-area {
-            margin-top: 10px;
-            border-top: 2px solid #ccc;
-            padding-top: 10px;
+
+        #rankButtons {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+            gap: 8px;
+            margin-bottom: 20px;
         }
-        #ranked-songs-list {
+
+        .rank-button {
+            padding: 10px 8px;
+            background: linear-gradient(135deg, #555 0%, #666 100%);
+            color: #ddd;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .rank-button:hover {
+            background: linear-gradient(135deg, #666 0%, #777 100%);
+            transform: translateY(-2px);
+        }
+
+        .rank-button.active {
+            background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+            color: #000;
+            font-weight: bold;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
+        }
+
+        #rankedList {
+            flex: 1;
+            background: rgba(0,0,0,0.6);
+            border-radius: 8px;
+            padding: 15px;
+            overflow-y: auto;
+            min-height: 200px;
+            border: 2px dashed #555;
+            transition: border-color 0.3s ease;
+        }
+
+        #rankedList.drag-over {
+            border-color: #FFD700;
+            background: rgba(255, 215, 0, 0.1);
+        }
+
+        #rankedSongsList {
             list-style: none;
             padding: 0;
-            min-height: 50px;
+            margin: 0;
         }
-        #ranked-songs-list li {
-            margin: 5px 0;
-            padding: 5px;
-            border: 1px dashed #666;
-            background-color: #f9f9f9;
-            cursor: move;
+
+        .ranked-song {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+            margin: 8px 0;
+            padding: 12px;
+            border-radius: 6px;
+            cursor: grab;
+            transition: all 0.2s ease;
+            color: white;
+            font-weight: 500;
+            position: relative;
         }
-        .buttons {
+
+        .ranked-song:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+        }
+
+        .ranked-song.dragging {
+            opacity: 0.7;
+            transform: rotate(3deg);
+        }
+
+        .ranked-song.drag-over {
+            border: 2px solid #FFD700;
             margin-top: 20px;
         }
-        .buttons form {
-            display: inline;
-            margin-right: 10px;
+
+        .ranked-song .position-indicator {
+            position: absolute;
+            left: -8px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: #FFD700;
+            color: #000;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        /* Footer buttons */
+        #actions {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .action-button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+
+        #pauseSaveBtn {
+            background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
+            color: white;
+        }
+
+        #pauseSaveBtn:hover {
+            background: linear-gradient(135deg, #FFB74D 0%, #FF9800 100%);
+            transform: translateY(-2px);
+        }
+
+        #finalRankBtn {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+            color: white;
+        }
+
+        #finalRankBtn:hover {
+            background: linear-gradient(135deg, #66BB6A 0%, #4CAF50 100%);
+            transform: translateY(-2px);
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #888;
+            font-style: italic;
+            margin-top: 40px;
+        }
+
+        .score-preview {
+            font-size: 12px;
+            color: #FFD700;
+            margin-left: 10px;
         }
     </style>
 </head>
 <body>
     <header>
-        <h1>{{ album.album_name }} – {{ album.artist_name }}</h1>
-        <img class="album-cover" src="{{ album.album_cover_url }}" alt="Album cover for {{ album.album_name }}">
+        <img src="{{ album.album_cover_url }}" alt="Album Cover">
+        <div class="album-info">
+            <h1>{{ album.album_name }}</h1>
+            <h2>{{ album.artist_name }}</h2>
+        </div>
     </header>
-    <div class="container">
-        <!-- Left panel: unranked songs with prelim inputs -->
-        <form id="pause-form" method="post" action="/pause_save">
-            <input type="hidden" name="album_name" value="{{ album.album_name }}">
-            <input type="hidden" name="artist_name" value="{{ album.artist_name }}">
-            <div class="left-panel">
-                <h2>Unranked Songs</h2>
-                <ul id="song-list">
+
+    <form id="rankingForm" method="post" action="/submit_rankings">
+        <!-- Hidden metadata fields -->
+        <input type="hidden" name="album_name" value="{{ album.album_name }}">
+        <input type="hidden" name="artist_name" value="{{ album.artist_name }}">
+        <input type="hidden" id="selected_rank" name="selected_rank" value="">
+        <input type="hidden" id="ranking_data" name="ranking_data" value="">
+        <input type="hidden" id="status" name="status" value="">
+
+        <div id="container">
+            <!-- Left panel: Song list -->
+            <div id="songListContainer">
+                <h3>Songs</h3>
+                <ul id="songList">
                     {% for song in album.songs %}
-                    <li class="song-item" data-track="{{ loop.index0 }}">
-                        <span class="track-num">{{ loop.index }}</span>
-                        <span class="song-name">{{ song.name }}</span>
-                        <input class="prelim-input" type="number" step="0.01" name="prelim_score_{{ loop.index }}" placeholder="Prelim"
-                            {% if song.prelim_score is defined %} value="{{ song.prelim_score }}"{% endif %}>
-                        {% if song.already_ranked %}
-                        <span class="checkmark">✔</span>
-                        {% endif %}
+                    <li class="song-item {% if song.get('already_ranked') %}ranked{% endif %}"
+                        draggable="true"
+                        data-song="{{ song.song_name }}">
+                        <span class="song-name">{{ song.song_name }}</span>
+                        <input type="number"
+                               class="prelim-rank-input"
+                               min="0.5"
+                               max="10"
+                               step="0.5"
+                               name="prelim_rank_{{ song.song_name }}"
+                               value="{{ song.get('prelim_rank', '') }}"
+                               placeholder="0.5-10"
+                               title="Preliminary rank (0.5-10)">
+                        <span class="checkmark">✓</span>
                     </li>
                     {% endfor %}
                 </ul>
-                <div class="buttons">
-                    <button type="submit">Pause & Save</button>
+            </div>
+
+            <!-- Right panel: Rank groups and ranking area -->
+            <div id="rankContainer">
+                <h3>Rank Groups</h3>
+                <div id="rankButtons">
+                    {% for i in range(1, 21) %}
+                        {% set rank = (i * 0.5)|round(1) %}
+                        <button type="button" class="rank-button" data-rank="{{ rank }}">{{ rank }}</button>
+                    {% endfor %}
+                </div>
+
+                <div id="rankedList">
+                    <div class="empty-state" id="emptyState">
+                        Select a rank group above to start ranking songs
+                    </div>
+                    <ul id="rankedSongsList">
+                        <!-- Dynamically populated -->
+                    </ul>
+                </div>
+
+                <div id="actions">
+                    <button type="button" class="action-button" id="pauseSaveBtn">Pause & Save</button>
+                    <button type="button" class="action-button" id="finalRankBtn">Final Rank</button>
                 </div>
             </div>
-        </form>
-        <!-- Right panel: rank buttons and current ranked group -->
-        <div class="rank-panel">
-            <div id="rank-buttons">
-                {% for i in range(2, 21) %}
-                {% set rank_value = (i/2) %}
-                <button type="button" class="rank-button" data-rank="{{ rank_value|round(1) }}">
-                    {{ rank_value|round(1) }}
-                </button>
-                {% endfor %}
-            </div>
-            <div id="ranked-area">
-                <h2>Rank Group: <span id="current-rank-display">None</span></h2>
-                <ul id="ranked-songs-list"></ul>
-            </div>
-            <form id="final-form" method="post" action="/submit_rankings">
-                <input type="hidden" name="album_name" value="{{ album.album_name }}">
-                <input type="hidden" name="artist_name" value="{{ album.artist_name }}">
-                <input type="hidden" id="selected_rank" name="selected_rank">
-                <input type="hidden" id="ranking_data" name="ranking_data">
-                <div class="buttons">
-                    <button type="submit">Submit Final</button>
-                </div>
-            </form>
         </div>
-    </div>
-    <!-- Include SortableJS for drag-and-drop -->
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    </form>
+
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Initialize Sortable on left (songs list) and right (ranked list)
-            var songList = document.getElementById('song-list');
-            var rankedList = document.getElementById('ranked-songs-list');
-            // Use SortableJS with clone to allow dragging from left to right without removal:contentReference[oaicite:4]{index=4}
-            Sortable.create(songList, {
-                group: { name: 'songs', pull: 'clone', put: false },
-                animation: 150,
-                sort: false,
-                ghostClass: 'dragging'
-            });
-            Sortable.create(rankedList, {
-                group: { name: 'songs', pull: false, put: true },
-                animation: 150,
-                ghostClass: 'dragging',
-                onAdd: function(evt) {
-                    // Mark song as ranked when dropped
-                    var track = evt.item.dataset.track;
-                    var leftItem = songList.querySelector('[data-track="' + track + '"]');
-                    if (leftItem && !leftItem.querySelector('.checkmark')) {
-                        var check = document.createElement('span');
-                        check.textContent = '✔';
-                        check.className = 'checkmark';
-                        leftItem.appendChild(check);
-                    }
-                },
-                onRemove: function(evt) {
-                    // Remove checkmark if song removed
-                    var track = evt.item.dataset.track;
-                    var leftItem = songList.querySelector('[data-track="' + track + '"]');
-                    if (leftItem) {
-                        var check = leftItem.querySelector('.checkmark');
-                        if (check) { leftItem.removeChild(check); }
-                    }
-                }
-            });
+        let draggingSong = null;
+        let currentRankGroup = null;
 
-            // Handle rank button clicks to load existing songs for that rank
-            document.querySelectorAll('.rank-button').forEach(function(btn) {
-                btn.addEventListener('click', function() {
-                    document.querySelectorAll('.rank-button').forEach(b => b.classList.remove('active'));
-                    this.classList.add('active');
-                    var rank = this.getAttribute('data-rank');
-                    document.getElementById('current-rank-display').textContent = rank;
-                    document.getElementById('selected_rank').value = rank;
-                    // Clear current ranked list
-                    rankedList.innerHTML = '';
-                    // Fetch previously ranked songs for this group
-                    fetch('/get_ranked_songs?rank=' + encodeURIComponent(rank))
-                        .then(response => response.json())
-                        .then(data => {
-                            if (Array.isArray(data.songs)) {
-                                data.songs.forEach(function(song) {
-                                    // Populate ranked list with returned songs
-                                    var li = document.createElement('li');
-                                    li.textContent = song.track + '. ' + song.name;
-                                    li.dataset.track = song.track;
-                                    li.className = 'song-item';
-                                    rankedList.appendChild(li);
-                                });
-                            }
-                        })
-                        .catch(error => console.error('Error fetching ranked songs:', error));
-                });
-            });
+        // Handle rank button clicks
+        document.querySelectorAll('.rank-button').forEach(btn => {
+            btn.addEventListener('click', async function() {
+                // Mark active button
+                document.querySelectorAll('.rank-button').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
 
-            // Before final submit, capture order of songs in current rank
-            document.getElementById('final-form').addEventListener('submit', function(e) {
-                var rank = document.getElementById('selected_rank').value;
-                if (!rank) {
-                    alert('Please select a rank group before submitting final rankings.');
-                    e.preventDefault();
+                const rankValue = parseFloat(this.getAttribute('data-rank'));
+                currentRankGroup = rankValue;
+                document.getElementById('selected_rank').value = rankValue;
+
+                // Hide empty state
+                document.getElementById('emptyState').style.display = 'none';
+
+                // Load previously ranked songs for this rank group
+                await loadRankedSongs(rankValue);
+            });
+        });
+
+        async function loadRankedSongs(rank) {
+            try {
+                const albumName = encodeURIComponent("{{ album.album_name }}");
+                const artistName = encodeURIComponent("{{ album.artist_name }}");
+                const response = await fetch(`/get_ranked_songs?album_name=${albumName}&artist_name=${artistName}&rank=${rank}`);
+
+                if (!response.ok) {
+                    console.error('Failed to load ranked songs:', response.status);
                     return;
                 }
-                var items = rankedList.querySelectorAll('li[data-track]');
-                var trackOrder = [];
-                items.forEach(function(li) {
-                    trackOrder.push(li.dataset.track);
+
+                const data = await response.json();
+                updateRankedList(data.songs || []);
+            } catch (error) {
+                console.error('Error loading ranked songs:', error);
+            }
+        }
+
+        function updateRankedList(songs) {
+            const rankedList = document.getElementById('rankedSongsList');
+            rankedList.innerHTML = '';
+
+            songs.forEach((songName, index) => {
+                const li = document.createElement('li');
+                li.className = 'ranked-song';
+                li.setAttribute('draggable', 'true');
+                li.dataset.song = songName;
+
+                // Add position indicator
+                const positionIndicator = document.createElement('span');
+                positionIndicator.className = 'position-indicator';
+                positionIndicator.textContent = index + 1;
+
+                li.appendChild(positionIndicator);
+                li.appendChild(document.createTextNode(songName));
+
+                // Add score preview
+                const scorePreview = document.createElement('span');
+                scorePreview.className = 'score-preview';
+                scorePreview.textContent = calculateScore(index, songs.length, currentRankGroup);
+                li.appendChild(scorePreview);
+
+                rankedList.appendChild(li);
+            });
+
+            updateSongCheckmarks();
+        }
+
+        function calculateScore(position, totalSongs, rankGroup) {
+            if (totalSongs === 1) {
+                return `(${rankGroup.toFixed(2)})`;
+            }
+
+            const range = 0.49; // Each group spans 0.49 points
+            const step = range / totalSongs;
+            const minScore = rankGroup - 0.25;
+            const score = minScore + (step * (position + 0.5));
+
+            return `(${score.toFixed(2)})`;
+        }
+
+        function updateSongCheckmarks() {
+            // Update checkmarks based on songs in ranked list
+            const rankedSongs = Array.from(document.querySelectorAll('#rankedSongsList .ranked-song'))
+                .map(li => li.dataset.song);
+
+            document.querySelectorAll('.song-item').forEach(item => {
+                const songName = item.dataset.song;
+                if (rankedSongs.includes(songName)) {
+                    item.classList.add('ranked');
+                } else {
+                    item.classList.remove('ranked');
+                }
+            });
+        }
+
+        // Drag and drop functionality
+        document.addEventListener('dragstart', function(e) {
+            if (e.target.classList.contains('song-item') || e.target.classList.contains('ranked-song')) {
+                draggingSong = e.target;
+                e.target.classList.add('dragging');
+            }
+        });
+
+        document.addEventListener('dragend', function(e) {
+            if (e.target.classList.contains('song-item') || e.target.classList.contains('ranked-song')) {
+                e.target.classList.remove('dragging');
+                draggingSong = null;
+
+                // Clean up drag over states
+                document.querySelectorAll('.drag-over').forEach(el => {
+                    el.classList.remove('drag-over');
                 });
-                // Store JSON of track order for this rank group
-                var rankingData = {};
-                rankingData[rank] = trackOrder;
-                document.getElementById('ranking_data').value = JSON.stringify(rankingData);
+            }
+        });
+
+        // Ranked list drop handling
+        const rankedListContainer = document.getElementById('rankedList');
+        const rankedSongsList = document.getElementById('rankedSongsList');
+
+        rankedListContainer.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            if (!draggingSong || !currentRankGroup) return;
+
+            rankedListContainer.classList.add('drag-over');
+        });
+
+        rankedListContainer.addEventListener('dragleave', function(e) {
+            if (!rankedListContainer.contains(e.relatedTarget)) {
+                rankedListContainer.classList.remove('drag-over');
+            }
+        });
+
+        rankedListContainer.addEventListener('drop', function(e) {
+            e.preventDefault();
+            rankedListContainer.classList.remove('drag-over');
+
+            if (!draggingSong || !currentRankGroup) return;
+
+            const songName = draggingSong.dataset.song;
+
+            // If dragging from song list, create new ranked song
+            if (draggingSong.classList.contains('song-item')) {
+                const newRankedSong = document.createElement('li');
+                newRankedSong.className = 'ranked-song';
+                newRankedSong.setAttribute('draggable', 'true');
+                newRankedSong.dataset.song = songName;
+
+                // Determine drop position
+                const afterElement = getDragAfterElement(rankedSongsList, e.clientY);
+                if (afterElement) {
+                    rankedSongsList.insertBefore(newRankedSong, afterElement);
+                } else {
+                    rankedSongsList.appendChild(newRankedSong);
+                }
+
+                // Update the ranked list display
+                const currentSongs = Array.from(rankedSongsList.children).map(li => li.dataset.song);
+                updateRankedList(currentSongs);
+            }
+            // If reordering within ranked list
+            else if (draggingSong.classList.contains('ranked-song')) {
+                const afterElement = getDragAfterElement(rankedSongsList, e.clientY);
+                if (afterElement) {
+                    rankedSongsList.insertBefore(draggingSong, afterElement);
+                } else {
+                    rankedSongsList.appendChild(draggingSong);
+                }
+
+                // Update positions and scores
+                const currentSongs = Array.from(rankedSongsList.children).map(li => li.dataset.song);
+                updateRankedList(currentSongs);
+            }
+        });
+
+        function getDragAfterElement(container, y) {
+            const draggableElements = [...container.querySelectorAll('li:not(.dragging)')];
+
+            return draggableElements.reduce((closest, child) => {
+                const rect = child.getBoundingClientRect();
+                const offset = y - rect.top - rect.height / 2;
+
+                if (offset < 0 && offset > closest.offset) {
+                    return { offset: offset, element: child };
+                } else {
+                    return closest;
+                }
+            }, { offset: Number.NEGATIVE_INFINITY }).element;
+        }
+
+        // Handle Final Rank submission
+        document.getElementById('finalRankBtn').addEventListener('click', function() {
+            if (!currentRankGroup) {
+                alert('Please select a rank group first');
+                return;
+            }
+
+            const rankedSongs = Array.from(document.querySelectorAll('#rankedSongsList .ranked-song'))
+                .map(li => li.dataset.song);
+
+            if (rankedSongs.length === 0) {
+                alert('Please drag some songs to rank first');
+                return;
+            }
+
+            document.getElementById('status').value = 'final';
+            document.getElementById('ranking_data').value = JSON.stringify(rankedSongs);
+            document.getElementById('rankingForm').submit();
+        });
+
+        // Handle Pause & Save submission
+        document.getElementById('pauseSaveBtn').addEventListener('click', function() {
+            document.getElementById('status').value = 'paused';
+            document.getElementById('rankingForm').submit();
+        });
+
+        // Auto-save preliminary ranks as user types
+        document.querySelectorAll('.prelim-rank-input').forEach(input => {
+            input.addEventListener('change', function() {
+                // Could add auto-save functionality here if desired
+                console.log(`Preliminary rank for ${this.name}: ${this.value}`);
             });
         });
     </script>
