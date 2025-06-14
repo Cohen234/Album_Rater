@@ -386,16 +386,22 @@ def view_album():
             }
             for track in album["songs"]
         ]
-    dominat_color = get_dominant_color(album["album_cover_url"])
+    cover_url = album["album_cover_url"]
+    bg_color = get_dominant_color(cover_url)
 
-    return render_template("album.html",
-                           album={
-                               "album_name": album_name,
-                               "artist_name": artist_name,
-                               "songs": songs,
-                           },
-                           bg_color=dominat_color
-                           )
+    # 2. Pass cover_url **and** the other album fields through
+    return render_template(
+        "album.html",
+        album={
+            "album_name": album_name,
+            "artist_name": artist_name,
+            "album_cover_url": cover_url,
+            "url": album_url,  # if you need url for the “back” form
+            "image": cover_url,  # alias if your template still uses album.image
+            "songs": songs,
+        },
+        bg_color=bg_color
+    )
 
 
 @app.route("/finalize_rankings", methods=["POST"])

@@ -109,14 +109,23 @@
     flex: 1;
     text-align: left;
   }
+  /* Highlighted rank button */
+  .rank-selected {
+    background-color: #ffcc00 !important;
+    color: #000     !important;
+  }
 </style>
 </head>
 <body style="background-color: {{ bg_color }}; font-family: sans-serif; margin: 0;">
 
   <!-- Header -->
-  <div class="header-container" style="display: flex; align-items: center; padding: 1rem; gap: 1rem;">
-    <img src="{{ album.album_cover_url }}" alt="{{ album.album_name }}" style="height: 150px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.7);"/>
-    <h1 style="margin: 0;">{{ album.album_name }} by {{ album.artist_name }}</h1>
+  <div class="header-container" style="display: flex; align-items: center; padding: 1rem; background: rgba(0,0,0,0.5);">
+    <img src="{{ album.album_cover_url }}"
+         alt="Cover for {{ album.album_name }}"
+         style="height: 120px; border-radius: 8px; margin-right:1rem;"/>
+    <h1 style="color:white; margin:0;">
+      {{ album.album_name }} <small>{{ album.artist_name }}</small>
+    </h1>
   </div>
 
   <!-- Main Form -->
