@@ -12,7 +12,6 @@ import os
 import json
 from google.oauth2 import service_account
 from spotify_logic import load_album_data, get_albums_by_artist, extract_album_id
-from utils.color_extractor import extract_dominant_color
 from google.oauth2.service_account import Credentials
 # Setup
 import json
