@@ -172,12 +172,9 @@
 <body style="background-color: {{ bg_color }}; font-family: sans-serif; margin: 0;">
   <!-- Header -->
   <div class="header-container" style="display: flex; align-items: center; padding: 1rem;">
-    <div class="album-art-container" style="margin-right: 1rem;">
-      <img src="{{ album_art }}" alt="Album cover" class="w-24 h-24 rounded shadow-lg" style="object-fit: cover;" />
-    </div>
-    <div class="album-info">
-      <h1 class="text-3xl font-bold">{{ album.album_name }}</h1>
-      <p class="text-xl text-gray-600">{{ album.artist_name }}</p>
+    <div class="album-header">
+      <img src="{{ album.album_cover_url }}" alt="Album Cover">
+      <h1>{{ album.album_name }} by {{ album.artist_name }}</h1>
     </div>
   </div>
 
