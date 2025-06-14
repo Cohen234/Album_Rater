@@ -1,26 +1,48 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>{{ album.album_name }} by {{ album.artist_name }} — Album Rater</title>
-<style>
-  body {
-    margin: 0; padding: 0;
-    font-family: Arial, sans-serif;
-    background: linear-gradient(135deg, {{ bg_color }} 0%, #000000 80%);
-    color: white;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-  }
-  header {
-    text-align: center;
-    padding: 1rem;
-    font-size: 2rem;
-    font-weight: bold;
-    background-color: rgba(0,0,0,0.5);
-  }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ album.album_name }} — {{ album.artist_name }}</title>
+  <style>
+    /* make sure this is in your style block */
+    body, html {
+      margin: 0; padding: 0; height: 100%;
+      font-family: sans-serif;
+      background-color: {{ bg_color }};
+      transition: background 1s ease-in-out;
+    }
+
+    /* rank-selected highlight */
+    .rank-selected {
+      background-color: #ffcc00 !important;
+      color: #000     !important;
+    }
+
+    /* basic header styling */
+    .header-container {
+      display: flex;
+      align-items: center;
+      padding: 1rem;
+      background: rgba(0,0,0,0.5);
+      color: white;
+    }
+    .header-container img {
+      height: 120px;
+      border-radius: 8px;
+      margin-right: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <!-- Header: cover + title -->
+  <div class="header-container">
+    <img src="{{ album.album_cover_url }}" alt="Cover for {{ album.album_name }}" />
+    <h1 style="margin:0;">
+      {{ album.album_name }}<br/>
+      <small>{{ album.artist_name }}</small>
+    </h1>
+  </div>
   main {
     flex: 1;
     display: flex;
@@ -197,195 +219,135 @@
   </form>
 </body>
 
-
   <script>
-      let draggedItem = null;
-      let currentRank = null;
-      let queuedRankings = {}; // { rank: [songName, ...] }
+  document.addEventListener('DOMContentLoaded', () => {
+    let draggedItem = null;
+    let currentRank = null;
+    const queuedRankings = {}; // { rank: [songName, ...] }
 
-      // Select a rank group and load previously ranked songs for that group
-      function selectRankGroup(rank) {
-        currentRank = rank;
-        const rankedListEl = document.getElementById('rankedList');
-        rankedListEl.innerHTML = "";
+    const rankedListEl = document.getElementById('rankedList');
+    const leftPanelItems = document.querySelectorAll('.left-panel .track-item');
+    const rankButtons    = document.querySelectorAll('.rank-buttons button');
+    const rankingDataIn  = document.getElementById('ranking_data');
 
-        // Un-highlight all rank buttons
-        document.querySelectorAll('.rank-buttons button').forEach(btn => {
-          btn.classList.remove('rank-selected');
-        });
+    // -- Utility: create a draggable div for a song --
+    function createDraggableSongDiv(songName) {
+      const div = document.createElement('div');
+      div.className         = 'track-item';
+      div.draggable         = true;
+      div.dataset.song      = songName;
+      div.innerHTML         = `<span>${songName}</span><span style="margin-left:auto;color:green;font-weight:bold;">✓</span>`;
+      attachDragStart(div);
+      return div;
+    }
 
-        // Highlight the selected rank button
-        const chosenBtn = Array.from(document.querySelectorAll('.rank-buttons button'))
-          .find(btn => btn.textContent.trim() === rank.toString());
-        if (chosenBtn) {
-          chosenBtn.classList.add('rank-selected');
-        }
+    // -- Highlight & load a rank group --
+    function selectRankGroup(rank) {
+      currentRank = rank;
+      // clear & highlight
+      rankedListEl.innerHTML = '';
+      rankButtons.forEach(btn => btn.classList.remove('rank-selected'));
+      const chosen = Array.from(rankButtons).find(b => b.textContent.trim() === rank.toString());
+      if (chosen) chosen.classList.add('rank-selected');
 
-        // Load from queuedRankings if already cached
-        if (queuedRankings[rank]) {
-          queuedRankings[rank].forEach(songName => {
-            rankedListEl.appendChild(createDraggableSongDiv(songName));
-          });
-          updateDragEvents();
-          updateRankingData();
-          return;
-        }
-
-        // Otherwise fetch saved ranked songs for this album, artist, rank from backend
+      // load cached or fetch
+      if (queuedRankings[rank]) {
+        queuedRankings[rank].forEach(createDraggableSongDiv).forEach(el => rankedListEl.appendChild(el));
+        updateRankingData();
+      } else {
         fetch(`/get_ranked_songs?album_name={{ album.album_name }}&artist_name={{ album.artist_name }}&rank=${rank}`)
-          .then(resp => resp.json())
+          .then(r => r.json())
           .then(data => {
-            data.songs.forEach(songName => {
-              rankedListEl.appendChild(createDraggableSongDiv(songName));
-            });
-            updateDragEvents();
+            queuedRankings[rank] = data.songs.slice();  // initialize cache
+            data.songs.forEach(name => rankedListEl.appendChild(createDraggableSongDiv(name)));
             updateRankingData();
           });
       }
+    }
 
-      // Create a draggable div representing a ranked song item
-      function createDraggableSongDiv(songName) {
-        const div = document.createElement('div');
-        div.className = 'track-item';
-        div.draggable = true;
-        div.dataset.song = songName;
+    // -- Attach dragstart to an element --
+    function attachDragStart(el) {
+      el.addEventListener('dragstart', e => {
+        draggedItem = el;
+        e.dataTransfer.effectAllowed = 'move';
+      });
+    }
 
-        // Show song name and a checkmark icon
-        div.innerHTML = `
-          <span>${songName}</span>
-          <span style="margin-left:auto; color:green; font-weight:bold;">✓</span>
-        `;
-        return div;
-      }
+    // -- Install dragstart on all left-panel items --
+    leftPanelItems.forEach(item => {
+      item.setAttribute('draggable', true);
+      attachDragStart(item);
+    });
 
-      // Submit final rankings
-      function submitFinalRanks() {
-        if (Object.keys(queuedRankings).length === 0) {
-          alert("No rankings to submit.");
-          return false; // prevent form submission
+    // -- Rank-button clicks --
+    rankButtons.forEach(btn => {
+      btn.addEventListener('click', () => selectRankGroup(btn.textContent.trim()));
+    });
+
+    // -- Dragover & drop on ranked list (insertion) --
+    rankedListEl.addEventListener('dragover', e => {
+      e.preventDefault();
+      if (!draggedItem) return;
+      const afterEl = getDragAfterElement(rankedListEl, e.clientY);
+      if (afterEl == null) rankedListEl.appendChild(draggedItem);
+      else rankedListEl.insertBefore(draggedItem, afterEl);
+    });
+    rankedListEl.addEventListener('drop', e => {
+      e.preventDefault();
+      updateRankingData();
+      draggedItem = null;
+    });
+
+    // -- Helper: find element to insert before --
+    function getDragAfterElement(container, y) {
+      const draggable = [...container.querySelectorAll('.track-item')].filter(el => el !== draggedItem);
+      return draggable.reduce((closest, child) => {
+        const box    = child.getBoundingClientRect();
+        const offset = y - box.top - box.height/2;
+        if (offset < 0 && offset > closest.offset) {
+          return { offset, element: child };
         }
+        return closest;
+      }, { offset: Number.NEGATIVE_INFINITY }).element || null;
+    }
 
-        fetch("/finalize_rankings", {
-          method: "POST",
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(queuedRankings)
-        }).then(resp => {
-          if (resp.ok) {
-            alert("All rankings submitted!");
-            queuedRankings = {};
-            document.getElementById('rankedList').innerHTML = "";
-            // Optionally refresh or update UI
-          } else {
-            resp.text().then(msg => alert("Error: " + msg));
-          }
-        });
+    // -- Update queuedRankings + hidden input + checkmarks --
+    function updateRankingData() {
+      if (currentRank === null) return;
+      const songs = [...rankedListEl.children].map(el => el.dataset.song);
+      queuedRankings[currentRank] = songs;
+      rankingDataIn.value = JSON.stringify(queuedRankings);
 
-        return false; // prevent default form submission
-      }
-
-      // Enable dragging for track items (both left panel and ranked list)
-      function updateDragEvents() {
-        // Drag start - remember dragged item
-        document.querySelectorAll('.track-item').forEach(item => {
-          item.ondragstart = e => {
-            draggedItem = item;
-            e.dataTransfer.effectAllowed = 'move';
-          };
-        });
-      }
-
-      // Handle dragover on rankedList to allow dropping and to insert between items
-      const rankedList = document.getElementById('rankedList');
-      rankedList.addEventListener('dragover', e => {
-        e.preventDefault();
-
-        // Determine where to insert draggedItem
-        const afterElement = getDragAfterElement(rankedList, e.clientY);
-        if (afterElement == null) {
-          rankedList.appendChild(draggedItem);
-        } else {
-          rankedList.insertBefore(draggedItem, afterElement);
+      // toggle checkmarks on left-panel
+      const allRanked = new Set(Object.values(queuedRankings).flat());
+      leftPanelItems.forEach(item => {
+        const name  = item.dataset.song;
+        let checkEl = item.querySelector('.checkmark');
+        if (!checkEl) {
+          checkEl = document.createElement('span');
+          checkEl.className = 'checkmark';
+          checkEl.textContent = '✓';
+          checkEl.style = 'margin-left:auto;color:green;font-weight:bold;display:none;';
+          item.appendChild(checkEl);
         }
+        checkEl.style.display = allRanked.has(name) ? 'inline' : 'none';
       });
+    }
 
-      rankedList.addEventListener('drop', e => {
-        e.preventDefault();
-        updateRankingData();
-        draggedItem = null;
-      });
-
-      // Helper to find element after which dragged item should be inserted
-      function getDragAfterElement(container, y) {
-        const draggableElements = [...container.querySelectorAll('.track-item:not(.dragging)')];
-
-        return draggableElements.reduce((closest, child) => {
-          const box = child.getBoundingClientRect();
-          const offset = y - box.top - box.height / 2;
-          if (offset < 0 && offset > closest.offset) {
-            return { offset: offset, element: child };
-          } else {
-            return closest;
-          }
-        }, { offset: Number.NEGATIVE_INFINITY }).element;
+    // -- Submission override for final button (if you need it) --
+    window.submitFinalRanks = function() {
+      if (Object.keys(queuedRankings).length === 0) {
+        alert('No rankings to submit.');
+        return false;
       }
+      // you can either let the form submit normally (with hidden input)
+      // or do a fetch here. If form submission, return true.
+      return true;
+    };
 
-      // Allow dragging songs from left panel into ranked list
-      const leftPanel = document.querySelector('.left-panel');
-      leftPanel.querySelectorAll('.track-item').forEach(item => {
-        item.setAttribute('draggable', true);
-      });
-
-      leftPanel.addEventListener('dragstart', e => {
-        if (e.target.classList.contains('track-item')) {
-          draggedItem = e.target;
-          e.dataTransfer.effectAllowed = 'move';
-        }
-      });
-
-      rankedList.addEventListener('dragenter', e => {
-        e.preventDefault();
-      });
-
-      // Update the ranking data hidden input and queuedRankings object after reorder or drop
-      function updateRankingData() {
-        const items = rankedList.querySelectorAll('.track-item');
-        const arr = Array.from(items).map(item => item.dataset.song);
-
-        // Save current ranked list for currentRank group
-        if (currentRank != null) {
-          queuedRankings[String(currentRank)] = arr;
-        }
-
-        // Update hidden input for form submission
-        document.getElementById('ranking_data').value = JSON.stringify(queuedRankings);
-
-        // Update checkmarks in left panel to show which songs are ranked anywhere
-        const rankedSongs = new Set();
-        Object.values(queuedRankings).forEach(arr => arr.forEach(s => rankedSongs.add(s)));
-
-        document.querySelectorAll('.left-panel .track-item').forEach(item => {
-          const song = item.dataset.song;
-          const check = document.getElementById(`checkmark-${song.replace(/\s/g, "_")}`);
-          if (check) {
-            check.style.display = rankedSongs.has(song) ? 'inline' : 'none';
-
-          }
-        document.addEventListener('DOMContentLoaded', function () {
-          updateDragEvents();
-
-          const rankedList = document.getElementById('rankedList');
-          rankedList.addEventListener('dragover', e => e.preventDefault());
-          rankedList.addEventListener('drop', () => {
-            if (draggedItem) {
-              rankedList.appendChild(draggedItem);
-              updateRankingData();
-            }
-        });
-      }
-
-      // Initialize
-      updateDragEvents();
-</script>
+    // initialize nothing selected yet
+  });
+  </script>
 
 
 </body>
