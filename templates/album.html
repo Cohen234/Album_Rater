@@ -173,7 +173,7 @@
   <!-- Header -->
   <div class="header-container" style="display: flex; align-items: center; padding: 1rem;">
     <div class="album-header">
-      <form action="{{ url_for('view_album') }}" method="post" style="display: flex; flex-direction: column; height: 100%;">
+      <form action="{{ url_for('view_album') }}" method="post">
           <input type="hidden" name="album_url" value="{{ album.url }}">
           <img src="{{ album.image }}" alt="{{ album.name }}">
       <form>
