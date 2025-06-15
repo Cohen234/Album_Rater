@@ -333,7 +333,7 @@ def submit_rankings():
 
 
         flash("Rankings saved successfully!")
-        return redirect(url_for('view_album_after_save', album_name=album_name, artist_name=artist_name))
+        return redirect(url_for('select_album', album_name=album_name, artist_name=artist_name))
 
     except Exception as e:
         import traceback
