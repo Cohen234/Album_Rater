@@ -285,6 +285,9 @@ def load_album():
         artist_name = request.form["artist_name"]
         album_data = load_album_data(album_id)
 
+        print(f"Debug /load_album: Received album_id: {album_id}")
+        print(f"Debug /load_album: Recivied artist_name: {artist_name}")
+
         # If load_album_data returns a single dict with keys like 'songs', fix it here
         if isinstance(album_data, dict) and "songs" in album_data:
             album_songs = album_data["songs"]
@@ -327,6 +330,7 @@ def load_album():
             "artist_name": artist_name,
             "songs": album_songs
         }
+        print(f"Debug /load_album: Final album dict: {album}")
 
         return render_template("album.html",
                                album=album,
