@@ -161,8 +161,23 @@ def submit_rankings():
         # A better way for large sheets is to get all rows, then filter in Python
         # and use `update_cells` on specific cells.
         all_existing_rows = get_as_dataframe(sheet, evaluate_formulas=True).fillna("")
-        print(f"DEBUG: Loaded {len(all_existing_rows)} existing rows from sheet.")
+        print("DEBUG: Distinct Album/Artist combinations in sheet (actual values):")  # New print
+        if not all_existing_rows.empty:
+            for _, row in all_existing_rows[['Album Name', 'Artist Name']].drop_duplicates().iterrows():
+                print(f"  Sheet: Album='{row['Album Name']}', Artist='{row['Artist Name']}'")  # New print
+        else:
+            print("  Sheet is empty or DataFrame creation failed.")
+        form_album_name_lower = album_name.strip().lower()
+        form_artist_name_lower = artist_name.strip().lower()
+        print(
+            f"DEBUG: Form values (stripped, lower) for comparison: Album='{form_album_name_lower}', Artist='{form_artist_name_lower}'")  # New print
 
+        # Filter for rows belonging to this specific album/artist in Python
+        album_artist_filtered_df = all_existing_rows[
+            (all_existing_rows["Album Name"].astype(str).str.strip().str.lower() == form_album_name_lower) &
+            (all_existing_rows["Artist Name"].astype(str).str.strip().str.lower() == form_artist_name_lower)
+            ]
+        print(f"DEBUG: Found {len(album_artist_filtered_df)} existing rows for this album/artist after filter.")
         # Filter for rows belonging to this specific album/artist in Python
         album_artist_filtered_df = all_existing_rows[
             (all_existing_rows["Album Name"].astype(str).str.strip().str.lower() == album_name.strip().lower()) &
@@ -193,6 +208,7 @@ def submit_rankings():
 
             # Default values for preliminary rank if not explicitly submitted with song_data
             prelim_rank_val = prelim_ranks_from_js.get(song_id, '')
+
 
             # Find if this song exists in the filtered DataFrame by ID
             existing_row_for_song = album_artist_filtered_df[
