@@ -340,68 +340,82 @@ def load_album():
 @app.route('/view_album', methods=['POST'])
 def view_album():
     album_url = request.form.get("album_url")
+    print(f"DEBUG: Received album_url: {album_url}")
     if not album_url:
         return "Missing album_url", 400
 
+    try:
+        album = load_album_data(album_url)
+        print(f"DEBUG: Data from spotify_logic.load_album_data: {album}")
+
+        album_name = album.get("album_name", "ERROR_NO_NAME")
+        artist_name = album.get("artist_name", "ERROR_NO_ARTIST")
+        album_cover_url = album.get("album_cover_url", "ERROR_NO_COVER")
+        print(f"DEBUG: Extracted: Name={album_name}, Artist={artist_name}, Cover={album_cover_url}")
+
     # Step 1: fetch album info from Spotify
-    album = load_album_data(album_url)
-    album_name  = album["album_name"]
-    print(album_name)
-    artist_name = album["artist_name"]
+        album = load_album_data(album_url)
+        album_name  = album["album_name"]
+        artist_name = album["artist_name"]
 
-    # Step 2: load existing rows from Google Sheets
-    sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
-    df    = get_as_dataframe(sheet, evaluate_formulas=True).fillna("")
+        # Step 2: load existing rows from Google Sheets
+        sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
+        df    = get_as_dataframe(sheet, evaluate_formulas=True).fillna("")
 
-    # Normalize for matching
-    df["Album Name"]  = df["Album Name"].astype(str).str.strip().str.lower()
-    df["Artist Name"] = df["Artist Name"].astype(str).str.strip().str.lower()
+        # Normalize for matching
+        df["Album Name"]  = df["Album Name"].astype(str).str.strip().str.lower()
+        df["Artist Name"] = df["Artist Name"].astype(str).str.strip().str.lower()
 
-    album_key  = album_name.strip().lower()
-    artist_key = artist_name.strip().lower()
+        album_key  = album_name.strip().lower()
+        artist_key = artist_name.strip().lower()
 
-    # Step 3: collect any “paused” rows for this album/artist
-    paused_df = df[
-        (df["Album Name"]  == album_key) &
-        (df["Artist Name"] == artist_key) &
-        (df["Ranking Status"] == "paused")
-    ]
-    rank_counts = df["Song Name"].value_counts().to_dict()
-
-    songs = []
-    for _, row in paused_df.iterrows():
-        songs.append({
-            "song_name": row["Song Name"],
-            "prelim_rank": row["Ranking"],
-            "rank_count": row.get("Rank Count", 0)  # Add this line
-        })
-
-    # Step 4: if there were no paused rows, fall back to the Spotify tracklist
-    if not songs:
-        songs = [
-            {
-                "song_name": track["song_name"],
-                "prelim_rank": "",
-                "rank_count": 0  # Add this!
-            }
-            for track in album["songs"]
+        # Step 3: collect any “paused” rows for this album/artist
+        paused_df = df[
+            (df["Album Name"]  == album_key) &
+            (df["Artist Name"] == artist_key) &
+            (df["Ranking Status"] == "paused")
         ]
-    cover_url = album["album_cover_url"]
-    bg_color = get_dominant_color(cover_url)
-    album_data = {
-        "album_name": album_name,
-        "artist_name": artist_name,
-        "album_cover_url": cover_url,
-        "url": album_url,  # if you need url for the “back” form
-        "image": cover_url,  # alias if your template still uses album.image
-        "songs": songs,
-        "bg_color": bg_color
-    }
+        rank_counts = df["Song Name"].value_counts().to_dict()
 
-    # 2. Pass cover_url **and** the other album fields through
-    return render_template(
-        "album.html", album=album_data
-    )
+        songs = []
+        for _, row in paused_df.iterrows():
+            songs.append({
+                "song_name": row["Song Name"],
+                "prelim_rank": row["Ranking"],
+                "rank_count": row.get("Rank Count", 0)  # Add this line
+            })
+
+        # Step 4: if there were no paused rows, fall back to the Spotify tracklist
+        if not songs:
+            songs = [
+                {
+                    "song_name": track["song_name"],
+                    "prelim_rank": "",
+                    "rank_count": 0  # Add this!
+                }
+                for track in album["songs"]
+            ]
+        cover_url = album["album_cover_url"]
+        bg_color = get_dominant_color(cover_url)
+        album_data = {
+            "album_name": album_name,
+            "artist_name": artist_name,
+            "album_cover_url": cover_url,
+            "url": album_url,  # if you need url for the “back” form
+            "image": cover_url,  # alias if your template still uses album.image
+            "songs": songs,
+            "bg_color": bg_color
+        }
+        print(f"DEBUG: Final album_data sent to template: {album_data}")
+
+        # 2. Pass cover_url **and** the other album fields through
+        return render_template(
+            "album.html", album=album_data
+        )
+    except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return f"Error processing album: {e}", 500
 
 
 @app.route("/finalize_rankings", methods=["POST"])
