@@ -281,6 +281,7 @@ def ranking_page():
 @app.route("/load_album", methods=["POST"])
 def load_album():
     try:
+        album_url = request.form.get("album_url")
         album_id = request.form["album_id"]
         artist_name = request.form["artist_name"]
         album_data = load_album_data(album_id)
@@ -319,14 +320,17 @@ def load_album():
                 song["already_ranked"] = False
                 song["rank_position"] = 999
                 rank_groups["?"].append(song)
+        album_data = load_album_data(album_url)
+        album_name = album_data["album_name"]
+        album_cover = album_data["album_cover_url"]
 
 
         for group in rank_groups:
             rank_groups[group].sort(key=lambda s: s.get("rank_position", 0))
 
         album = {
-            "album_name": album_songs[0].get("album_name", "Unknown Album") if album_songs else "Unknown Album",
-            "album_cover_url": album_songs[0].get("album_cover_url", "") if album_songs else "",
+            "album_name": album_name,
+            "album_cover_url": album_cover,
             "artist_name": artist_name,
             "songs": album_songs
         }
