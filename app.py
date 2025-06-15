@@ -20,6 +20,10 @@ import gspread
 import traceback
 from collections import Counter
 
+import os
+from dotenv import load_dotenv # New import
+load_dotenv()
+
 creds_info = json.loads(os.environ['GOOGLE_SERVICE_ACCOUNT_JSON'])
 
 creds = Credentials.from_service_account_info(
@@ -31,7 +35,13 @@ client = gspread.authorize(creds)
 SPREADSHEET_ID = '15E4b-DWSYP9AzbAzSviqkW-jEOktbimPlmhNIs_d5jc'
 SHEET_NAME = "Sheet1"
 
+from flask import Flask, request, redirect, url_for, flash, json # Ensure json is imported
+from datetime import datetime
+# from your_gspread_utils import get_as_dataframe # Make sure this is imported correctly
+# from your_main_app import client, SPREADSHEET_ID, SHEET_NAME # Adjust imports as per your setup
+
 app = Flask(__name__)
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'a_temporary_dev_key')
 def group_ranked_songs(sheet_rows):
     group_bins = {round(x * 0.5, 1): [] for x in range(2, 21)}  # 1.0 to 10.0
 
