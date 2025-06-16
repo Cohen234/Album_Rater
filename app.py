@@ -428,7 +428,7 @@ def merge_album_with_rankings(album_tracks, sheet_rows, artist_name):
 def load_google_sheet_data():
     sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
     return sheet.get_all_records()
-@app.route("/load_albums_by_artist", methods=["GET", "POST"]) # <--- ADD "GET" here
+@app.route("/load_albums_by_artist", methods=["GET", "POST"])
 def load_albums_by_artist_route():
     artist_name = None # Initialize artist_name
 
@@ -444,47 +444,55 @@ def load_albums_by_artist_route():
         flash("Artist name not provided. Please search for an artist.")
         return redirect(url_for('index')) # Redirect to your home/search page
 
-    albums = get_albums_by_artist(artist_name)
+    albums_from_spotify = get_albums_by_artist(artist_name) # Renamed variable for clarity
+
+    # --- DEBUG: Raw albums from Spotify API ---
     print("DEBUG: Raw albums from Spotify API:")
-    if albums:
-        for i, album_data in enumerate(albums[:3]):  # Print first 3 for brevity
-            print(f"  Album {i + 1}: {album_data}")
+    if albums_from_spotify: # Changed from 'albums' to 'albums_from_spotify'
+        for i, album_data in enumerate(albums_from_spotify[:3]):
+            print(f"  Album {i+1}: {album_data}")
     else:
         print("  No albums returned from Spotify API.")
-    album_averages_sheet_name = "Album Averages"  # Use the same constant
+    # --- END DEBUG ---
+
+    album_averages_sheet_name = "Album Averages"
     album_averages_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(album_averages_sheet_name)
     album_averages_df = get_as_dataframe(album_averages_sheet, evaluate_formulas=True).fillna("")
 
     # Create a dictionary for quick lookup of averages/times ranked
     album_metadata = {}
-    for _, row in album_averages_df.iterrows():
-        album_key = (row["Album Name"].strip().lower(), row["Artist Name"].strip().lower())
-        album_metadata[album_key] = {
-            "average_score": row.get("Average Score", None),
-            "times_ranked": row.get("Times Ranked", 0)
-        }
+    if not album_averages_df.empty: # Added check for empty df
+        for _, row in album_averages_df.iterrows():
+            album_key = (str(row.get("Album Name", "")).strip().lower(), str(row.get("Artist Name", "")).strip().lower())
+            album_metadata[album_key] = {
+                "average_score": row.get("Average Score", None),
+                "times_ranked": row.get("Times Ranked", 0)
+            }
     print(f"DEBUG: Loaded {len(album_metadata)} album metadata entries from sheet.")
 
     # Prepare albums for template, adding average score and times ranked
     albums_for_template = []
-    for album in albums:  # This `albums` is from `get_albums_by_artist`
-        album_name_lower = album.get("album_name", "").strip().lower()
-        artist_name_lower = album.get("artist_name", "").strip().lower()
+    for album_data in albums_from_spotify: # Iterate through the raw Spotify data
+        album_name_lower = album_data.get("name", "").strip().lower() # Use 'name' from Spotify
+        # artist_name_lower needs to be from the request as spotify returns it nested in a list
+        # For lookup against sheet, use the artist_name from the request/route
+        artist_name_for_lookup_lower = artist_name.strip().lower()
 
-        metadata = album_metadata.get((album_name_lower, artist_name_lower), {})
+        metadata = album_metadata.get((album_name_lower, artist_name_for_lookup_lower), {})
 
         albums_for_template.append({
-            "album_name": album.get("album_name"),
-            "artist_name": album.get("artist_name"),
-            "album_cover_url": album.get("album_cover_url"),
-            "spotify_id": album.get("spotify_id"),  # Ensure your `get_albums_by_artist` returns this
-            "average_score": metadata.get("average_score"),  # Add this
-            "times_ranked": metadata.get("times_ranked")  # Add this
+            "album_name": album_data.get("name"),       # Mapped from 'name'
+            "artist_name": artist_name,                  # Use the artist_name passed to the route
+            "image": album_data.get("image"),            # Mapped from 'image'
+            "id": album_data.get("id"),                  # Mapped from 'id'
+            "average_score": metadata.get("average_score"),
+            "times_ranked": metadata.get("times_ranked"),
+            "url": album_data.get("url")                 # Mapped from 'url'
         })
     print(f"DEBUG: Prepared {len(albums_for_template)} albums for select_album.html with metadata.")
 
-    return render_template("select_album.html", artist_name=artist_name,
-                           albums=albums_for_template)  # Pass the enriched list
+    # Pass the enriched list to the template
+    return render_template("select_album.html", artist_name=artist_name, albums=albums_for_template)
 @app.route("/ranking_page")
 def ranking_page():
     sheet_rows = load_google_sheet_data()
