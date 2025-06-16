@@ -333,7 +333,7 @@ def submit_rankings():
 
 
         flash("Rankings saved successfully!")
-        return redirect(url_for('select_album', artist_name=artist_name))
+        return redirect(url_for('load_albums_by_artist_route', artist_name=artist_name))
 
     except Exception as e:
         import traceback
@@ -380,9 +380,22 @@ def merge_album_with_rankings(album_tracks, sheet_rows, artist_name):
 def load_google_sheet_data():
     sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
     return sheet.get_all_records()
-@app.route("/load_albums_by_artist", methods=["POST"])
+@app.route("/load_albums_by_artist", methods=["GET", "POST"]) # <--- ADD "GET" here
 def load_albums_by_artist_route():
-    artist_name = request.form["artist_name"]
+    artist_name = None # Initialize artist_name
+
+    if request.method == "POST":
+        # For initial search (from a form)
+        artist_name = request.form["artist_name"]
+    elif request.method == "GET":
+        # For redirect after ranking (from url_for passing it as a query param)
+        artist_name = request.args.get("artist_name")
+
+    if not artist_name:
+        # Handle cases where artist_name isn't found (e.g., direct GET without param)
+        flash("Artist name not provided. Please search for an artist.")
+        return redirect(url_for('index')) # Redirect to your home/search page
+
     albums = get_albums_by_artist(artist_name)
 
     return render_template("select_album.html", artist_name=artist_name, albums=albums)
