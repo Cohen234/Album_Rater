@@ -4,15 +4,18 @@
     <meta charset="UTF-8">
     <title>{{ album.album_name }} - {{ album.artist_name }} Ranking</title>
     <style>
-        /* Your existing CSS (no changes needed here for functionality) */
+        /* Base styles */
         body {
             margin: 0;
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
             color: #eee;
             min-height: 100vh;
+            display: flex;
+            flex-direction: column;
         }
 
+        /* Header section */
         header {
             display: flex;
             align-items: center;
@@ -20,6 +23,7 @@
             background: rgba(0,0,0,0.8);
             backdrop-filter: blur(10px);
             border-bottom: 1px solid #333;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
         }
 
         header img {
@@ -35,6 +39,7 @@
             margin: 0 0 5px 0;
             font-size: 28px;
             font-weight: bold;
+            color: #fff;
         }
 
         header .album-info h2 {
@@ -44,9 +49,10 @@
             color: #bbb;
         }
 
+        /* Main content container */
         #container {
             display: flex;
-            height: calc(100vh - 180px);
+            flex: 1; /* Allow container to fill available height */
             gap: 20px;
             padding: 20px;
         }
@@ -58,12 +64,16 @@
             border-radius: 12px;
             padding: 20px;
             overflow-y: auto;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            position: relative; /* For scrollbar styling */
         }
 
         #songListContainer h3 {
             margin: 0 0 15px 0;
             color: #fff;
             font-size: 18px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 10px;
         }
 
         #songList {
@@ -82,8 +92,7 @@
             cursor: grab;
             transition: all 0.2s ease;
             border-left: 4px solid transparent;
-            /* Disable drag when already ranked */
-            pointer-events: auto; /* Default */
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         }
 
         .song-item:hover {
@@ -97,15 +106,16 @@
         }
 
         .song-item.ranked {
-            border-left-color: #4CAF50;
-            cursor: default; /* Change cursor for ranked items */
-            opacity: 0.7; /* Slightly dim already ranked songs */
+            border-left-color: #4CAF50; /* Green checkmark indicator */
+            cursor: default;
+            opacity: 0.7;
+            filter: grayscale(20%);
         }
         .song-item.ranked .prelim-rank-input {
-            pointer-events: none; /* Disable input for ranked songs */
+            pointer-events: none;
             opacity: 0.7;
+            background: #555; /* Darker background for disabled input */
         }
-
 
         .song-name {
             flex: 1;
@@ -122,6 +132,7 @@
             border-radius: 4px;
             text-align: center;
             font-size: 14px;
+            transition: border-color 0.2s ease;
         }
 
         .prelim-rank-input:focus {
@@ -142,7 +153,7 @@
             opacity: 1;
         }
 
-        /* Right panel: ranking */
+        /* Right panel: ranking interface */
         #rankContainer {
             flex: 1.5;
             background: rgba(0,0,0,0.4);
@@ -150,12 +161,15 @@
             padding: 20px;
             display: flex;
             flex-direction: column;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
         }
 
         #rankContainer h3 {
             margin: 0 0 15px 0;
             color: #fff;
             font-size: 18px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 10px;
         }
 
         #rankButtons {
@@ -175,6 +189,9 @@
             transition: all 0.2s ease;
             font-weight: 500;
             font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .rank-button:hover {
@@ -190,26 +207,69 @@
             box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
         }
 
-        #rankedList {
-            flex: 1;
+        /* Icon for rank buttons indicating content */
+        .rank-button-icon {
+            margin-left: 5px;
+            font-size: 0.8em;
+            color: #ccc;
+            visibility: hidden;
+        }
+
+        .rank-button.has-songs .rank-button-icon {
+            visibility: visible;
+            color: #000; /* Darker star for active button content indicator */
+        }
+
+        .rank-button.has-songs .rank-button-icon::before {
+            content: "★";
+        }
+
+        /* Main display area for the currently active rank group */
+        #activeRankGroupDisplay {
+            flex: 1; /* Take remaining space */
             background: rgba(0,0,0,0.6);
             border-radius: 8px;
             padding: 15px;
             overflow-y: auto;
             min-height: 200px;
-            border: 2px dashed #555;
-            transition: border-color 0.3s ease;
+            border: 2px dashed #555; /* Indicates it's a drop zone */
+            transition: border-color 0.3s ease, background 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
         }
 
-        #rankedList.drag-over {
+        #activeRankGroupDisplay.drag-over {
             border-color: #FFD700;
             background: rgba(255, 215, 0, 0.1);
+        }
+
+        /* Container for the actual list of songs within the active group */
+        #currentRankGroupContent {
+            width: 100%;
+            display: flex;
+            justify-content: center; /* Center the list within its parent */
         }
 
         #rankedSongsList {
             list-style: none;
             padding: 0;
             margin: 0;
+            width: 100%; /* Take full width of its container */
+            min-height: 50px; /* Give it some height for dragging into */
+            /* If you want a visual drop indicator border on the list itself */
+            /* border: 1px dashed rgba(255,255,255,0.3); */
+            /* border-radius: 5px; */
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #888;
+            font-style: italic;
+            margin: auto; /* Centers itself in the flex container */
+            padding: 20px;
+            display: block; /* Shown by default until JS hides it or loads songs */
         }
 
         .ranked-song {
@@ -222,6 +282,9 @@
             color: white;
             font-weight: 500;
             position: relative;
+            display: flex;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         }
 
         .ranked-song:hover {
@@ -234,72 +297,37 @@
             transform: rotate(3deg);
         }
 
-        .ranked-song.drag-over {
-            border: 2px solid #FFD700;
-            margin-top: 20px;
+        .ranked-song.drag-over { /* For visual insertion point */
+            border-top: 2px solid #FFD700;
+            margin-top: 20px; /* Create space for the indicator */
+        }
+        .ranked-song.drag-over:first-child {
+            border-top: 2px solid #FFD700;
         }
 
-        .ranked-song .position-indicator {
+        .position-indicator {
             position: absolute;
             left: -8px;
             top: 50%;
             transform: translateY(-50%);
             background: #FFD700;
             color: #000;
-            width: 20px;
-            height: 20px;
+            width: 24px;
+            height: 24px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 12px;
             font-weight: bold;
-        }
-        .rank-button-icon {
-            margin-left: 5px; /* Space between rank number and icon */
-            font-size: 0.8em; /* Slightly smaller star */
-            color: #ccc; /* Default (unfilled) color for consistency */
-            visibility: hidden; /* Hidden by default */
-            display: inline-block; /* Ensure it takes up space */
-            vertical-align: middle; /* Align with text */
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
         }
 
-        /* Style when the button's corresponding group HAS songs */
-        .rank-button.has-songs .rank-button-icon {
-            visibility: visible;
-            color: gold; /* Or any prominent color */
-        }
-
-        .rank-button.has-songs .rank-button-icon::before {
-            content: "★"; /* Filled star, or "⭐" for emoji, "●" for a simple dot */
-        }
-
-        /* Add/adjust these styles for your rank groups if they aren't already defined */
-        .rank-group {
-            border: 1px solid #ddd;
-            margin-bottom: 10px;
-            padding: 10px;
-            border-radius: 5px;
-            background-color: #f9f9f9;
-        }
-
-        .group-header {
-            display: flex; /* Aligns h2 and span horizontally */
-            align-items: center; /* Vertically centers them */
-            margin-bottom: 10px;
-        }
-
-        .group-header h2 {
-            margin: 0; /* Remove default margin */
-            font-size: 1.2em;
-        }
-
-        .song-list {
-            min-height: 50px; /* Give it some height for dragging into */
-            border: 1px dashed #ccc;
-            padding: 5px;
-            border-radius: 3px;
-            background-color: #fff;
+        .score-preview {
+            font-size: 12px;
+            color: #FFD700;
+            margin-left: auto; /* Push to the right */
+            font-weight: normal;
         }
 
         /* Footer buttons */
@@ -308,6 +336,8 @@
             display: flex;
             gap: 10px;
             justify-content: flex-end;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            padding-top: 15px;
         }
 
         .action-button {
@@ -318,6 +348,7 @@
             font-weight: 600;
             font-size: 14px;
             transition: all 0.2s ease;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
         }
 
         #pauseSaveBtn {
@@ -326,7 +357,7 @@
         }
 
         #pauseSaveBtn:hover {
-            background: linear-gradient(135deg, #FFB74D 0%, #FF9800 100%);
+            background: linear: gradient(135deg, #FFB74D 0%, #FF9800 100%);
             transform: translateY(-2px);
         }
 
@@ -339,35 +370,24 @@
             background: linear-gradient(135deg, #66BB6A 0%, #4CAF50 100%);
             transform: translateY(-2px);
         }
-        .rank-button-icon {
-            margin-left: 5px; /* Space between rank number and icon */
-            font-size: 0.7em;
-            color: #ccc; /* Default (unfilled) color */
-            visibility: hidden; /* Hidden by default */
-            display: inline-block; /* Ensure it takes up space */
+
+        /* Custom scrollbar for better aesthetics */
+        ::-webkit-scrollbar {
+            width: 10px;
         }
 
-        /* Style when the button's corresponding group HAS songs */
-        .rank-button.has-songs .rank-button-icon {
-            visibility: visible;
-            color: gold;
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
         }
 
-        .rank-button.has-songs .rank-button-icon::before {
-            content: "★"; /* Filled star, or "⭐" for emoji */
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
         }
 
-        .empty-state {
-            text-align: center;
-            color: #888;
-            font-style: italic;
-            margin-top: 40px;
-        }
-
-        .score-preview {
-            font-size: 12px;
-            color: #FFD700;
-            margin-left: 10px;
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
         }
     </style>
 </head>
@@ -397,14 +417,14 @@
                     <li class="song-item {% if song.get('already_ranked') %}ranked{% endif %}"
                         draggable="true"
                         data-song="{{ song.song_name }}"
-                        data-song-id="{{ song.song_id }}"> {# Add song_id for unique identification #}
+                        data-song-id="{{ song.song_id }}">
                         <span class="song-name">{{ song.song_name }}</span>
                         <input type="number"
                                class="prelim-rank-input"
                                min="0.5"
                                max="10"
                                step="0.5"
-                               name="prelim_rank_{{ song.song_id }}" {# Use song.song_id for unique name #}
+                               name="prelim_rank_{{ song.song_id }}"
                                value="{{ song.get('prelim_rank', '') }}"
                                placeholder="0.5-10"
                                title="Preliminary rank (0.5-10)">
@@ -421,61 +441,23 @@
                         {% set rank = (i * 0.5)|round(1) %}
                         <button type="button" class="rank-button" data-rank="{{ rank }}" id="rank-btn-{{ rank }}">
                             {{ rank }}
-                            <span class="rank-button-icon"></span> {# This span will hold the icon #}
+                            <span class="rank-button-icon"></span>
                         </button>
                     {% endfor %}
+                    <button type="button" class="rank-button" data-rank="?" id="rank-btn-question">
+                        ?
+                        <span class="rank-button-icon"></span>
+                    </button>
                 </div>
 
-                <div id="rankGroupsContainer">
-                    {% for i in range(1, 21) %}
-                        {% set rank = (i * 0.5)|round(1) %}
-                        <div class="rank-group" id="group-{{ rank }}" data-group="{{ rank }}" ondrop="handleSongDrop(event)" ondragover="allowDrop(event)">
-                            <div class="group-header" data-group="{{ rank }}">
-                                <h4>Rank {{ rank }}</h4>
-                                <div class="group-controls">
-                                    <button class="clear-group-btn" data-group="{{ rank }}">Clear</button>
-                                    <button class="expand-group-btn" data-group="{{ rank }}">Expand</button>
-                                </div>
-                            </div>
-                            <ul class="song-list" data-group="{{ rank }}">
-                                </ul>
-                        </div>
-                    {% endfor %}
-                </div>
-
-                <div id="rankedList">
+                <div id="activeRankGroupDisplay">
                     <div class="empty-state" id="emptyState">
-                        Select a rank group above to start ranking songs
+                        Select a rank group above to start ranking songs.
                     </div>
-                    <ul id="rankedSongsList">
-                        {# This is where your individual rank groups will be rendered, either on load or dynamically #}
-                        {# Example of how a rank group for 5.0 might look (you need to generate these) #}
-                        {% if rank_groups %} {# Assuming rank_groups is passed to your template #}
-                            {% for group_key, songs_in_group in rank_groups.items() %}
-                                <div class="rank-group" data-group="{{ group_key }}">
-                                    <div class="group-header">
-                                        <h2>{{ group_key }}</h2>
-                                        <span class="group-icon" id="icon-group-{{ group_key }}"></span> {# ICON HERE #}
-                                    </div>
-                                    <div class="song-list" id="group-{{ group_key }}">
-                                        {# Songs already in this group will be rendered here by your Flask app #}
-                                        {% for song in songs_in_group %}
-                                            <div class="draggable-song"
-                                                 data-song-id="{{ song.song_id }}"
-                                                 data-song-name="{{ song.song_name }}"
-                                                 data-prelim-rank="{{ song.prelim_rank }}"
-                                                 data-calculated-score="{{ song.calculated_score }}"
-                                                 data-rank-group="{{ group_key }}"
-                                                 data-rank-position="{{ loop.index0 }}"
-                                                 draggable="true">
-                                                {{ song.song_name }}
-                                            </div>
-                                        {% endfor %}
-                                    </div>
-                                </div>
-                            {% endfor %}
-                        {% endif %}
-                    </ul>
+                    <div id="currentRankGroupContent">
+                        <ul id="rankedSongsList">
+                            </ul>
+                    </div>
                 </div>
 
                 <div id="actions">
@@ -488,28 +470,42 @@
 
     <script>
     let draggingSong = null;
-    let currentRankGroup = null;
+    let currentRankGroup = null; // Stores the currently selected rank (e.g., "4.5", "5.0", "?")
 
     // Global data structure to hold all ranked songs, organized by group
     let allRankedSongsByGroup = {};
 
     // On page load, initialize allRankedSongsByGroup with data from Flask
-    // album.rank_groups is expected to be a dictionary like:
-    // { "7.0": [{song_name: "Song A", song_id: "idA", prelim_rank: "", rank_position: 0}, ...], "?": [...] }
     const initialRankGroups = {{ rank_groups | tojson }};
     console.log("Initial rank groups from Flask:", initialRankGroups);
 
-    // Ensure all possible rank groups exist as keys
+    // Initialize all possible rank groups and populate them from initialRankGroups
     for (let i = 1; i <= 20; i++) {
         const rank = (i * 0.5).toFixed(1);
         allRankedSongsByGroup[rank] = initialRankGroups[rank] || [];
     }
-    allRankedSongsByGroup['?'] = initialRankGroups['?'] || []; // Initialize '?' group
+    allRankedSongsByGroup['?'] = initialRankGroups['?'] || []; // Initialize '?' group explicitly
+
+    // Add event listeners to rank buttons
+    document.querySelectorAll('.rank-button').forEach(button => {
+        button.addEventListener('click', function() {
+            // Remove active class from all buttons
+            document.querySelectorAll('.rank-button').forEach(btn => btn.classList.remove('active'));
+            // Add active class to the clicked button
+            this.classList.add('active');
+
+            currentRankGroup = this.dataset.rank;
+            console.log("Selected rank group:", currentRankGroup);
+            loadRankedSongsIntoDisplay(currentRankGroup);
+        });
+    });
 
     // Helper to check if a song (by ID) is ranked in *any* group
     function isSongRankedGlobally(songId) {
         for (const group in allRankedSongsByGroup) {
-            if (allRankedSongsByGroup[group].some(s => s.song_id === songId)) {
+            // Check if the song exists in this group AND it's not the '?' group
+            // (songs in '?' are considered "preliminary" and can still be dragged/moved)
+            if (group !== '?' && allRankedSongsByGroup[group].some(s => s.song_id === songId)) {
                 return true;
             }
         }
@@ -518,14 +514,10 @@
 
     // Function to update the icon of a RANK BUTTON based on its group's content
     function updateRankButtonIcon(rankGroupKey) {
-        // Only update if rankGroupKey is a valid numeric key (not '?')
-        if (rankGroupKey === '?' || !document.getElementById(`rank-btn-${rankGroupKey}`)) {
-            return;
-        }
+        const rankButtonId = rankGroupKey === '?' ? 'rank-btn-question' : `rank-btn-${rankGroupKey}`;
+        const rankButton = document.getElementById(rankButtonId);
+        if (!rankButton) return;
 
-        const rankButton = document.getElementById(`rank-btn-${rankGroupKey}`);
-        // We need to check the *data* for the group, not the DOM element,
-        // because the DOM for the rank group itself only shows the *currently selected* group.
         const songsInGroup = allRankedSongsByGroup[rankGroupKey] || [];
 
         if (songsInGroup.length > 0) {
@@ -533,41 +525,51 @@
         } else {
             rankButton.classList.remove('has-songs');
         }
-        console.log(`DEBUG: Rank button icon for group ${rankGroupKey} updated. Has songs: ${songsInGroup.length > 0}`);
+    }
+
+    // Function to update icons for ALL rank buttons
+    function updateAllRankButtonIcons() {
+        for (let i = 1; i <= 20; i++) {
+            updateRankButtonIcon((i * 0.5).toFixed(1));
+        }
+        updateRankButtonIcon('?'); // Update the '?' button as well
     }
 
     // This function now *displays* songs from the global data structure
     function loadRankedSongsIntoDisplay(rank) {
-        const rankedListDisplay = document.getElementById('rankedSongsList');
-        rankedListDisplay.innerHTML = ''; // Clear current display
+        const rankedSongsListDisplay = document.getElementById('rankedSongsList');
+        const emptyState = document.getElementById('emptyState');
+        rankedSongsListDisplay.innerHTML = ''; // Clear current display
 
         const songsToDisplay = allRankedSongsByGroup[rank] || [];
         console.log(`Displaying ${songsToDisplay.length} songs for rank group: ${rank}`);
 
         if (songsToDisplay.length === 0) {
-             document.getElementById('emptyState').style.display = 'block'; // Show empty state if no songs
-             document.getElementById('emptyState').textContent = `Drag songs here to rank them in the ${rank} group.`;
+             emptyState.style.display = 'block'; // Show empty state if no songs
+             emptyState.textContent = `Drag songs here to rank them in the ${rank} group.`;
+             rankedSongsListDisplay.style.display = 'none'; // Hide the ul if empty
         } else {
-             document.getElementById('emptyState').style.display = 'none';
+             emptyState.style.display = 'none';
+             rankedSongsListDisplay.style.display = 'block'; // Show the ul if songs are present
         }
 
         songsToDisplay.forEach((song, index) => {
-            const li = createRankedSongElement(song, index, songsToDisplay.length);
-            rankedListDisplay.appendChild(li);
+            const li = createRankedSongElement(song, index, songsToDisplay.length, rank);
+            rankedSongsListDisplay.appendChild(li);
         });
 
         updateSongCheckmarks(); // Update checkmarks on the left panel
     }
 
     // Helper to create a ranked song <li> element
-    function createRankedSongElement(songData, index, totalSongsInGroup) {
+    function createRankedSongElement(songData, index, totalSongsInGroup, currentRankGroupKey) {
         const li = document.createElement('li');
         li.className = 'ranked-song';
         li.setAttribute('draggable', 'true');
         li.dataset.song = songData.song_name;
         li.dataset.songId = songData.song_id;
-        li.dataset.rankGroup = songData.rank_group; // Add this for consistency, though handled by global state
-        li.dataset.rankPosition = songData.rank_position; // Add this for consistency
+        li.dataset.rankGroup = currentRankGroupKey; // This should reflect the group it's currently displayed in
+        li.dataset.rankPosition = index; // Store 0-based index for display ordering
 
         const positionIndicator = document.createElement('span');
         positionIndicator.className = 'position-indicator';
@@ -578,7 +580,7 @@
 
         const scorePreview = document.createElement('span');
         scorePreview.className = 'score-preview';
-        scorePreview.textContent = calculateScore(index, totalSongsInGroup, parseFloat(songData.rank_group)); // Use songData.rank_group
+        scorePreview.textContent = calculateScore(index, totalSongsInGroup, parseFloat(currentRankGroupKey));
         li.appendChild(scorePreview);
 
         return li;
@@ -589,7 +591,8 @@
         if (totalSongs === 1) return `(${rankGroup.toFixed(2)})`;
 
         const range = 0.49;
-        const step = range / totalSongs;
+        const effectiveTotalSongs = Math.max(1, totalSongs);
+        const step = range / effectiveTotalSongs;
         const baseGroupScore = rankGroup;
         const score = baseGroupScore + (step * position);
 
@@ -606,6 +609,9 @@
                 const prelimInput = item.querySelector('.prelim-rank-input');
                 if (prelimInput) {
                     prelimInput.disabled = true;
+                    // If song is now truly ranked, clear any prelim input
+                    // (optional, but good for UX if you want to enforce this)
+                    // prelimInput.value = '';
                 }
             } else {
                 item.classList.remove('ranked');
@@ -624,6 +630,18 @@
             draggingSong = e.target;
             e.target.classList.add('dragging');
             e.dataTransfer.setData("text/plain", e.target.dataset.songId); // Pass song ID
+            e.dataTransfer.effectAllowed = "move"; // Indicate move operation
+
+            // If dragging from a ranked group, remember its original group for removal later
+            if (e.target.classList.contains('ranked-song')) {
+                e.dataTransfer.setData("text/original-rank-group", e.target.dataset.rankGroup);
+                e.dataTransfer.setData("text/original-rank-position", e.target.dataset.rankPosition);
+            } else { // Dragging from the left song list (potentially with a prelim rank)
+                 const prelimInput = e.target.querySelector('.prelim-rank-input');
+                 if (prelimInput) {
+                     e.dataTransfer.setData("text/prelim-rank", prelimInput.value || "");
+                 }
+            }
         } else {
             e.preventDefault(); // Prevent dragging non-song elements
         }
@@ -634,46 +652,51 @@
             e.target.classList.remove('dragging');
             draggingSong = null;
 
-            document.getElementById('rankedList').classList.remove('drag-over');
+            document.getElementById('activeRankGroupDisplay').classList.remove('drag-over');
             document.querySelectorAll('.ranked-song.drag-over').forEach(el => el.classList.remove('drag-over'));
 
+            // Re-render the display for the current group to reflect final state
             if (currentRankGroup) {
-                // After drag ends, the `drop` event (or lack thereof) will handle updating the data.
-                // Just re-render the display for the current group to ensure positions/scores are correct.
                 loadRankedSongsIntoDisplay(currentRankGroup);
             }
-            // Always update all buttons after a drag operation to reflect potential changes
-            updateAllRankButtonIcons();
+            updateAllRankButtonIcons(); // Update icons for all rank buttons
         }
     });
 
-    // Ranked list drop handling
-    const rankedListContainer = document.getElementById('rankedList');
-    const rankedSongsListDisplay = document.getElementById('rankedSongsList');
+    // Drop target for songs: the #activeRankGroupDisplay
+    const activeRankGroupDisplay = document.getElementById('activeRankGroupDisplay');
+    const rankedSongsListDisplay = document.getElementById('rankedSongsList'); // The UL inside the display
 
-    rankedListContainer.addEventListener('dragover', function(e) {
+    activeRankGroupDisplay.addEventListener('dragover', function(e) {
         e.preventDefault();
-        if (!draggingSong || !currentRankGroup) return;
+        e.dataTransfer.dropEffect = "move"; // Visual feedback for move operation
 
-        rankedListContainer.classList.add('drag-over');
+        if (!draggingSong || !currentRankGroup) return; // Only allow drop if a group is selected
 
+        activeRankGroupDisplay.classList.add('drag-over');
+
+        // Highlight the specific song element to insert after/before
         const afterElement = getDragAfterElement(rankedSongsListDisplay, e.clientY);
         document.querySelectorAll('.ranked-song.drag-over').forEach(el => el.classList.remove('drag-over'));
         if (afterElement) {
             afterElement.classList.add('drag-over');
+        } else if (rankedSongsListDisplay.children.length === 0) {
+            // If the list is empty, highlight the entire list as a drop zone
+            // This is handled by activeRankGroupDisplay.drag-over already
         }
     });
 
-    rankedListContainer.addEventListener('dragleave', function(e) {
-        if (!rankedListContainer.contains(e.relatedTarget)) {
-            rankedListContainer.classList.remove('drag-over');
+    activeRankGroupDisplay.addEventListener('dragleave', function(e) {
+        // Only remove drag-over if moving completely out of the drop zone
+        if (!activeRankGroupDisplay.contains(e.relatedTarget)) {
+            activeRankGroupDisplay.classList.remove('drag-over');
+            document.querySelectorAll('.ranked-song.drag-over').forEach(el => el.classList.remove('drag-over'));
         }
-        document.querySelectorAll('.ranked-song.drag-over').forEach(el => el.classList.remove('drag-over'));
     });
 
-    rankedListContainer.addEventListener('drop', function(e) {
+    activeRankGroupDisplay.addEventListener('drop', function(e) {
         e.preventDefault();
-        rankedListContainer.classList.remove('drag-over');
+        activeRankGroupDisplay.classList.remove('drag-over');
         document.querySelectorAll('.ranked-song.drag-over').forEach(el => el.classList.remove('drag-over'));
 
         if (!draggingSong || !currentRankGroup) {
@@ -681,96 +704,78 @@
             return;
         }
 
-        const songId = draggingSong.dataset.songId;
-        const songName = draggingSong.dataset.song;
+        const songId = e.dataTransfer.getData("text/plain");
+        const songName = draggingSong.dataset.song; // Get from original dragging element
+        const originalRankGroup = e.dataTransfer.getData("text/original-rank-group");
+        const prelimRankFromDrag = e.dataTransfer.getData("text/prelim-rank");
+
         const currentGroupSongs = allRankedSongsByGroup[currentRankGroup];
 
-        // Scenario 1: Dragging from the left unranked/other group list
-        if (draggingSong.classList.contains('song-item')) {
+        let songDataToMove = null;
+
+        // 1. Remove song from its original location (if it was ranked)
+        if (originalRankGroup) {
+            const originalArray = allRankedSongsByGroup[originalRankGroup];
+            const songIndexInOriginal = originalArray.findIndex(s => s.song_id === songId);
+            if (songIndexInOriginal > -1) {
+                [songDataToMove] = originalArray.splice(songIndexInOriginal, 1);
+                console.log(`Removed song ${songName} from its original group ${originalRankGroup}`);
+                // Update icon for the original group if it changed
+                updateRankButtonIcon(originalRankGroup);
+            }
+        } else {
+            // Song came from the left song list (not previously in a rank group)
+            // Check if it's already ranked elsewhere (e.g. if drag-and-drop was used to bypass prelim removal)
             if (isSongRankedGlobally(songId)) {
                 alert(`"${songName}" is already ranked in another group. Please unrank it first if you want to move it.`);
                 return;
             }
-
-            // Create new song data for the current group
-            const newRankedSongData = {
+            // Create new song data for it
+            songDataToMove = {
                 song_name: songName,
                 song_id: songId,
-                rank_group: parseFloat(currentRankGroup), // Set the rank_group here
-                prelim_rank: "" // Clear prelim rank if now fully ranked
+                prelim_rank: prelimRankFromDrag || ""
             };
-
-            const afterElement = getDragAfterElement(rankedSongsListDisplay, e.clientY);
-            const insertIndex = afterElement ? Array.from(rankedSongsListDisplay.children).indexOf(afterElement) : rankedSongsListDisplay.children.length;
-
-            // Insert into the currently active group's data
-            currentGroupSongs.splice(insertIndex, 0, newRankedSongData);
-
-            // If the song was in the '?' group, remove it
+            // Also, remove it from the '?' group if it was there (as it's now explicitly ranked)
             allRankedSongsByGroup['?'] = allRankedSongsByGroup['?'].filter(s => s.song_id !== songId);
-
-            console.log(`DEBUG: Added song '${songName}' to group '${currentRankGroup}' at index ${insertIndex}`);
-        }
-        // Scenario 2: Reordering within the currently active ranked list OR moving from another ranked group
-        else if (draggingSong.classList.contains('ranked-song')) {
-            const originalGroupKey = draggingSong.dataset.rankGroup; // Get the original group of the dragged song
-            const originalSongId = draggingSong.dataset.songId;
-
-            let movedSongData;
-
-            // Remove from original group (could be current group or another group)
-            if (originalGroupKey && allRankedSongsByGroup[originalGroupKey]) {
-                const originalGroupArray = allRankedSongsByGroup[originalGroupKey];
-                const draggedSongIndex = originalGroupArray.findIndex(s => s.song_id === originalSongId);
-                if (draggedSongIndex > -1) {
-                    [movedSongData] = originalGroupArray.splice(draggedSongIndex, 1);
-                    console.log(`DEBUG: Removed song '${songName}' from its original group '${originalGroupKey}'`);
-                    // Update icon for the original group if it changed
-                    if (originalGroupKey !== currentRankGroup) {
-                        updateRankButtonIcon(originalGroupKey);
-                    }
-                }
-            } else {
-                console.warn(`Could not find original group data for song '${songName}' (ID: ${originalSongId})`);
-                return; // Prevent errors if original group data is missing
-            }
-
-            if (!movedSongData) {
-                console.error("Moved song data is undefined after removal from original group.");
-                return;
-            }
-
-            // Update the moved song's rank_group to the new group
-            movedSongData.rank_group = parseFloat(currentRankGroup);
-
-            // Insert into the currently active group's data
-            const afterElement = getDragAfterElement(rankedSongsListDisplay, e.clientY);
-            let insertIndex = afterElement ? Array.from(rankedSongsListDisplay.children).indexOf(afterElement) : rankedSongsListDisplay.children.length;
-
-            currentGroupSongs.splice(insertIndex, 0, movedSongData);
-            console.log(`DEBUG: Moved song '${songName}' into group '${currentRankGroup}' at index ${insertIndex}`);
+            updateRankButtonIcon('?'); // Update '?' button icon
         }
 
-        // After any drop operation, re-render the displayed list for the current group
+        if (!songDataToMove) {
+            console.error("Song data to move is undefined.");
+            return;
+        }
+
+        // 2. Determine insertion point in the target group
+        const afterElement = getDragAfterElement(rankedSongsListDisplay, e.clientY);
+        let insertIndex = afterElement ? Array.from(rankedSongsListDisplay.children).indexOf(afterElement) : currentGroupSongs.length;
+
+        // If moving within the same group, and the source was before the target, adjust index
+        if (originalRankGroup === currentRankGroup && afterElement && (e.dataTransfer.getData("text/original-rank-position") < insertIndex)) {
+            insertIndex--;
+        }
+
+        // 3. Add to the new group
+        songDataToMove.rank_group = parseFloat(currentRankGroup); // Assign the new rank group
+        currentGroupSongs.splice(insertIndex, 0, songDataToMove);
+        console.log(`Added song ${songName} to group ${currentRankGroup} at index ${insertIndex}`);
+
+        // 4. Update positions for all songs in the affected group
+        currentGroupSongs.forEach((s, i) => s.rank_position = i);
+
+        // 5. Re-render the display for the current group
         loadRankedSongsIntoDisplay(currentRankGroup);
-        // And update checkmarks on the left panel (essential after adding/removing a song)
-        updateSongCheckmarks();
-        // Crucially, update the icon for the *current* rank button
-        updateRankButtonIcon(currentRankGroup);
-
-        // If the song moved from '?' group to a ranked group, update '?' group button state
-        // (though '?' group doesn't have a button, `updateSongCheckmarks` covers left panel)
+        updateSongCheckmarks(); // Update checkmarks on the left panel
+        updateRankButtonIcon(currentRankGroup); // Update icon for the current group
     });
 
 
-    // Helper to find the element to insert after
     function getDragAfterElement(container, y) {
-        const draggableElements = [...container.querySelectorAll('li:not(.dragging)')];
+        const draggableElements = [...container.querySelectorAll('.ranked-song:not(.dragging)')];
 
         return draggableElements.reduce((closest, child) => {
-            const rect = child.getBoundingClientRect();
-            const offset = y - rect.top - rect.height / 2;
-
+            const box = child.getBoundingClientRect();
+            const offset = y - box.top - box.height / 2;
             if (offset < 0 && offset > closest.offset) {
                 return { offset: offset, element: child };
             } else {
@@ -779,197 +784,96 @@
         }, { offset: Number.NEGATIVE_INFINITY }).element;
     }
 
-    // Helper: Collect all ranked songs for submission
-    // This is called just before form submission to ensure all data is fresh.
-    function collectAllRankedSongsForSubmission() {
-        const allSongsToSubmit = [];
+    // --- Save/Submit functionality ---
+    document.getElementById('pauseSaveBtn').addEventListener('click', function() {
+        saveRankings("paused");
+    });
+
+    document.getElementById('finalRankBtn').addEventListener('click', function() {
+        saveRankings("final");
+    });
+
+    function saveRankings(status) {
+        const allRankedData = [];
+        const prelimRankData = {};
+
+        // Collect all ranked songs from allRankedSongsByGroup (excluding the '?' group for "final" submission)
         for (const groupKey in allRankedSongsByGroup) {
-            if (groupKey !== '?') { // Only include explicitly ranked groups
+            if (groupKey !== '?') { // Only include explicitly ranked groups in the main submission data
                 allRankedSongsByGroup[groupKey].forEach((song, index) => {
                     const finalScore = parseFloat(calculateScore(index, allRankedSongsByGroup[groupKey].length, parseFloat(groupKey)).slice(1,-1));
-                    allSongsToSubmit.push({
-                        song_name: song.song_name,
+                    allRankedData.push({
                         song_id: song.song_id,
+                        song_name: song.song_name,
                         rank_group: parseFloat(groupKey),
                         rank_position: index,
+                        prelim_rank: song.prelim_rank, // Include prelim rank
                         calculated_score: finalScore
                     });
                 });
             }
         }
-        return allSongsToSubmit;
-    }
 
-    // --- Submission Logic ---
-
-    // Helper to collect all prelim ranks from the left panel
-    function collectPrelimRanks() {
-        const prelimRanks = {};
-        document.querySelectorAll('.song-item').forEach(item => { // Iterate all song items
+        // Collect preliminary ranks from the left song list (only unranked ones)
+        // Also collect songs from the '?' group as preliminary.
+        document.querySelectorAll('.song-item').forEach(item => {
             const songId = item.dataset.songId;
             const prelimInput = item.querySelector('.prelim-rank-input');
 
-            // Only collect prelim rank if song is NOT globally ranked
-            if (prelimInput && !isSongRankedGlobally(songId)) {
-                const value = prelimInput.value.trim();
-                if (value !== "") {
-                    prelimRanks[songId] = parseFloat(value);
+            // If the song is NOT globally ranked (i.e., not in a numeric rank group)
+            if (!isSongRankedGlobally(songId)) {
+                if (prelimInput && prelimInput.value.trim() !== '') {
+                    prelimRankData[songId] = parseFloat(prelimInput.value);
                 }
             }
         });
-        return prelimRanks;
-    }
 
-    // This function ensures the data in `allRankedSongsByGroup` reflects the *currently displayed*
-    // order for the `currentRankGroup`. It's essential before switching groups or submitting.
-    function saveCurrentRankedListState() {
-        if (!currentRankGroup) return;
-
-        const currentDisplayedSongs = Array.from(document.querySelectorAll('#rankedSongsList .ranked-song'))
-            .map((li, index) => ({
-                song_name: li.dataset.song,
-                song_id: li.dataset.songId,
-                rank_position: index, // Store position for re-ordering
-                rank_group: parseFloat(currentRankGroup),
-                // Ensure calculated_score is always re-calculated based on current position and group
-                calculated_score: parseFloat(calculateScore(index, li.parentElement.children.length, parseFloat(currentRankGroup)).slice(1,-1))
-            }));
-
-        allRankedSongsByGroup[currentRankGroup] = currentDisplayedSongs;
-        console.log(`DEBUG: Saved state for group ${currentRankGroup}:`, allRankedSongsByGroup[currentRankGroup]);
-    }
-
-    // New function to update all rank button icons
-    function updateAllRankButtonIcons() {
-        for (let i = 1; i <= 20; i++) {
-            const rank = (i * 0.5).toFixed(1);
-            updateRankButtonIcon(rank);
-        }
-    }
+        // Add songs from the '?' group to prelim_rank_data as well
+        allRankedSongsByGroup['?'].forEach(song => {
+            prelimRankData[song.song_id] = parseFloat(song.prelim_rank) || 0; // Use existing prelim_rank or default
+        });
 
 
-    // Handle Final Rank submission
-    document.getElementById('finalRankBtn').addEventListener('click', function() {
-        saveCurrentRankedListState(); // Ensure the currently displayed group is saved
-
-        const allRankedData = collectAllRankedSongsForSubmission();
-
-        document.getElementById('status').value = 'final';
+        document.getElementById('selected_rank').value = currentRankGroup || ''; // Store the last active rank group if needed
+        document.getElementById('status').value = status;
         document.getElementById('all_ranked_data').value = JSON.stringify(allRankedData);
-        document.getElementById('prelim_rank_data').value = JSON.stringify(collectPrelimRanks());
-        console.log("DEBUG: Final Rank Submission Data:", document.getElementById('all_ranked_data').value);
+        document.getElementById('prelim_rank_data').value = JSON.stringify(prelimRankData);
+
+        console.log("Submitting with all_ranked_data:", allRankedData);
+        console.log("Submitting with prelim_rank_data:", prelimRankData);
+
         document.getElementById('rankingForm').submit();
-    });
+    }
 
-    // Handle Pause & Save submission
-    document.getElementById('pauseSaveBtn').addEventListener('click', function() {
-        saveCurrentRankedListState(); // Ensure the currently displayed group is saved
-
-        const allRankedData = collectAllRankedSongsForSubmission(); // Use the consolidated function
-
-        document.getElementById('status').value = 'paused';
-        document.getElementById('all_ranked_data').value = JSON.stringify(allRankedData);
-        document.getElementById('prelim_rank_data').value = JSON.stringify(collectPrelimRanks());
-        console.log("DEBUG: Pause & Save Submission Data:", document.getElementById('all_ranked_data').value);
-        document.getElementById('rankingForm').submit();
-    });
-
-    // Initial setup on page load
+    // Initial render and update of button icons on page load
     document.addEventListener('DOMContentLoaded', () => {
-        // Auto-select the '?' group on load if it has songs, otherwise select the first non-empty ranked group
-        let foundInitialGroup = false;
-        if (allRankedSongsByGroup['?'] && allRankedSongsByGroup['?'].length > 0) {
-            document.getElementById('rank-btn-?').click(); // Assuming you have a button for '?'
-            foundInitialGroup = true;
-        } else {
-            for (let i = 1; i <= 20; i++) {
-                const rank = (i * 0.5).toFixed(1);
-                if (allRankedSongsByGroup[rank] && allRankedSongsByGroup[rank].length > 0) {
-                    document.getElementById(`rank-btn-${rank}`).click();
-                    foundInitialGroup = true;
-                    break;
+        updateAllRankButtonIcons();
+
+        // Automatically activate '?' group if it has songs, otherwise show generic empty state
+        if (allRankedSongsByGroup['?'].length > 0) {
+            const questionButton = document.getElementById('rank-btn-question');
+            if (questionButton) {
+                questionButton.click(); // This will activate and load '?' group songs
+            }
+        } else if (Object.values(allRankedSongsByGroup).flat().length > 0) {
+            // If any other group has songs, activate the first one found
+            for (const groupKey in allRankedSongsByGroup) {
+                if (groupKey !== '?' && allRankedSongsByGroup[groupKey].length > 0) {
+                    const activeButton = document.getElementById(`rank-btn-${groupKey}`);
+                    if (activeButton) {
+                        activeButton.click();
+                        break;
+                    }
                 }
             }
+        } else {
+            // If no songs anywhere, just ensure the empty state is visible
+            document.getElementById('emptyState').style.display = 'block';
+            document.getElementById('emptyState').textContent = `Select a rank group above to start ranking songs.`;
+            document.getElementById('rankedSongsList').style.display = 'none'; // Hide the ul
         }
-        if (!foundInitialGroup) {
-            // If no songs anywhere, just default to a group (e.g., 5.0) or show instructions
-            // Optionally, simulate a click on the 5.0 button
-            document.getElementById('rank-btn-5.0')?.click();
-        }
-
-        // Ensure checkmarks are updated immediately based on initial data
-        updateSongCheckmarks();
-        // Initialize all rank button icons
-        updateAllRankButtonIcons();
     });
 
-    // Handle rank button clicks (moved outside DOMContentLoaded for clarity, but works either way)
-    document.querySelectorAll('.rank-button').forEach(btn => {
-        btn.addEventListener('click', async function() {
-            // Save current state of songs in the currently active rankedList before switching
-            if (currentRankGroup) { // Only save if a group was previously active
-                saveCurrentRankedListState();
-            }
-
-            // Mark active button
-            document.querySelectorAll('.rank-button').forEach(b => b.classList.remove('active'));
-            this.classList.add('active');
-
-            const rankValue = this.getAttribute('data-rank'); // Use string value directly
-            currentRankGroup = rankValue; // Current rank group is now the string like "5.0"
-
-            document.getElementById('selected_rank').value = currentRankGroup;
-
-            // Load and display songs for this rank group from our local data structure
-            loadRankedSongsIntoDisplay(currentRankGroup);
-        });
-    });
-
-    // Clear Group Button Logic
-    document.querySelectorAll('.clear-group-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const groupToClear = this.dataset.group;
-            console.log(`DEBUG: Clearing group ${groupToClear}`);
-
-            // Move songs from this group to the '?' group in allRankedSongsByGroup
-            if (allRankedSongsByGroup[groupToClear]) {
-                allRankedSongsByGroup[groupToClear].forEach(song => {
-                    song.rank_group = '?'; // Mark as unranked/unknown group
-                    song.calculated_score = ''; // Clear score
-                    song.rank_position = ''; // Clear position
-                    // Ensure '?' group exists
-                    if (!allRankedSongsByGroup['?']) {
-                        allRankedSongsByGroup['?'] = [];
-                    }
-                    allRankedSongsByGroup['?'].push(song);
-                });
-                allRankedSongsByGroup[groupToClear] = []; // Clear the original group
-            }
-
-            // If the cleared group is the currently displayed one, update the display
-            if (groupToClear === currentRankGroup) {
-                loadRankedSongsIntoDisplay(currentRankGroup);
-            }
-
-            // Update song checkmarks (as songs moved from ranked to unranked/?)
-            updateSongCheckmarks();
-            // Update the icon for the cleared rank button
-            updateRankButtonIcon(groupToClear);
-
-            // If the '?' group now has songs and has a button, update its icon (if applicable)
-            updateRankButtonIcon('?'); // If you add a button for '?'
-        });
-    });
-
-    // Expand Group Button Logic (placeholder, implement as needed)
-    document.querySelectorAll('.expand-group-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const groupToExpand = this.dataset.group;
-            console.log(`Expand group ${groupToExpand}`);
-            // Implement logic to show all songs in this group in a popup or separate view
-            // This might involve creating a temporary modal or navigating to a detailed page.
-            // For now, it just logs.
-        });
-    });
-
-</script>
+    </script>
+</body>
+</html>
