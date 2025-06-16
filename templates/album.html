@@ -351,6 +351,23 @@
             background: linear-gradient(135deg, #66BB6A 0%, #4CAF50 100%);
             transform: translateY(-2px);
         }
+        .rank-button-icon {
+            margin-left: 5px; /* Space between rank number and icon */
+            font-size: 0.7em;
+            color: #ccc; /* Default (unfilled) color */
+            visibility: hidden; /* Hidden by default */
+            display: inline-block; /* Ensure it takes up space */
+        }
+
+        /* Style when the button's corresponding group HAS songs */
+        .rank-button.has-songs .rank-button-icon {
+            visibility: visible;
+            color: gold;
+        }
+
+        .rank-button.has-songs .rank-button-icon::before {
+            content: "★"; /* Filled star, or "⭐" for emoji */
+        }
 
         .empty-state {
             text-align: center;
@@ -414,7 +431,11 @@
                 <div id="rankButtons">
                     {% for i in range(1, 21) %}
                         {% set rank = (i * 0.5)|round(1) %}
-                        <button type="button" class="rank-button" data-rank="{{ rank }}">{{ rank }}</button>
+                        {# Add a unique ID or better data attribute for easy JS targeting #}
+                        <button type="button" class="rank-button" data-rank="{{ rank }}" id="rank-btn-{{ rank }}">
+                            {{ rank }}
+                            <span class="rank-button-icon" id="icon-rank-{{ rank }}"></span> {# Icon placeholder #}
+                        </button>
                     {% endfor %}
                 </div>
 
