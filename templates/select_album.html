@@ -225,14 +225,14 @@
               {% endfor %}
           </div>
           <div class="stats">
-              {% if album.average_score is not none %} {# Use is not none to check for actual value #}
-                Avg Score: {{ album.average_score }}<br>
-              {% else %}
-                Avg Score: N/A<br>
-              {% endif %}
+              {% if album.average_score is not none %}
+                  Avg Score: {{ album.average_score | float if album.average_score else "N/A" }}<br>
+                {% else %}
+                  Avg Score: N/A<br>
+                {% endif %}
               {# If you track last_ranked_date in your album averages sheet, you can display it here too #}
               {# e.g. Last Ranked: {{ album.last_ranked_date if album.last_ranked_date else "Never" }} #}
-              {% if album.times_ranked is not none and album.times_ranked > 0 %}
+              {% if album.times_ranked is not none and (album.times_ranked | int) > 0 %}
                  Ranked {{ album.times_ranked }} time{{ 's' if album.times_ranked != 1 }}
               {% else %}
                  Not ranked yet
