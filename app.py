@@ -445,6 +445,12 @@ def load_albums_by_artist_route():
         return redirect(url_for('index')) # Redirect to your home/search page
 
     albums = get_albums_by_artist(artist_name)
+    print("DEBUG: Raw albums from Spotify API:")
+    if albums:
+        for i, album_data in enumerate(albums[:3]):  # Print first 3 for brevity
+            print(f"  Album {i + 1}: {album_data}")
+    else:
+        print("  No albums returned from Spotify API.")
     album_averages_sheet_name = "Album Averages"  # Use the same constant
     album_averages_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(album_averages_sheet_name)
     album_averages_df = get_as_dataframe(album_averages_sheet, evaluate_formulas=True).fillna("")
