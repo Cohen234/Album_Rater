@@ -34,6 +34,7 @@ creds = Credentials.from_service_account_info(
 client = gspread.authorize(creds)
 SPREADSHEET_ID = '15E4b-DWSYP9AzbAzSviqkW-jEOktbimPlmhNIs_d5jc'
 SHEET_NAME = "Sheet1"
+album_averages_sheet_name = "Album Averages"
 
 from flask import Flask, request, redirect, url_for, flash, json # Ensure json is imported
 from datetime import datetime
@@ -145,38 +146,25 @@ def submit_rankings():
         submission_status = request.form["status"]
 
         # --- IMPORTANT DEBUGGING PRINTS ---
-        print(f"DEBUG: Submitting for Album (from form): '{album_name}', Artist (from form): '{artist_name}', Status: {submission_status}")
 
         all_ranked_data_json = request.form.get("all_ranked_data", "[]")
         all_ranked_songs_from_js = json.loads(all_ranked_data_json)
-        print(f"DEBUG: Received all_ranked_songs_from_js (parsed): {all_ranked_songs_from_js}")
 
         prelim_rank_data_json = request.form.get("prelim_rank_data", "{}")
         prelim_ranks_from_js = json.loads(prelim_rank_data_json)
-        print(f"DEBUG: Received prelim_ranks_from_js (parsed): {prelim_ranks_from_js}")
 
         sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
 
         all_existing_rows = get_as_dataframe(sheet, evaluate_formulas=True).fillna("")
-        print(f"DEBUG: Loaded {len(all_existing_rows)} existing rows from sheet.")
-
-        print("DEBUG: Distinct Album/Artist combinations in sheet (actual values):")
-        if not all_existing_rows.empty:
-            for _, row in all_existing_rows[['Album Name', 'Artist Name']].drop_duplicates().iterrows():
-                print(f"  Sheet: Album='{row['Album Name']}', Artist='{row['Artist Name']}'")
-        else:
-            print("  Sheet is empty or DataFrame creation failed during get_as_dataframe.")
 
         form_album_name_lower = album_name.strip().lower()
         form_artist_name_lower = artist_name.strip().lower()
-        print(f"DEBUG: Form values (stripped, lower) for comparison: Album='{form_album_name_lower}', Artist='{form_artist_name_lower}'")
 
         # Filter for rows belonging to this specific album/artist in Python
         album_artist_filtered_df = all_existing_rows[
             (all_existing_rows["Album Name"].astype(str).str.strip().str.lower() == form_album_name_lower) &
             (all_existing_rows["Artist Name"].astype(str).str.strip().str.lower() == form_artist_name_lower)
         ]
-        print(f"DEBUG: Found {len(album_artist_filtered_df)} existing rows for this album/artist after initial filter.")
 
 
         # Define the desired column order for appending new rows
@@ -330,8 +318,68 @@ def submit_rankings():
                 sheet.update_cells(cells_for_batch_update)
             else:
                 print("DEBUG: No cells needed batch update.")
+                # In your submit_rankings function, after all songs are processed and saved:
+                # (Place this before the final `flash` and `redirect`)
 
+            if submission_status == 'final' and all_ranked_songs_from_js:
+                # Calculate album average score
+                total_score = sum(s.get('calculated_score', 0) for s in all_ranked_songs_from_js)
+                num_ranked_songs = len(all_ranked_songs_from_js)
+                average_album_score = round(total_score / num_ranked_songs, 2) if num_ranked_songs > 0 else 0
 
+                    # Load the Album Averages sheet
+                album_averages_sheet_name = "Album Averages"  # Define this as a constant
+                album_averages_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(album_averages_sheet_name)
+                album_averages_df = get_as_dataframe(album_averages_sheet, evaluate_formulas=True).fillna("")
+
+                    # Try to find the album's existing entry
+                matching_album_row = album_averages_df[
+                    (album_averages_df["Album Name"].astype(
+                        str).str.strip().str.lower() == album_name.strip().lower()) &
+                    (album_averages_df["Artist Name"].astype(
+                        str).str.strip().str.lower() == artist_name.strip().lower())
+                    ]
+
+                if not matching_album_row.empty:
+                        # Update existing album average
+                    album_row_idx = matching_album_row.index[0] + 2  # +2 for header and 0-indexing
+                    times_ranked = matching_album_row.iloc[0].get("Times Ranked", 0)
+                    times_ranked = int(times_ranked) + 1  # Increment times ranked
+
+                    update_cells = []
+                        # Update Average Score
+                    cell_avg = album_averages_sheet.acell(
+                        f"C{album_row_idx}")  # Assuming 'Average Score' is Column C
+                    if cell_avg.value != str(average_album_score):  # Check if value changed
+                        cell_avg.value = average_album_score
+                        update_cells.append(cell_avg)
+
+                        # Update Times Ranked
+                    cell_times = album_averages_sheet.acell(
+                        f"D{album_row_idx}")  # Assuming 'Times Ranked' is Column D
+                    if cell_times.value != str(times_ranked):  # Check if value changed
+                        cell_times.value = times_ranked
+                        update_cells.append(cell_times)
+
+                    if update_cells:
+                        album_averages_sheet.update_cells(update_cells)
+                        print(
+                            f"DEBUG: Updated average score ({average_album_score}) and times ranked ({times_ranked}) for '{album_name}' in Album Averages sheet.")
+                    else:
+                        print(f"DEBUG: No changes to average score/times ranked for '{album_name}'.")
+
+                else:
+                        # Add new album average entry
+                    new_album_row_values = [
+                        album_name,
+                        artist_name,
+                        average_album_score,
+                        1,  # First time ranked
+                        datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # Last Ranked Date (optional column)
+                    ]
+                    album_averages_sheet.append_row(new_album_row_values)
+                    print(
+                        f"DEBUG: Added new entry for '{album_name}' with average score {average_album_score} to Album Averages sheet.")
         flash("Rankings saved successfully!")
         return redirect(url_for('load_albums_by_artist_route', artist_name=artist_name))
 
@@ -397,8 +445,40 @@ def load_albums_by_artist_route():
         return redirect(url_for('index')) # Redirect to your home/search page
 
     albums = get_albums_by_artist(artist_name)
+    album_averages_sheet_name = "Album Averages"  # Use the same constant
+    album_averages_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(album_averages_sheet_name)
+    album_averages_df = get_as_dataframe(album_averages_sheet, evaluate_formulas=True).fillna("")
 
-    return render_template("select_album.html", artist_name=artist_name, albums=albums)
+    # Create a dictionary for quick lookup of averages/times ranked
+    album_metadata = {}
+    for _, row in album_averages_df.iterrows():
+        album_key = (row["Album Name"].strip().lower(), row["Artist Name"].strip().lower())
+        album_metadata[album_key] = {
+            "average_score": row.get("Average Score", None),
+            "times_ranked": row.get("Times Ranked", 0)
+        }
+    print(f"DEBUG: Loaded {len(album_metadata)} album metadata entries from sheet.")
+
+    # Prepare albums for template, adding average score and times ranked
+    albums_for_template = []
+    for album in albums:  # This `albums` is from `get_albums_by_artist`
+        album_name_lower = album.get("album_name", "").strip().lower()
+        artist_name_lower = album.get("artist_name", "").strip().lower()
+
+        metadata = album_metadata.get((album_name_lower, artist_name_lower), {})
+
+        albums_for_template.append({
+            "album_name": album.get("album_name"),
+            "artist_name": album.get("artist_name"),
+            "album_cover_url": album.get("album_cover_url"),
+            "spotify_id": album.get("spotify_id"),  # Ensure your `get_albums_by_artist` returns this
+            "average_score": metadata.get("average_score"),  # Add this
+            "times_ranked": metadata.get("times_ranked")  # Add this
+        })
+    print(f"DEBUG: Prepared {len(albums_for_template)} albums for select_album.html with metadata.")
+
+    return render_template("select_album.html", artist_name=artist_name,
+                           albums=albums_for_template)  # Pass the enriched list
 @app.route("/ranking_page")
 def ranking_page():
     sheet_rows = load_google_sheet_data()

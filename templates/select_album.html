@@ -161,7 +161,43 @@
         width: 100px;
       }
     }
-    .paused-icon { color: orange; font-size: 1.2rem; margin-left: 0.5rem; }
+     .mastery-stars {
+        margin-top: 5px;
+        font-size: 1.2em; /* Adjust size as needed */
+    }
+
+    .mastery-stars .star {
+        display: inline-block;
+        margin: 0 1px; /* Small spacing between stars */
+        color: #ccc; /* Default empty star color */
+    }
+
+    .mastery-stars .star.filled {
+        color: gold; /* Color for filled stars */
+    }
+
+    .album-card .stats { /* Ensure this exists and styles your text */
+        font-size: 0.9em;
+        color: #555;
+        margin-top: 6px;
+        line-height: 1.3;
+    }
+
+    /* Adjust album-name min-height if avg score/stars add too much height and misalign */
+    .album-name {
+        font-weight: bold;
+        margin: 0 0 8px 0;
+        font-size: 1em;
+        color: #222;
+        min-height: 2.5em; /* You had this, keep it or adjust if needed */
+        display: flex; /* Use flex to align name and icon */
+        align-items: center; /* Center vertically */
+        justify-content: center; /* Center horizontally */
+        flex-wrap: wrap; /* Allow wrapping if name is long */
+    }
+    .album-name span.paused-icon {
+        margin-left: 5px; /* Adjust spacing for the paused icon */
+    }
    </style>
 </head>
 <body>
@@ -170,42 +206,42 @@
     {% for album in albums %}
       <div class="album-card {% if loop.index > 4 %}mobile-hide{% endif %}">
         <form action="{{ url_for('view_album') }}" method="post" style="display: flex; flex-direction: column; height: 100%;">
-          <input type="hidden" name="album_url" value="{{ album.url }}">
-          <img src="{{ album.image }}" alt="{{ album.name }}">
+          <input type="hidden" name="album_url" value="{{ album.url }}"> {# Or album.spotify_id if that's what view_album expects #}
+          <img src="{{ album.image }}" alt="{{ album.album_name }}">
 
-          <h3 class="album-name" title="{{ album.name }}">
-            {{ album.name }}
+          <h3 class="album-name" title="{{ album.album_name }}">
+            {{ album.album_name }}
             {% if album.stats and album.stats.ranking_status == "paused" %}
               <span class="paused-icon" title="Paused">⏸️</span>
             {% endif %}
           </h3>
 
-          {% if album.stats %}
-            <div class="stars" aria-label="Ranking stars">
-              {% set avg = album.stats.last_final_avg_rank or 0 %}
-              {% if avg >= 8.5 %}
-                ★ ★ ★
-              {% elif avg >= 6.5 %}
-                ★ ★ ☆
-              {% elif avg >= 4.5 %}
-                ★ ☆ ☆
+          {# Your existing stars block will be replaced with this #}
+          <div class="mastery-stars" aria-label="Ranking stars">
+              {% set max_stars = 3 %} {# Total stars for mastery #}
+              {% set filled_stars = album.times_ranked | int %} {# Convert to integer #}
+              {% for i in range(max_stars) %}
+                  <span class="star {% if i < filled_stars %}filled{% endif %}">★</span>
+              {% endfor %}
+          </div>
+          <div class="stats">
+              {% if album.average_score is not none %} {# Use is not none to check for actual value #}
+                Avg Score: {{ album.average_score }}<br>
               {% else %}
-                ☆ ☆ ☆
+                Avg Score: N/A<br>
               {% endif %}
-            </div>
-            <div class="stats">
-              Last Ranked: {{ album.stats.last_final_rank_date.split(" ")[0] if album.stats.last_final_rank_date }}<br>
-              Avg Score: {{ album.stats.last_final_avg_rank if album.stats.last_final_avg_rank else "N/A" }}
-            </div>
-          {% else %}
-            <div class="stars">☆ ☆ ☆</div>
-            <div class="stats">Not ranked yet</div>
-          {% endif %}
+              {# If you track last_ranked_date in your album averages sheet, you can display it here too #}
+              {# e.g. Last Ranked: {{ album.last_ranked_date if album.last_ranked_date else "Never" }} #}
+              {% if album.times_ranked is not none and album.times_ranked > 0 %}
+                 Ranked {{ album.times_ranked }} time{{ 's' if album.times_ranked != 1 }}
+              {% else %}
+                 Not ranked yet
+              {% endif %}
+          </div>
 
           <button type="submit">Rank Album</button>
         </form>
 
-        <!-- ✅ New Select Album Form -->
         <form action="{{ url_for('load_album') }}" method="post" style="margin-top: 8px;">
           <input type="hidden" name="album_id" value="{{ album.id }}">
           <input type="hidden" name="artist_name" value="{{ artist_name }}">

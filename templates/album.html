@@ -255,6 +255,64 @@
             font-size: 12px;
             font-weight: bold;
         }
+        /* Styles for the group icon */
+        .group-icon {
+            margin-left: 8px; /* Space between number and icon */
+            font-size: 0.8em;
+            color: #ccc; /* Default (unfilled) color */
+            visibility: hidden; /* Hidden by default */
+            display: inline-block; /* Ensure it respects margin */
+        }
+
+        /* Style when a group HAS songs (active icon) */
+        .group-header.has-songs .group-icon {
+            visibility: visible; /* Make visible when active */
+            color: gold; /* Change color when active */
+        }
+
+        /* Using a simple star emoji for content */
+        .group-header.has-songs .group-icon::before {
+            content: "⭐";
+        }
+
+        /* If you want to use a different empty star or Font Awesome:
+        .group-icon::before {
+            content: "☆"; // Empty star
+            color: #ccc;
+        }
+        .group-header.has-songs .group-icon::before {
+            content: "⭐"; // Filled star
+            color: gold;
+        }
+        */
+
+        /* Add/adjust these styles for your rank groups if they aren't already defined */
+        .rank-group {
+            border: 1px solid #ddd;
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+
+        .group-header {
+            display: flex; /* Aligns h2 and span horizontally */
+            align-items: center; /* Vertically centers them */
+            margin-bottom: 10px;
+        }
+
+        .group-header h2 {
+            margin: 0; /* Remove default margin */
+            font-size: 1.2em;
+        }
+
+        .song-list {
+            min-height: 50px; /* Give it some height for dragging into */
+            border: 1px dashed #ccc;
+            padding: 5px;
+            border-radius: 3px;
+            background-color: #fff;
+        }
 
         /* Footer buttons */
         #actions {
@@ -365,7 +423,34 @@
                         Select a rank group above to start ranking songs
                     </div>
                     <ul id="rankedSongsList">
-                        </ul>
+                        {# This is where your individual rank groups will be rendered, either on load or dynamically #}
+                        {# Example of how a rank group for 5.0 might look (you need to generate these) #}
+                        {% if rank_groups %} {# Assuming rank_groups is passed to your template #}
+                            {% for group_key, songs_in_group in rank_groups.items() %}
+                                <div class="rank-group" data-group="{{ group_key }}">
+                                    <div class="group-header">
+                                        <h2>{{ group_key }}</h2>
+                                        <span class="group-icon" id="icon-group-{{ group_key }}"></span> {# ICON HERE #}
+                                    </div>
+                                    <div class="song-list" id="group-{{ group_key }}">
+                                        {# Songs already in this group will be rendered here by your Flask app #}
+                                        {% for song in songs_in_group %}
+                                            <div class="draggable-song"
+                                                 data-song-id="{{ song.song_id }}"
+                                                 data-song-name="{{ song.song_name }}"
+                                                 data-prelim-rank="{{ song.prelim_rank }}"
+                                                 data-calculated-score="{{ song.calculated_score }}"
+                                                 data-rank-group="{{ group_key }}"
+                                                 data-rank-position="{{ loop.index0 }}"
+                                                 draggable="true">
+                                                {{ song.song_name }}
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    </ul>
                 </div>
 
                 <div id="actions">
@@ -406,6 +491,47 @@
             }
             return false;
         }
+        // Function to update the icon for a specific group
+        function updateGroupIcon(groupKey) {
+            const groupElement = document.querySelector(`.rank-group[data-group="${groupKey}"]`);
+            if (!groupElement) return;
+
+            const songList = groupElement.querySelector('.song-list');
+            const groupHeader = groupElement.querySelector('.group-header');
+
+            if (songList.children.length > 0) {
+                groupHeader.classList.add('has-songs');
+            } else {
+                groupHeader.classList.remove('has-songs');
+            }
+        }
+
+        // Modify your existing drag and drop handlers:
+
+        // Existing drop handler (e.g., in a general drop function or specific dropzone listener)
+        // You need to call updateGroupIcon for the source and target groups
+        // Let's assume you have a function that handles the actual DOM manipulation after a drop
+        function handleSongDrop(songElement, targetGroupElement) {
+            const sourceGroupKey = songElement.parentElement.dataset.group;
+            const targetGroupKey = targetGroupElement.dataset.group;
+
+            targetGroupElement.querySelector('.song-list').appendChild(songElement);
+            // Re-index and update data attributes as needed for your backend submission
+
+            // Call the icon update function for both affected groups
+            updateGroupIcon(sourceGroupKey);
+            updateGroupIcon(targetGroupKey);
+        }
+
+        // Initial check when the page loads (in your document ready/DOMContentLoaded block)
+        document.addEventListener('DOMContentLoaded', () => {
+            // ... your existing initialization code ...
+
+            // Call updateGroupIcon for all groups on load to set initial states
+            document.querySelectorAll('.rank-group').forEach(groupElement => {
+                updateGroupIcon(groupElement.dataset.group);
+            });
+        });
 
         // Handle rank button clicks
         document.querySelectorAll('.rank-button').forEach(btn => {
