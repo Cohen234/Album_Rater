@@ -19,7 +19,7 @@ from dotenv import load_dotenv # Load dotenv as early as possible
 load_dotenv()
 
 # Import functions from spotify_logic after all core imports
-from spotify_logic import load_album_data, get_albums_by_artist, extract_album_id # Ensure these are correct
+from spotify_logic import load_album_data_v2, get_albums_by_artist, extract_album_id # Ensure these are correct
 
 # --- Google Sheets Setup ---
 creds_info = json.loads(os.environ['GOOGLE_SERVICE_ACCOUNT_JSON'])
@@ -575,8 +575,8 @@ def view_album():
             # Check if the global 'sp' object is initialized
             if sp is None:
                 raise Exception("Spotify client (sp) is not initialized. Cannot fetch album data.")
-            from spotify_logic import load_album_data
-            album_data = load_album_data(sp, album_id) # Pass sp as the first argument
+
+            album_data = load_album_data_v2(sp, album_id) # Pass sp as the first argument
         except Exception as e:
             flash(f"Error loading album data from Spotify: {e}", "error")
             print(f"ERROR: Error loading album data from Spotify for ID {album_id}: {e}")

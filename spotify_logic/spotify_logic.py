@@ -9,7 +9,7 @@ def extract_album_id(url_or_uri):
     return match.group(2) if match else url_or_uri.strip()
 
 # Keep 'sp_param' here, as it's the parameter you're expecting from the caller (app.py)
-def load_album_data(sp_param, album_id):
+def load_album_data_v2(sp_param, album_id):
     # Use the parameter passed to the function
     album = sp_param.album(album_id)
     tracks = sp_param.album_tracks(album_id)
