@@ -205,8 +205,16 @@
   <div class="album-grid">
     {% for album in albums %}
       <div class="album-card {% if loop.index > 4 %}mobile-hide{% endif %}">
+        {# COMBINE ALL INPUTS INTO ONE FORM #}
         <form action="{{ url_for('view_album') }}" method="post" style="display: flex; flex-direction: column; height: 100%;">
-          <input type="hidden" name="album_url" value="{{ album.url }}"> {# Or album.spotify_id if that's what view_album expects #}
+          {# Include all necessary hidden inputs here #}
+          <input type="hidden" name="album_id" value="{{ album.id }}">
+          <input type="hidden" name="album_name" value="{{ album.album_name }}"> {# CRITICAL: Use album.album_name from your Flask data #}
+          <input type="hidden" name="artist_name" value="{{ artist_name }}"> {# artist_name from the template context #}
+          <input type="hidden" name="album_cover_url" value="{{ album.image }}"> {# CRITICAL: Use album.image for the cover URL #}
+
+          {# The image itself can be wrapped in a submit button or just displayed #}
+          {# If you want the image to submit the form, wrap it in <button type="submit"> #}
           <img src="{{ album.image }}" alt="{{ album.album_name }}">
 
           <h3 class="album-name" title="{{ album.album_name }}">
@@ -216,10 +224,9 @@
             {% endif %}
           </h3>
 
-          {# Your existing stars block will be replaced with this #}
           <div class="mastery-stars" aria-label="Ranking stars">
-              {% set max_stars = 3 %} {# Total stars for mastery #}
-              {% set filled_stars = album.times_ranked | int %} {# Convert to integer #}
+              {% set max_stars = 3 %}
+              {% set filled_stars = album.times_ranked | int %}
               {% for i in range(max_stars) %}
                   <span class="star {% if i < filled_stars %}filled{% endif %}">★</span>
               {% endfor %}
@@ -230,21 +237,17 @@
                 {% else %}
                   Avg Score: N/A<br>
                 {% endif %}
-              {# If you track last_ranked_date in your album averages sheet, you can display it here too #}
-              {# e.g. Last Ranked: {{ album.last_ranked_date if album.last_ranked_date else "Never" }} #}
               {% if album.times_ranked is not none and (album.times_ranked | int) > 0 %}
                  Ranked {{ album.times_ranked }} time{{ 's' if album.times_ranked != 1 }}
               {% else %}
                  Not ranked yet
               {% endif %}
           </div>
-        </form>
 
-        <form action="{{ url_for('view_album') }}" method="post" style="margin-top: 8px;">
-          <input type="hidden" name="album_id" value="{{ album.id }}">
-          <input type="hidden" name="artist_name" value="{{ artist_name }}">
-          <button type="submit">Select Album</button>
+          {# This is the only submit button, and it's now inside the form with all the data #}
+          <button type="submit" style="margin-top: 12px;">Select Album</button>
         </form>
+        {# REMOVE THE SECOND FORM ENTIRELY #}
       </div>
     {% endfor %}
   </div>
