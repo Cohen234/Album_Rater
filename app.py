@@ -139,13 +139,18 @@ import json
 import pandas as pd
 
 
+from datetime import datetime
+import json
+import pandas as pd
+# Assuming sp and client are defined globally in your app.py
+# from your_gspread_utils import get_as_dataframe # Assuming this is separate
+
 @app.route("/submit_rankings", methods=["POST"])
 def submit_rankings():
     try:
         album_name = request.form.get("album_name")
         artist_name = request.form.get("artist_name")
         album_id = request.form.get("album_id")
-        # submission_status will always be 'final' now
         submission_status = 'final'
 
         print(f"\n--- SUBMIT RANKINGS START ---")
@@ -214,19 +219,26 @@ def submit_rankings():
         else:
             print(f"DEBUG: No existing rows found for album '{album_name}' (ID: {album_id}) to delete.")
 
+
         # 2. PREPARE NEW ROWS FOR INSERTION
         new_rows_for_sheet = []
-        submitted_ranked_song_ids = {str(s.get('song_id')) for s in all_ranked_songs_from_js if s.get('song_id')}
+        # submitted_ranked_song_ids = {str(s.get('song_id')) for s in all_ranked_songs_from_js if s.get('song_id')} # This line is not strictly needed here
 
         spotify_tracks_for_album = {}
+        album_spotify_data = {'tracks': {'items': []}} # <--- Initialize album_spotify_data here
         try:
-            album_spotify_data = sp.album(album_id)
-            for track in album_spotify_data['tracks']['items']:
-                spotify_tracks_for_album[track['id']] = track['name']
+            # Add a check for 'sp' object being defined
+            if 'sp' in globals() and sp is not None:
+                album_spotify_data = sp.album(album_id)
+                for track in album_spotify_data['tracks']['items']:
+                    spotify_tracks_for_album[track['id']] = track['name']
+            else:
+                raise Exception("Spotify client (sp) not initialized.") # Force fallback if sp is missing
+
         except Exception as e:
             print(
                 f"WARNING: Could not fetch Spotify tracks for album {album_id}: {e}. Falling back to submission data for song names.")
-            # Fallback for song names in case Spotify API fails (e.g., rate limits)
+            # Fallback for song names in case Spotify API fails (e.g., rate limits or 'sp' not defined)
             spotify_tracks_for_album = {
                 str(s.get('song_id')): s.get('song_name', f"Unknown Song {str(s.get('song_id', 'N/A'))}")
                 for s in all_ranked_songs_from_js
@@ -235,6 +247,7 @@ def submit_rankings():
             for song_id, prelim_score in prelim_ranks_from_js.items():
                 if song_id not in spotify_tracks_for_album:
                     spotify_tracks_for_album[song_id] = f"Unknown Song {song_id}"
+
 
         # Define the exact column order expected by your Google Sheet
         # Based on your current sheet and previous discussion:
@@ -247,13 +260,23 @@ def submit_rankings():
         # Get all unique song IDs from Spotify (all album tracks) to ensure we save prelims for ALL of them.
         # This is robust because it ensures any song on the album can have a prelim, even if not explicitly submitted.
         # Ensure we always get song names from Spotify for accurate mapping
+        # This line will now work because album_spotify_data is always defined
         all_spotify_album_song_ids = {str(track.get('id')) for track in
                                       album_spotify_data.get('tracks', {}).get('items', [])}
+
+        # If Spotify API failed, we might only have songs from the ranked data.
+        # Ensure that if all_spotify_album_song_ids is empty due to API failure,
+        # we still process songs that were dragged and ranked.
+        if not all_spotify_album_song_ids and all_ranked_songs_from_js:
+             all_spotify_album_song_ids = {str(s.get('song_id')) for s in all_ranked_songs_from_js if s.get('song_id')}
+             # Also add songs with prelim ranks that might not have been dragged
+             all_spotify_album_song_ids.update(prelim_ranks_from_js.keys())
+
 
         # Iterate through ALL songs on the album to determine their status and data for the sheet
         # This handles both ranked songs and unranked songs with prelim scores.
         for song_id in all_spotify_album_song_ids:
-            song_name = spotify_tracks_for_album.get(song_id, f"Unknown Song {song_id}")
+            song_name = spotify_tracks_for_album.get(song_id, f"Unknown Song {song_id}") # Use the possibly fallback-populated dict
 
             # Find if this song was submitted as ranked
             ranked_song_data = next((s for s in all_ranked_songs_from_js if str(s.get('song_id')) == song_id), None)
