@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify
+from flask import Flask, render_template, request, redirect, url_for, jsonify, flash
 import gspread
 from gspread_dataframe import get_as_dataframe, set_with_dataframe
 from google.oauth2.service_account import Credentials
@@ -7,56 +7,47 @@ import pandas as pd
 from colorthief import ColorThief
 import requests
 from io import BytesIO
-import sys
 import os
-import json
-from google.oauth2 import service_account
-from spotify_logic import load_album_data, get_albums_by_artist, extract_album_id
-from google.oauth2.service_account import Credentials
-# Setup
-import json
-from google.oauth2.service_account import Credentials
-import gspread
-import traceback
+import json # Only need to import json once
 from collections import Counter
-import spotipy # <--- ADD THIS
+import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
+import traceback # Already imported, keeping it explicit for clarity
+import re # Added for extract_album_id if it's not exclusively in spotify_logic
 
-import os
-from dotenv import load_dotenv # New import
+from dotenv import load_dotenv # Load dotenv as early as possible
 load_dotenv()
 
-creds_info = json.loads(os.environ['GOOGLE_SERVICE_ACCOUNT_JSON'])
+# Import functions from spotify_logic after all core imports
+from spotify_logic import load_album_data, get_albums_by_artist, extract_album_id # Ensure these are correct
 
+# --- Google Sheets Setup ---
+creds_info = json.loads(os.environ['GOOGLE_SERVICE_ACCOUNT_JSON'])
 creds = Credentials.from_service_account_info(
     creds_info,
     scopes=["https://www.googleapis.com/auth/spreadsheets"]
 )
-
 client = gspread.authorize(creds)
+
 SPREADSHEET_ID = '15E4b-DWSYP9AzbAzSviqkW-jEOktbimPlmhNIs_d5jc'
 SHEET_NAME = "Sheet1"
-album_averages_sheet_name = "Album Averages"
+album_averages_sheet_name = "Album Averages" # Renamed for clarity and consistency
 
-from flask import Flask, request, redirect, url_for, flash, json # Ensure json is imported
-from datetime import datetime
-# from your_gspread_utils import get_as_dataframe # Make sure this is imported correctly
-# from your_main_app import client, SPREADSHEET_ID, SHEET_NAME # Adjust imports as per your setup
-
+# --- Flask App Initialization ---
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'a_temporary_dev_key')
-SPOTIFY_CLIENT_ID_APP = os.environ.get('SPOTIPY_CLIENT_ID')
-SPOTIFY_CLIENT_SECRET_APP = os.environ.get('SPOTIPY_CLIENT_SECRET')
 
-SPOTIPY_CLIENT_ID_APP = os.environ.get('SPOTIFY_CLIENT_ID')
-SPOTIPY_CLIENT_SECRET_APP = os.environ.get('SPOTIFY_CLIENT_SECRET')
+# --- Spotify API Initialization ---
+# Use consistent variable names for Spotify Client ID/Secret
+SPOTIFY_CLIENT_ID = os.environ.get('SPOTIFY_CLIENT_ID') # Changed from SPOTIPY_CLIENT_ID_APP
+SPOTIFY_CLIENT_SECRET = os.environ.get('SPOTIFY_CLIENT_SECRET') # Changed from SPOTIPY_CLIENT_SECRET_APP
 
 sp = None # Initialize sp to None
-if SPOTIPY_CLIENT_ID_APP and SPOTIPY_CLIENT_SECRET_APP:
+if SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET:
     try:
         sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(
-            client_id=SPOTIPY_CLIENT_ID_APP,
-            client_secret=SPOTIPY_CLIENT_SECRET_APP
+            client_id=SPOTIFY_CLIENT_ID,
+            client_secret=SPOTIFY_CLIENT_SECRET
         ))
         print("DEBUG: Spotify client (sp) initialized successfully in app.py.")
     except Exception as e:
@@ -67,15 +58,17 @@ else:
     print("WARNING: SPOTIFY_CLIENT_ID or SPOTIFY_CLIENT_SECRET environment variables not found for app.py.")
     print("Spotify functionality may be limited.")
 
+# --- Helper Functions (move these up here if they are used globally) ---
+# Your group_ranked_songs, get_dominant_color, get_album_stats functions should
+# come after the sp and client initialization if they use them, but before routes.
+
 def group_ranked_songs(sheet_rows):
     group_bins = {round(x * 0.5, 1): [] for x in range(2, 21)}  # 1.0 to 10.0
-
     for row in sheet_rows:
         try:
             rank = float(row["Ranking"])
             group = round(rank * 2) / 2  # Ensure .5 steps
             group = min(max(group, 1.0), 10.0)  # Clamp between 1.0 and 10.0
-
             group_bins[group].append({
                 "artist": row["Artist Name"],
                 "title": row["Song Name"],
@@ -83,88 +76,61 @@ def group_ranked_songs(sheet_rows):
                 "date": row["Ranked Date"],
                 "position": row.get("Position In Group", None)
             })
-        except:
-            continue  # skip if bad data
-
+        except Exception as e: # Catch specific exceptions or general Exception
+            print(f"WARNING: Skipping bad row in group_ranked_songs: {row} - {e}")
+            continue
     return group_bins
+
 def get_dominant_color(image_url):
     try:
         response = requests.get(image_url)
         color_thief = ColorThief(BytesIO(response.content))
         rgb = color_thief.get_color(quality=1)
         return f"rgb({rgb[0]}, {rgb[1]}, {rgb[2]})"
-    except Exception:
+    except Exception as e:
+        print(f"ERROR: Failed to get dominant color for {image_url}: {e}")
         return "#ffffff"
 
-def get_album_stats(album_name, artist_name, df=None):
+
+def merge_album_with_rankings(album_tracks, sheet_rows, artist_name):
+    merged_tracks = []
+    for track in album_tracks:
+        # Handle both string and dict cases
+        track_name = track if isinstance(track, str) else track.get("song_name", "")
+        tn_lower = track_name.strip().lower()
+        artist_lower = artist_name.strip().lower()
+
+        matches = [
+            row for row in sheet_rows
+            if row['Artist Name'].strip().lower() == artist_lower and
+               row['Song Name'].strip().lower() == tn_lower
+        ]
+
+        if matches:
+            rank_count = len(matches)
+            avg_rank = round(sum(float(r['Ranking']) for r in matches) / rank_count, 2)
+            latest_rank_date = max(r['Ranked Date'] for r in matches)
+            prelim_rank = matches[-1]['Ranking']
+        else:
+            rank_count = 0
+            avg_rank = None
+            latest_rank_date = None
+            prelim_rank = ""
+
+        merged_tracks.append({
+            "song_name": track_name,
+            "rank_count": rank_count,
+            "avg_rank": avg_rank,
+            "latest_rank_date": latest_rank_date,
+            "prelim_rank": prelim_rank
+        })
+
+    return merged_tracks
+
+def load_google_sheet_data():
+    # This function uses `client`, so it must be defined after `client` is initialized
     sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
-    if df is None:
-        df = get_as_dataframe(sheet, evaluate_formulas=True).fillna("")
-
-    # Normalize keys
-    album_key  = album_name.strip().lower()
-    artist_key = artist_name.strip().lower()
-    df = df.dropna(subset=["Album Name", "Artist Name"])
-    df["Album Name"]   = df["Album Name"].astype(str).str.strip().str.lower()
-    df["Artist Name"]  = df["Artist Name"].astype(str).str.strip().str.lower()
-    df["Ranking Status"] = df["Ranking Status"].fillna("")
-
-    # Filter to this album/artist (ignore session rows)
-    album_df = df[
-        (df["Album Name"] == album_key) &
-        (df["Artist Name"] == artist_key) &
-        (df["Song Name"] != "__ALBUM_SESSION__")
-    ]
-    if album_df.empty:
-        return {
-            'finalized_rank_count': 0,
-            'last_final_avg_rank': None,
-            'last_final_rank_date': None,
-            'ranking_status': None
-        }
-
-    # Is there any paused row?
-    paused_exists = album_df["Ranking Status"].str.contains("paused", case=False).any()
-
-    # Finalized rows only:
-    finalized_df = album_df[album_df["Ranking Status"] == "final"].copy()
-    if finalized_df.empty:
-        return {
-            'finalized_rank_count': 0,
-            'last_final_avg_rank': None,
-            'last_final_rank_date': None,
-            'ranking_status': "paused" if paused_exists else None
-        }
-
-    # Convert Ranking to numeric, compute overall average across *all* final rows
-    finalized_df["Ranking"] = pd.to_numeric(finalized_df["Ranking"], errors="coerce")
-    avg_rank = round(finalized_df["Ranking"].mean(), 2)
-
-    # Most recent final date
-    finalized_df["Ranked Date"] = pd.to_datetime(finalized_df["Ranked Date"], errors="coerce")
-    latest_date = finalized_df["Ranked Date"].max()
-    formatted_date = latest_date.strftime("%Y-%m-%d %H:%M:%S") if pd.notna(latest_date) else None
-
-    return {
-        'finalized_rank_count': len(finalized_df),
-        'last_final_avg_rank': avg_rank,
-        'last_final_rank_date': formatted_date,
-        'ranking_status': "paused" if paused_exists else "final"
-    }
-
-
-from flask import request, redirect, url_for, flash
-
-from datetime import datetime
-import json
-import pandas as pd
-
-
-from datetime import datetime
-import json
-import pandas as pd
-# Assuming sp and client are defined globally in your app.py
-# from your_gspread_utils import get_as_dataframe # Assuming this is separate
+    return sheet.get_all_records()
 
 @app.route("/submit_rankings", methods=["POST"])
 def submit_rankings():
@@ -500,43 +466,8 @@ def submit_rankings():
 @app.route('/')
 def index():
     return render_template('index.html')
-def merge_album_with_rankings(album_tracks, sheet_rows, artist_name):
-    merged_tracks = []
-    for track in album_tracks:
-        # Handle both string and dict cases
-        track_name = track if isinstance(track, str) else track.get("song_name", "")
-        tn_lower = track_name.strip().lower()
-        artist_lower = artist_name.strip().lower()
 
-        matches = [
-            row for row in sheet_rows
-            if row['Artist Name'].strip().lower() == artist_lower and
-               row['Song Name'].strip().lower() == tn_lower
-        ]
 
-        if matches:
-            rank_count = len(matches)
-            avg_rank = round(sum(float(r['Ranking']) for r in matches) / rank_count, 2)
-            latest_rank_date = max(r['Ranked Date'] for r in matches)
-            prelim_rank = matches[-1]['Ranking']
-        else:
-            rank_count = 0
-            avg_rank = None
-            latest_rank_date = None
-            prelim_rank = ""
-
-        merged_tracks.append({
-            "song_name": track_name,
-            "rank_count": rank_count,
-            "avg_rank": avg_rank,
-            "latest_rank_date": latest_rank_date,
-            "prelim_rank": prelim_rank
-        })
-
-    return merged_tracks
-def load_google_sheet_data():
-    sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
-    return sheet.get_all_records()
 @app.route("/load_albums_by_artist", methods=["GET", "POST"])
 def load_albums_by_artist_route():
     artist_name = None # Initialize artist_name
