@@ -1,6 +1,8 @@
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 import re
+import spotipy
+from spotipy.oauth2 import SpotifyClientCredentials
 
 # Set up your Spotify credentials here (use environment variables or config in production)
 SPOTIPY_CLIENT_ID = 'your_spotify_client_id'
