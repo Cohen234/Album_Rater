@@ -45,23 +45,7 @@ from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'a_temporary_dev_key')
-SPOTIPY_CLIENT_ID = os.getenv('SPOTIPY_CLIENT_ID')
-SPOTIPY_CLIENT_SECRET = os.getenv('SPOTIPY_CLIENT_SECRET')
 
-if not SPOTIPY_CLIENT_ID or not SPOTIPY_CLIENT_SECRET:
-    print("WARNING: Spotify API client ID or secret not found in environment variables.")
-    print("Please set SPOTIPY_CLIENT_ID and SPOTIPY_CLIENT_SECRET.")
-    # You might want to halt execution or provide a default error page here
-else:
-    try:
-        sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(
-            client_id=SPOTIPY_CLIENT_ID,
-            client_secret=SPOTIPY_CLIENT_SECRET
-        ))
-        print("Spotify client (sp) initialized successfully.")
-    except Exception as e:
-        print(f"ERROR: Failed to initialize Spotify client: {e}")
-        sp = None
 def group_ranked_songs(sheet_rows):
     group_bins = {round(x * 0.5, 1): [] for x in range(2, 21)}  # 1.0 to 10.0
 

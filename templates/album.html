@@ -399,13 +399,17 @@
         </div>
     </header>
 
-    <form id="rankingForm" method="post" action="/submit_rankings">
-        <input type="hidden" name="album_name" value="{{ album.album_name }}">
-        <input type="hidden" name="artist_name" value="{{ album.artist_name }}">
-        <input type="hidden" id="selected_rank" name="selected_rank" value="">
-        <input type="hidden" id="status" name="status" value="">
-        <input type="hidden" id="all_ranked_data" name="all_ranked_data" value="">
-        <input type="hidden" id="prelim_rank_data" name="prelim_rank_data" value="">
+    <form id="rankingForm" action="/submit_rankings" method="POST">
+        <input type="hidden" id="album_id" name="album_id" value="{{ album.album_id }}">
+        <input type="hidden" id="album_name" name="album_name" value="{{ album.album_name }}">
+        <input type="hidden" id="artist_name" name="artist_name" value="{{ album.artist_name }}">
+        <input type="hidden" id="album_cover_url" name="album_cover_url" value="{{ album.album_cover_url }}">
+
+        <input type="hidden" name="all_ranked_data" id="all_ranked_data">
+        <input type="hidden" name="prelim_rank_data" id="prelim_rank_data">
+        <input type="hidden" name="status" id="status_input" value="final">
+
+        <button type="button" onclick="saveRankings()">Finalize Rank</button>
 
 
         <div id="container">
