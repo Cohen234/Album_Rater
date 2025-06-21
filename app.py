@@ -554,8 +554,8 @@ def ranking_page():
 
 @app.route('/view_album', methods=['POST'])
 def view_album():
-    album_id_from_form = request.form.get("album_id") # Use album_id as primary identifier
-    artist_name_from_form = request.form.get("artist_name") # Keep artist name from form for robustness
+    album_id_from_form = request.form.get("album_id")
+    artist_name_from_form = request.form.get("artist_name")
 
     print(f"\n--- VIEW ALBUM START ---")
     print(f"DEBUG: Received album_id from form: {album_id_from_form}")
@@ -564,106 +564,108 @@ def view_album():
     if not album_id_from_form or not artist_name_from_form:
         flash("Missing album ID or artist name.", "error")
         print("ERROR: Missing album_id or artist_name in /view_album POST request.")
-        return redirect(url_for('index')) # Redirect to a safe page
+        return redirect(url_for('index'))
 
     try:
         spotify_uri_to_fetch = f"spotify:album:{album_id_from_form}"
         print(f"DEBUG: Constructed Spotify URI: {spotify_uri_to_fetch}")
 
-        # Fetch album data from Spotify (only once)
         album_data_from_spotify = load_album_data(spotify_uri_to_fetch)
         print(f"DEBUG: Raw data from spotify_logic.load_album_data: {album_data_from_spotify}")
 
         if not album_data_from_spotify:
             flash("Could not load album data from Spotify. Album not found.", "error")
             print(f"ERROR: No album data returned from Spotify for ID: {album_id_from_form}")
-            return redirect(url_for('load_albums_by_artist_route', artist_name=artist_name_from_form)) # Go back to artist albums
+            return redirect(url_for('load_albums_by_artist_route', artist_name=artist_name_from_form))
 
-        # Extract essential album info for the template
         album_name_final = album_data_from_spotify.get("album_name", "Unknown Album Name")
         artist_name_final = album_data_from_spotify.get("artist_name", artist_name_from_form)
         album_cover_url_final = album_data_from_spotify.get("album_cover_url", "")
-        spotify_tracks_list = album_data_from_spotify.get("songs", []) # List of songs from Spotify
+        spotify_tracks_list = album_data_from_spotify.get("songs", [])
 
-        print(f"DEBUG: Extracted for template: Name='{album_name_final}', Artist='{artist_name_final}', Cover='{album_cover_url_final}'")
+        print(
+            f"DEBUG: Extracted for template: Name='{album_name_final}', Artist='{artist_name_final}', Cover='{album_cover_url_final}'")
 
-        # --- Load existing ranking data from the main Google Sheet ---
         main_rankings_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
         all_existing_rows_df = get_as_dataframe(main_rankings_sheet, evaluate_formulas=True).fillna("")
         print(f"DEBUG: Loaded {len(all_existing_rows_df)} rows from main ranking sheet.")
 
-        # Filter sheet data for the current album/artist (case-insensitive and stripped)
         form_album_name_lower = album_name_final.strip().lower()
         form_artist_name_lower = artist_name_final.strip().lower()
 
         album_artist_filtered_df = all_existing_rows_df[
             (all_existing_rows_df["Album Name"].astype(str).str.strip().str.lower() == form_album_name_lower) &
             (all_existing_rows_df["Artist Name"].astype(str).str.strip().str.lower() == form_artist_name_lower)
-        ]
-        print(f"DEBUG: Found {len(album_artist_filtered_df)} existing entries in sheet for '{album_name_final}' by '{artist_name_final}'.")
+            ].copy()  # Use .copy() to avoid SettingWithCopyWarning
+        print(
+            f"DEBUG: Found {len(album_artist_filtered_df)} existing entries in sheet for '{album_name_final}' by '{artist_name_final}'.")
 
-
-        # --- Build the rank_groups dictionary for the frontend JS ---
+        # --- Initialize data structures for the frontend ---
         rank_groups_for_js = {f"{(i * 0.5):.1f}": [] for i in range(1, 21)}
-        rank_groups_for_js["?"] = [] # Initialize the unranked/preliminary group
+        rank_groups_for_js["?"] = []  # This group will hold 'preliminary' status songs from sheet
+        # and songs that were previously in numbered groups but got
+        # removed (this should be handled by frontend JS primarily)
 
-        all_ranked_song_ids_from_sheet = set() # Track all songs found in any ranked group
-        prelim_ranks_from_sheet = {} # To store prelim ranks if they are in the sheet
+        # Keep track of song IDs that are 'final' or 'paused' in a NUMERIC group
+        final_or_paused_song_ids = set()
+        # Keep track of all song IDs that have any data in the sheet (final, paused, or preliminary)
+        # This helps pre-populate prelim inputs
+        all_sheet_song_data = {}  # {song_id: {prelim_rank: X, status: Y, ...}}
 
         if not album_artist_filtered_df.empty:
             for _, row in album_artist_filtered_df.iterrows():
                 song_id = str(row.get("Spotify Song ID", ""))
                 ranking_status = str(row.get("Ranking Status", "")).lower()
                 rank_group_val = row.get("Rank Group")
-                prelim_rank_val = row.get("Preliminary Rank", "") # Get prelim rank from sheet if exists
+                prelim_rank_val = row.get("Preliminary Rank", "")
 
-                # Store prelim rank if found (regardless of status, just for reference)
-                if prelim_rank_val:
-                    prelim_ranks_from_sheet[song_id] = prelim_rank_val
+                # Store all sheet data for this song ID for later lookup
+                all_sheet_song_data[song_id] = {
+                    "song_name": row.get("Song Name", ""),
+                    "prelim_rank": prelim_rank_val,
+                    "ranking_status": ranking_status,
+                    "rank_group": rank_group_val,
+                    "position_in_group": row.get("Position In Group", 999),
+                    "ranking": row.get("Ranking", "")
+                }
 
-                # Process songs that are explicitly ranked (final or paused in a group)
-                if ranking_status in ["final", "paused"] and rank_group_val is not None:
+                song_data_for_group = {
+                    "song_name": row.get("Song Name", ""),
+                    "song_id": song_id,
+                    "prelim_rank": prelim_rank_val,  # Always pass the prelim from sheet
+                    # Default values for position and score; will be updated for final/paused
+                    "rank_position": row.get("Position In Group", 999),
+                    "calculated_score": row.get("Ranking", "")
+                }
+
+                if ranking_status in ["final", "paused"] and rank_group_val not in [None, '?', '']:
                     try:
-                        rank_group_str = f"{float(rank_group_val):.1f}"
+                        # Ensure rank_group_val is a float for comparison
+                        float_rank_group = float(rank_group_val)
+                        rank_group_str = f"{float_rank_group:.1f}"
                     except (ValueError, TypeError):
-                        rank_group_str = "?" # Fallback if rank_group is not numeric
-
-                    song_data_for_group = {
-                        "song_name": row.get("Song Name", ""),
-                        "song_id": song_id,
-                        "prelim_rank": prelim_rank_val, # Use prelim from sheet
-                        "rank_position": row.get("Position In Group", 999),
-                        "calculated_score": row.get("Ranking", "")
-                    }
+                        rank_group_str = "?"  # If invalid numeric, treat as '?' for now
 
                     if rank_group_str in rank_groups_for_js:
                         rank_groups_for_js[rank_group_str].append(song_data_for_group)
-                        all_ranked_song_ids_from_sheet.add(song_id)
+                        final_or_paused_song_ids.add(song_id)
                     else:
-                        # If a song has a rank_group that's not one of our standard buttons, put it in '?'
+                        # This should ideally not happen if numeric groups are fixed to 0.5 increments
+                        # but as a fallback, if a numeric group is unexpected, put it in '?'
                         rank_groups_for_js["?"].append(song_data_for_group)
-                        all_ranked_song_ids_from_sheet.add(song_id)
+                        final_or_paused_song_ids.add(song_id)
                 elif ranking_status == "preliminary":
-                    # If status is just preliminary, it belongs in the '?' group on load
-                    song_data_for_group = {
-                        "song_name": row.get("Song Name", ""),
-                        "song_id": song_id,
-                        "prelim_rank": prelim_rank_val,
-                        "rank_position": 999, # Prelims don't have a specific position in group
-                        "calculated_score": ""
-                    }
-                    rank_groups_for_js["?"].append(song_data_for_group)
-                    # We might add prelims to `all_ranked_song_ids_from_sheet` if we want them marked
-                    # as 'already_ranked' on the left panel, even if not fully ranked.
-                    # For now, let's keep `already_ranked` for `final`/`paused` in a group.
-
+                    # Songs with 'preliminary' status always go to the '?' group on load
+                    # unless they are also in a final/paused group (which should ideally not happen with clean data)
+                    if song_id not in final_or_paused_song_ids:
+                        rank_groups_for_js["?"].append(song_data_for_group)
+                    # Note: We do NOT add to `final_or_paused_song_ids` here, as `preliminary` status
+                    # means it's still considered un-ranked in the main UI.
 
         # Sort songs within each group by rank_position
         for group_key in rank_groups_for_js:
             rank_groups_for_js[group_key].sort(key=lambda s: s.get("rank_position", float('inf')))
         print(f"DEBUG: Populated rank_groups_for_js with {sum(len(v) for v in rank_groups_for_js.values())} songs.")
-        # print(f"DEBUG: rank_groups_for_js: {rank_groups_for_js}") # Uncomment for full debug
-
 
         # --- Prepare the songs list for the left panel of album.html ---
         songs_for_left_panel = []
@@ -671,65 +673,48 @@ def view_album():
             song_name = spotify_track.get("song_name")
             song_id = str(spotify_track.get("song_id"))
 
-            # Check if this Spotify song is already ranked in the sheet
-            # A song is "already_ranked" if it's in a final/paused group, or has a prelim_rank
-            already_ranked_flag = False
-            prelim_value_for_display = ''
+            # Determine `prelim_rank` and `already_ranked` status for the left panel
+            # based on all_sheet_song_data
+            song_data_from_sheet = all_sheet_song_data.get(song_id, {})
 
-            # Check if it's in our collected ranked song IDs (final/paused)
-            if song_id in all_ranked_song_ids_from_sheet:
-                already_ranked_flag = True
-                # If it's ranked, its prelim_rank should be what's in the sheet
-                prelim_value_for_display = prelim_ranks_from_sheet.get(song_id, '')
-            else:
-                # If not explicitly ranked (final/paused), check if it has a prelim rank from sheet
-                prelim_value_for_display = prelim_ranks_from_sheet.get(song_id, '')
-                if prelim_value_for_display:
-                    # If it has a prelim rank but isn't in a main group, it should go to '?' group if not already there
-                    # This implies it should appear in the '?' group's display initially.
-                    if not any(s.get('song_id') == song_id for s in rank_groups_for_js['?']):
-                        rank_groups_for_js['?'].append({
-                            "song_name": song_name,
-                            "song_id": song_id,
-                            "prelim_rank": prelim_value_for_display,
-                            "rank_position": 999,
-                            "calculated_score": ""
-                        })
-                    already_ranked_flag = True # Mark as ranked if it has a prelim, as it's "touched"
+            # `prelim_rank` for display: use what's in the sheet for this song
+            prelim_value_for_display = song_data_from_sheet.get("prelim_rank", "")
 
+            # `already_ranked` for display (checkmark and disable input):
+            # True if it's in a final/paused (numeric) group.
+            # This means it's "locked in" to a rank group on the right.
+            already_ranked_flag = song_id in final_or_paused_song_ids
 
             songs_for_left_panel.append({
                 "song_name": song_name,
                 "song_id": song_id,
-                "prelim_rank": prelim_value_for_display, # Pass prelim rank from sheet
-                "already_ranked": already_ranked_flag # Flag for frontend checkmark
+                "prelim_rank": prelim_value_for_display,
+                "already_ranked": already_ranked_flag
             })
         print(f"DEBUG: Prepared {len(songs_for_left_panel)} songs for left panel.")
-
 
         # --- Prepare the final album dictionary for the template ---
         album_data_for_template = {
             "album_name": album_name_final,
             "artist_name": artist_name_final,
-            "album_cover_url": album_cover_url_final, # Used by your header image
-            "url": spotify_uri_to_fetch, # Passed to hidden input, original Spotify URI
-            "songs": songs_for_left_panel, # The enhanced song list for the left panel
-            # Note: `album.image` is used in select_album.html, but `album.album_cover_url`
-            # is used in album.html. Both are handled correctly here.
+            "album_cover_url": album_cover_url_final,
+            "url": spotify_uri_to_fetch,  # Spotify URI (e.g., spotify:album:...)
+            "album_id": album_id_from_form,  # Pass album_id explicitly
+            "songs": songs_for_left_panel,
         }
 
-        # Get dominant color for background
         bg_color = get_dominant_color(album_cover_url_final)
         album_data_for_template["bg_color"] = bg_color if bg_color else 'rgb(45, 45, 45)'
 
         print(f"DEBUG: Final album_data_for_template sent to album.html: {album_data_for_template.keys()}")
-        print(f"DEBUG: Final rank_groups_for_js sent to album.html: {rank_groups_for_js.keys()} (Total songs: {sum(len(v) for v in rank_groups_for_js.values())})")
+        print(
+            f"DEBUG: Final rank_groups_for_js sent to album.html: {rank_groups_for_js.keys()} (Total songs in groups: {sum(len(v) for v in rank_groups_for_js.values())})")
         print(f"--- VIEW ALBUM END ---\n")
 
         return render_template(
             "album.html",
             album=album_data_for_template,
-            rank_groups=rank_groups_for_js # <--- THIS IS NOW PASSED
+            rank_groups=rank_groups_for_js
         )
 
     except Exception as e:
@@ -737,8 +722,7 @@ def view_album():
         print("\n🔥 ERROR in /view_album route:")
         traceback.print_exc()
         flash(f"Error loading album: {e}", "error")
-        return redirect(url_for('index')) # Fallback to home page on any unhandled error
-
+        return redirect(url_for('index'))
 
 @app.route("/finalize_rankings", methods=["POST"])
 def finalize_rankings():
