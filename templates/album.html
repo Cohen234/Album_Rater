@@ -407,12 +407,7 @@
 
         <input type="hidden" name="all_ranked_data" id="all_ranked_data">
         <input type="hidden" name="prelim_rank_data" id="prelim_rank_data">
-        <input type="hidden" name="status" id="status_input" value="final">
-
-        <button type="button" onclick="saveRankings()">Finalize Rank</button>
-
-
-        <div id="container">
+        <input type="hidden" name="status" id="status_input"> <div id="container">
             <div id="songListContainer">
                 <h3>Songs</h3>
                 <ul id="songList">
@@ -455,12 +450,11 @@
                     </div>
                     <div id="currentRankGroupContent">
                         <ul id="rankedSongsList">
-                            </ul>
+                        </ul>
                     </div>
                 </div>
 
                 <div id="actions">
-                    <button type="button" class="action-button" id="pauseSaveBtn">Pause & Save</button>
                     <button type="button" class="action-button" id="finalRankBtn">Final Rank</button>
                 </div>
             </div>
@@ -796,82 +790,113 @@
         saveRankings("paused");
     });
 
+    // --- Save/Submit functionality ---
+// Assuming you have ONE "Final Rank" button with id="finalRankBtn" in your HTML,
+// and it calls saveRankings()
     document.getElementById('finalRankBtn').addEventListener('click', function() {
-        saveRankings("final");
+        saveRankings();
     });
 
-    function saveRankings() { // Removed 'status' parameter
+    function saveRankings() {
         const allRankedData = [];
         // Iterate through all numeric rank groups and collect song data
         for (const rankGroup in allRankedSongsByGroup) {
-            if (rankGroup !== '?') { // Exclude '?' if you still want to differentiate, but it won't be used
+            // Exclude the '?' group as it's no longer a valid ranking group for submission.
+            // We only care about songs explicitly placed in numeric rank groups.
+            if (rankGroup !== '?' && Array.isArray(allRankedSongsByGroup[rankGroup])) {
                 allRankedSongsByGroup[rankGroup].forEach((song, index) => {
+                    // IMPORTANT: Ensure song.calculated_score is populated BEFORE this point.
+                    // This happens in your drag-and-drop `drop` event listener when the song object
+                    // is first added to allRankedSongsByGroup.
+                    if (typeof song.calculated_score === 'undefined' || song.calculated_score === null) {
+                        console.error(`ERROR: song.calculated_score is missing for song ID: ${song.song_id}. This will cause backend errors.`);
+                        // As a fallback, try to calculate it here if it's missing (though better to fix at source)
+                        const tempTotalSongs = allRankedSongsByGroup[rankGroup].length;
+                        song.calculated_score = calculateScoreValue(index, tempTotalSongs, parseFloat(rankGroup));
+                    }
+
                     allRankedData.push({
                         song_id: song.song_id,
                         song_name: song.song_name,
                         rank_group: rankGroup, // Stored as a string like "5.0"
                         rank_position: index + 1, // 1-based index within group
-                        calculated_score: song.calculated_score, // <--- THIS IS THE ISSUE
-                        prelim_rank: song.prelim_rank // Pass prelim_rank if it exists on the song object
+                        calculated_score: song.calculated_score,
+                        // Pass prelim_rank if it exists on the song object.
+                        // This will be for songs that were prelim-ranked, then dragged into a final group.
+                        prelim_rank: song.prelim_rank || "" // Ensure it's not undefined
                     });
                 });
             }
         }
 
-    const prelimRankData = {};
-    // Collect preliminary ranks from the left song list (only unranked ones)
-    document.querySelectorAll('.song-item').forEach(item => {
-        const songId = item.dataset.songId;
-        const prelimInput = item.querySelector('.prelim-rank-input');
+        const prelimRankData = {};
+        // Collect preliminary ranks from the left song list (only unranked ones)
+        document.querySelectorAll('.song-item').forEach(item => {
+            const songId = item.dataset.songId;
+            const prelimInput = item.querySelector('.prelim-rank-input');
 
-        // Only collect prelim rank if song is NOT in a final/numeric group AND has an input value
-        const isSongInRankedGroup = allRankedData.some(s => s.song_id === songId);
+            // Check if the song exists in *any* of the `allRankedData` (numeric ranked songs)
+            const isSongInRankedGroup = allRankedData.some(s => s.song_id === songId);
 
-        if (!isSongInRankedGroup && prelimInput && prelimInput.value.trim() !== '') {
-            const parsedValue = parseFloat(prelimInput.value);
-            if (!isNaN(parsedValue)) {
-                prelimRankData[songId] = parsedValue;
-            } else {
-                console.warn(`Invalid preliminary rank for song ${songId}: ${prelimInput.value}`);
+            // If the song is NOT in a final/numeric group AND has a non-empty preliminary input value
+            if (!isSongInRankedGroup && prelimInput && prelimInput.value.trim() !== '') {
+                const parsedValue = parseFloat(prelimInput.value);
+                if (!isNaN(parsedValue)) {
+                    prelimRankData[songId] = parsedValue;
+                } else {
+                    console.warn(`Invalid preliminary rank for song ${songId}: ${prelimInput.value}`);
+                }
             }
+        });
+
+        let submissionStatus;
+
+        if (allRankedData.length > 0) {
+            submissionStatus = 'final'; // User has dragged songs to numeric groups
+        } else if (Object.keys(prelimRankData).length > 0) {
+            submissionStatus = 'preliminary'; // No final ranks, but preliminary ranks exist
+        } else {
+            // If neither final nor preliminary ranks are set, we still submit as 'final'.
+            // This ensures that any *previously existing* final/preliminary ranks for this
+            // album are effectively cleared on the backend, representing a blank state.
+            submissionStatus = 'final';
         }
-    });
 
-    // Hidden inputs
-    document.getElementById('all_ranked_data').value = JSON.stringify(allRankedData);
-    document.getElementById('prelim_rank_data').value = JSON.stringify(prelimRankData);
-    document.getElementById('status_input').value = 'final'; // Hardcode status to 'final'
+        // Hidden inputs
+        document.getElementById('all_ranked_data').value = JSON.stringify(allRankedData);
+        document.getElementById('prelim_rank_data').value = JSON.stringify(prelimRankData);
+        // CRITICAL FIX: Use the dynamically determined submissionStatus
+        document.getElementById('status_input').value = submissionStatus;
 
-    console.log("Submitting with all_ranked_data:", allRankedData);
-    console.log("Submitting with prelim_rank_data:", prelimRankData);
-    console.log("Submitting with status:", document.getElementById('status_input').value);
+        console.log("Submitting with all_ranked_data:", allRankedData);
+        console.log("Submitting with prelim_rank_data:", prelimRankData);
+        console.log("Submitting with status:", document.getElementById('status_input').value);
 
-    document.getElementById('rankingForm').submit();
-}
+        // Finally, submit the form
+        document.getElementById('rankingForm').submit();
+    }
 
     // Initial render and update of button icons on page load
     document.addEventListener('DOMContentLoaded', () => {
         updateAllRankButtonIcons();
 
-        // Automatically activate '?' group if it has songs, otherwise show generic empty state
-        if (allRankedSongsByGroup['?'].length > 0) {
-            const questionButton = document.getElementById('rank-btn-question');
-            if (questionButton) {
-                questionButton.click(); // This will activate and load '?' group songs
-            }
-        } else if (Object.values(allRankedSongsByGroup).flat().length > 0) {
-            // If any other group has songs, activate the first one found
-            for (const groupKey in allRankedSongsByGroup) {
-                if (groupKey !== '?' && allRankedSongsByGroup[groupKey].length > 0) {
-                    const activeButton = document.getElementById(`rank-btn-${groupKey}`);
-                    if (activeButton) {
-                        activeButton.click();
-                        break;
-                    }
+        // Check if any *numeric* rank groups have songs.
+        // Iterate through 0.5 to 10.0 to find if any of those groups contain songs.
+        let foundInitialActiveGroup = false;
+        for (let i = 1; i <= 20; i++) {
+            const rank = (i * 0.5).toFixed(1);
+            if (allRankedSongsByGroup[rank] && allRankedSongsByGroup[rank].length > 0) {
+                const activeButton = document.getElementById(`rank-btn-${rank}`);
+                if (activeButton) {
+                    activeButton.click(); // This will activate the group and load its songs
+                    foundInitialActiveGroup = true;
+                    break; // Activate only the first group found with songs
                 }
             }
-        } else {
-            // If no songs anywhere, just ensure the empty state is visible
+        }
+
+        // If no numeric groups had songs, ensure the empty state is displayed
+        if (!foundInitialActiveGroup) {
             document.getElementById('emptyState').style.display = 'block';
             document.getElementById('emptyState').textContent = `Select a rank group above to start ranking songs.`;
             document.getElementById('rankedSongsList').style.display = 'none'; // Hide the ul
