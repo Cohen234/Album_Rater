@@ -19,7 +19,7 @@ from dotenv import load_dotenv # Load dotenv as early as possible
 load_dotenv()
 
 # Import functions from spotify_logic after all core imports
-from spotify_logic import load_album_data, get_albums_by_artist, extract_album_id # Ensure these are correct
+from spotify_logic import get_albums_by_artist, extract_album_id
 
 # --- Google Sheets Setup ---
 creds_info = json.loads(os.environ['GOOGLE_SERVICE_ACCOUNT_JSON'])
@@ -61,7 +61,32 @@ else:
 # --- Helper Functions (move these up here if they are used globally) ---
 # Your group_ranked_songs, get_dominant_color, get_album_stats functions should
 # come after the sp and client initialization if they use them, but before routes.
+def load_album_data(sp_param, album_id):
+    # Use the parameter passed to the function
+    album = sp_param.album(album_id)
+    tracks = sp_param.album_tracks(album_id)
 
+    album_name = album['name']
+    artist_name = album['artists'][0]['name']
+    album_cover_url = album['images'][0]['url'] if album['images'] else ""
+    album_url = album['external_urls'].get('spotify', '')
+
+    songs = []
+    for item in tracks['items']:
+        song_name = item['name']
+        song_id = item['id']
+        songs.append({
+            'song_name': song_name,
+            'song_id': song_id
+        })
+
+    return {
+        'album_name': album_name,
+        'artist_name': artist_name,
+        'album_cover_url': album_cover_url,
+        'url': album_url,
+        'songs': songs
+    }
 def group_ranked_songs(sheet_rows):
     group_bins = {round(x * 0.5, 1): [] for x in range(2, 21)}  # 1.0 to 10.0
     for row in sheet_rows:
