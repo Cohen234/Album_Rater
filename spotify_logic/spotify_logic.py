@@ -18,14 +18,15 @@ def extract_album_id(url_or_uri):
     match = re.search(r"(album[:/])([a-zA-Z0-9]+)", url_or_uri)
     return match.group(2) if match else url_or_uri.strip()
 
-def load_album_data(spotify_url):
-    album_id = extract_album_id(spotify_url)
-    album = sp.album(album_id)
-    tracks = sp.album_tracks(album_id)
+def load_album_data(sp_param, album_id): # Changed 'sp' to 'sp_param' for clarity, or just keep it 'sp'
+    # Use the parameter passed to the function, not a different variable name
+    album = sp_param.album(album_id) # <-- Use the parameter name
+    tracks = sp_param.album_tracks(album_id) # <-- Use the parameter name
 
     album_name = album['name']
     artist_name = album['artists'][0]['name']
     album_cover_url = album['images'][0]['url'] if album['images'] else ""
+    album_url = album['external_urls'].get('spotify', '')
 
     songs = []
     for item in tracks['items']:
@@ -40,5 +41,6 @@ def load_album_data(spotify_url):
         'album_name': album_name,
         'artist_name': artist_name,
         'album_cover_url': album_cover_url,
+        'url': album_url,
         'songs': songs
     }
