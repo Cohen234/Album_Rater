@@ -820,16 +820,29 @@
             const prelimInput = item.querySelector('.prelim-rank-input');
 
             // If the song is NOT globally ranked (i.e., not in a numeric rank group)
-            if (!isSongRankedGlobally(songId)) {
-                if (prelimInput && prelimInput.value.trim() !== '') {
-                    prelimRankData[songId] = parseFloat(prelimInput.value);
+            if (!isSongRankedGlobally(songId) && prelimInput && prelimInput.value.trim() !== '') {
+                // Ensure the value is a number
+                const parsedValue = parseFloat(prelimInput.value);
+                if (!isNaN(parsedValue)) {
+                    prelimRankData[songId] = parsedValue;
+                } else {
+                    console.warn(`Invalid preliminary rank for song ${songId}: ${prelimInput.value}`);
                 }
             }
         });
 
         // Add songs from the '?' group to prelim_rank_data as well
         allRankedSongsByGroup['?'].forEach(song => {
-            prelimRankData[song.song_id] = parseFloat(song.prelim_rank) || 0; // Use existing prelim_rank or default
+            const isInFinalGroup = allRankedData.some(s => s.song_id === song.song_id);
+            if (!isInFinalGroup) {
+                // Ensure song.prelim_rank exists and is a number
+                const prelimValue = parseFloat(song.prelim_rank);
+                if (!isNaN(prelimValue)) {
+                    prelimRankData[song.song_id] = prelimValue;
+                } else {
+                    console.warn(`Invalid preliminary rank in '?' group for song ${song.song_id}: ${song.prelim_rank}`);
+                }
+            }
         });
 
 
@@ -840,6 +853,7 @@
 
         console.log("Submitting with all_ranked_data:", allRankedData);
         console.log("Submitting with prelim_rank_data:", prelimRankData);
+        document.getElementById('prelim_rank_data').value = JSON.stringify(prelimRankData);
 
         document.getElementById('rankingForm').submit();
     }
