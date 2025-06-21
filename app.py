@@ -588,163 +588,176 @@ def ranking_page():
     return render_template("album.html", group_bins=group_bins)
 
 
-@app.route('/view_album', methods=['POST'])
+@app.route("/view_album", methods=["POST", "GET"])
 def view_album():
-    album_id_from_form = request.form.get("album_id")
-    artist_name_from_form = request.form.get("artist_name")
-
-    print(f"\n--- VIEW ALBUM START ---")
-    print(f"DEBUG: Received album_id from form: {album_id_from_form}")
-    print(f"DEBUG: Received artist_name from form: {artist_name_from_form}")
-
-    if not album_id_from_form or not artist_name_from_form:
-        flash("Missing album ID or artist name.", "error")
-        print("ERROR: Missing album_id or artist_name in /view_album POST request.")
-        return redirect(url_for('index'))
+    global sp # Ensure sp is accessible
 
     try:
-        spotify_uri_to_fetch = f"spotify:album:{album_id_from_form}"
-        print(f"DEBUG: Constructed Spotify URI: {spotify_uri_to_fetch}")
+        # Get album details from form (POST) or URL parameters (GET)
+        if request.method == 'POST':
+            album_id = request.form.get("album_id")
+            album_name = request.form.get("album_name")
+            artist_name = request.form.get("artist_name")
+            album_cover_url = request.form.get("album_cover_url")
+        else: # GET request, likely from a redirect
+            album_id = request.args.get("album_id")
+            album_name = request.args.get("album_name")
+            artist_name = request.args.get("artist_name")
+            album_cover_url = request.args.get("album_cover_url")
 
-        album_data_from_spotify = load_album_data(spotify_uri_to_fetch)
-        print(f"DEBUG: Raw data from spotify_logic.load_album_data: {album_data_from_spotify}")
+        if not album_id:
+            flash("No album selected.", "warning")
+            return redirect(url_for('index'))
 
-        if not album_data_from_spotify:
-            flash("Could not load album data from Spotify. Album not found.", "error")
-            print(f"ERROR: No album data returned from Spotify for ID: {album_id_from_form}")
-            return redirect(url_for('load_albums_by_artist_route', artist_name=artist_name_from_form))
+        print(f"\n--- VIEW ALBUM START ---")
+        print(f"DEBUG: Received album_id from form/args: {album_id}")
+        print(f"DEBUG: Received artist_name from form/args: {artist_name}")
 
-        album_name_final = album_data_from_spotify.get("album_name", "Unknown Album Name")
-        artist_name_final = album_data_from_spotify.get("artist_name", artist_name_from_form)
-        album_cover_url_final = album_data_from_spotify.get("album_cover_url", "")
-        spotify_tracks_list = album_data_from_spotify.get("songs", [])
+        # Fetch album data from Spotify
+        print(f"DEBUG: Constructed Spotify URI: spotify:album:{album_id}")
+        try:
+            if sp is None:
+                raise Exception("Spotify client (sp) not initialized.")
+            album_data = load_album_data(album_id)
+        except Exception as e:
+            flash(f"Error loading album data from Spotify: {e}", "error")
+            print(f"ERROR: Error loading album data from Spotify: {e}")
+            return redirect(url_for('index'))
 
-        print(
-            f"DEBUG: Extracted for template: Name='{album_name_final}', Artist='{artist_name_final}', Cover='{album_cover_url_final}'")
-
-        main_rankings_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
-        all_existing_rows_df = get_as_dataframe(main_rankings_sheet, evaluate_formulas=True).fillna("")
-        print(f"DEBUG: Loaded {len(all_existing_rows_df)} rows from main ranking sheet.")
-
-        form_album_name_lower = album_name_final.strip().lower()
-        form_artist_name_lower = artist_name_final.strip().lower()
-
-        album_artist_filtered_df = all_existing_rows_df[
-            (all_existing_rows_df["Album Name"].astype(str).str.strip().str.lower() == form_album_name_lower) &
-            (all_existing_rows_df["Artist Name"].astype(str).str.strip().str.lower() == form_artist_name_lower)
-            ].copy()
-        print(
-            f"DEBUG: Found {len(album_artist_filtered_df)} existing entries in sheet for '{album_name_final}' by '{artist_name_final}'.")
-
-        # --- Initialize data structures for the frontend ---
-        # Remove the '?' group initialization
-        rank_groups_for_js = {f"{(i * 0.5):.1f}": [] for i in range(1, 21)}
-
-        # Keep track of song IDs that are 'final' or 'paused' in a NUMERIC group
-        # Since we're removing '?', 'paused' status will effectively make songs appear 'unranked' on load
-        # unless they are explicitly in a numerical group. If 'paused' means they should disappear from left panel
-        # then their status must be 'final' for them to be in the numeric groups.
-        # For this setup, we'll assume only 'final' status means they appear in the numeric groups.
-        final_ranked_song_ids = set()
-        # Store all sheet data for this song ID for later lookup
-        all_sheet_song_data = {}  # {song_id: {prelim_rank: X, status: Y, ...}}
-
-        if not album_artist_filtered_df.empty:
-            for _, row in album_artist_filtered_df.iterrows():
-                song_id = str(row.get("Spotify Song ID", ""))
-                ranking_status = str(row.get("Ranking Status", "")).lower()
-                rank_group_val = row.get("Rank Group")
-                prelim_rank_val = row.get("Preliminary Rank", "")
-
-                # Store all sheet data for this song ID for later lookup
-                all_sheet_song_data[song_id] = {
-                    "song_name": row.get("Song Name", ""),
-                    "prelim_rank": prelim_rank_val,
-                    "ranking_status": ranking_status,
-                    "rank_group": rank_group_val,
-                    "position_in_group": row.get("Position In Group", 999),
-                    "ranking": row.get("Ranking", "")
-                }
-
-                song_data_for_group = {
-                    "song_name": row.get("Song Name", ""),
-                    "song_id": song_id,
-                    "prelim_rank": prelim_rank_val,  # Always pass the prelim from sheet
-                    "rank_position": row.get("Position In Group", 999),
-                    "calculated_score": row.get("Ranking", "")
-                }
-
-                # Only load into numeric groups if status is 'final' and rank_group is numeric
-                if ranking_status == "final" and rank_group_val not in [None, '?', '']:
-                    try:
-                        float_rank_group = float(rank_group_val)
-                        rank_group_str = f"{float_rank_group:.1f}"
-                    except (ValueError, TypeError):
-                        rank_group_str = None  # Invalid numeric, will not be placed
-
-                    if rank_group_str in rank_groups_for_js:
-                        rank_groups_for_js[rank_group_str].append(song_data_for_group)
-                        final_ranked_song_ids.add(song_id)
-
-
-
-
-        # Sort songs within each group by rank_position
-        for group_key in rank_groups_for_js:
-            rank_groups_for_js[group_key].sort(key=lambda s: s.get("rank_position", float('inf')))
-        print(f"DEBUG: Populated rank_groups_for_js with {sum(len(v) for v in rank_groups_for_js.values())} songs.")
-
-        # --- Prepare the songs list for the left panel of album.html ---
-        songs_for_left_panel = []
-        for spotify_track in spotify_tracks_list:
-            song_name = spotify_track.get("song_name")
-            song_id = str(spotify_track.get("song_id"))
-
-            song_data_from_sheet = all_sheet_song_data.get(song_id, {})
-
-            prelim_value_for_display = song_data_from_sheet.get("prelim_rank", "")
-
-            # A song is "already_ranked" if it's in a final numeric group
-            already_ranked_flag = song_id in final_ranked_song_ids
-
-            songs_for_left_panel.append({
-                "song_name": song_name,
-                "song_id": song_id,
-                "prelim_rank": prelim_value_for_display,
-                "already_ranked": already_ranked_flag
-            })
-        print(f"DEBUG: Prepared {len(songs_for_left_panel)} songs for left panel.")
-
-        # --- Prepare the final album dictionary for the template ---
+        # Prepare album data for template
         album_data_for_template = {
-            "album_name": album_name_final,
-            "artist_name": artist_name_final,
-            "album_cover_url": album_cover_url_final,
-            "url": spotify_uri_to_fetch,
-            "album_id": album_id_from_form,
-            "songs": songs_for_left_panel,
+            'album_name': album_data['album_name'],
+            'artist_name': album_data['artist_name'],
+            'album_cover_url': album_data['album_cover_url'],
+            'url': album_data.get('url', ''),
+            'album_id': album_id,
+            'songs': album_data['songs'],
+            'bg_color': album_data.get('bg_color', '#121212') # Default background
         }
+        print(f"DEBUG: Extracted for template: Name='{album_data_for_template['album_name']}', Artist='{album_data_for_template['artist_name']}', Cover='{album_data_for_template['album_cover_url']}'")
 
-        bg_color = get_dominant_color(album_cover_url_final)
-        album_data_for_template["bg_color"] = bg_color if bg_color else 'rgb(45, 45, 45)'
+        # --- Load existing rankings (Final and Preliminary) ---
+        main_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
+        print(f"DEBUG: Loaded {main_sheet.row_count} rows from main ranking sheet.")
+        main_sheet_data = get_as_dataframe(main_sheet, evaluate_formulas=False).fillna("") # Fetch as DataFrame
+
+        # Filter for current album's final rankings
+        current_album_final_ranks = main_sheet_data[
+            (main_sheet_data["Spotify Album ID"].astype(str) == str(album_id)) &
+            (main_sheet_data["Ranking Status"].astype(str) == "final")
+        ]
+        print(f"DEBUG: Found {len(current_album_final_ranks)} existing FINAL entries in sheet for '{album_name}' by '{artist_name}'.")
+
+        # --- Populate rank groups for JavaScript (Right Panel) ---
+        rank_groups_for_js = {f"{i/2:.1f}": [] for i in range(1, 21)} # Groups from 0.5 to 10.0
+        # This will be passed to JS to rebuild the right panel
+        for _, row in current_album_final_ranks.iterrows():
+            try:
+                rank_group = f"{float(row['Rank Group']):.1f}"
+                song_score = float(row['Ranking'])
+                position_in_group = int(row['Position In Group']) # Ensure this is an int
+
+                song_data = {
+                    'song_id': row['Spotify Song ID'],
+                    'song_name': row['Song Name'],
+                    'rank_group': rank_group,
+                    'calculated_score': song_score,
+                    'rank_position': position_in_group # Include position for accurate re-ordering
+                }
+                if rank_group in rank_groups_for_js:
+                    rank_groups_for_js[rank_group].append(song_data)
+            except (ValueError, KeyError, TypeError) as e:
+                print(f"WARNING: Error parsing existing ranked song data for JS: {row} - {e}")
+
+        # Sort songs within each group by their rank_position
+        for group_key in rank_groups_for_js:
+            rank_groups_for_js[group_key].sort(key=lambda x: x.get('rank_position', 0)) # Sort by position
+
+        # Convert rank_groups_for_js values from list to a stringified JSON for direct JS parsing
+        # (This is how your current JS expects it to be rebuilt if you had previous `rank_groups_for_js` logic)
+        # However, a dict directly passed to Flask's render_template usually gets JSON-serialized correctly.
+        # Let's keep it as a dict and ensure Jinja renders it properly into a JS variable.
+        # print(f"DEBUG: Populated rank_groups_for_js with {sum(len(v) for v in rank_groups_for_js.values())} songs.")
+        total_songs_in_groups = sum(len(v) for v in rank_groups_for_js.values())
+        print(f"DEBUG: Populated rank_groups_for_js with {total_songs_in_groups} songs.")
+        # print(f"DEBUG: Final rank_groups_for_js sent to album.html: {rank_groups_for_js.keys()} (Total songs in groups: {total_songs_in_groups})")
+
+
+        # --- Load existing preliminary ranks for this album ---
+        existing_prelim_ranks = {} # To store song_id: prelim_rank_value
+        prelim_sheet_name = "Preliminary Ranks"
+        try:
+            prelim_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(prelim_sheet_name)
+            prelim_sheet_data = get_as_dataframe(prelim_sheet, evaluate_formulas=False).fillna("")
+
+            current_album_prelim_ranks = prelim_sheet_data[
+                (prelim_sheet_data["album_id"].astype(str) == str(album_id)) &
+                (prelim_sheet_data["prelim_rank"] != "") # Ensure prelim_rank is not empty
+            ]
+
+            for _, row in current_album_prelim_ranks.iterrows():
+                song_id = str(row['song_id'])
+                prelim_rank_value = row['prelim_rank']
+                try:
+                    existing_prelim_ranks[song_id] = float(prelim_rank_value)
+                except ValueError:
+                    print(f"WARNING: Invalid prelim_rank value '{prelim_rank_value}' for song {song_id}. Skipping.")
+            print(f"DEBUG: Loaded {len(existing_prelim_ranks)} preliminary rank entries for album {album_id}.")
+        except gspread.exceptions.WorksheetNotFound:
+            print(f"WARNING: Preliminary Ranks sheet '{prelim_sheet_name}' not found. No prelim ranks loaded.")
+        except Exception as e:
+            print(f"ERROR: Error loading preliminary ranks from sheet: {e}")
+            flash(f"Error loading preliminary ranks: {e}", "error")
+
+
+        # --- Prepare songs for Left Panel ---
+        songs_for_template = []
+        for song in album_data['songs']:
+            song_id = str(song['song_id'])
+            song_name = song['song_name']
+            is_final_ranked = False
+
+            # Check if song is already in a final rank group
+            for group_key in rank_groups_for_js:
+                if any(s['song_id'] == song_id for s in rank_groups_for_js[group_key]):
+                    is_final_ranked = True
+                    break
+
+            song_entry = {
+                'song_name': song_name,
+                'song_id': song_id,
+                'already_ranked': is_final_ranked, # 'already_ranked' means it's in a final rank group
+                'prelim_rank': '' # Default to empty
+            }
+
+            # If not final ranked, check for preliminary rank
+            if not is_final_ranked:
+                if song_id in existing_prelim_ranks:
+                    song_entry['prelim_rank'] = existing_prelim_ranks[song_id]
+                    # Also, you might want a status or flag to indicate it has a prelim rank
+                    # e.g., 'status': 'preliminary_saved'
+            songs_for_template.append(song_entry)
+
+        album_data_for_template['songs'] = songs_for_template
+        print(f"DEBUG: Prepared {len(songs_for_template)} songs for left panel.")
+
 
         print(f"DEBUG: Final album_data_for_template sent to album.html: {album_data_for_template.keys()}")
-        print(
-            f"DEBUG: Final rank_groups_for_js sent to album.html: {rank_groups_for_js.keys()} (Total songs in groups: {sum(len(v) for v in rank_groups_for_js.values())})")
+        print(f"DEBUG: Final rank_groups_for_js sent to album.html: {rank_groups_for_js.keys()} (Total songs in groups: {total_songs_in_groups})")
         print(f"--- VIEW ALBUM END ---\n")
 
-        return render_template(
-            "album.html",
-            album=album_data_for_template,
-            rank_groups=rank_groups_for_js
-        )
+        return render_template('album.html',
+                               album=album_data_for_template,
+                               rank_groups=rank_groups_for_js # Pass the populated dictionary
+                               )
 
     except Exception as e:
         import traceback
         print("\n🔥 ERROR in /view_album route:")
         traceback.print_exc()
-        flash(f"Error loading album: {e}", "error")
+        flash(f"An unexpected error occurred: {e}", "error")
         return redirect(url_for('index'))
+
 
 @app.route("/finalize_rankings", methods=["POST"])
 def finalize_rankings():
