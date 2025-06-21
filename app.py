@@ -644,7 +644,6 @@ def view_album():
             # Check if the global 'sp' object is initialized
             if sp is None:
                 raise Exception("Spotify client (sp) is not initialized. Cannot fetch album data.")
-            # Call load_album_data from spotify_logic.py, passing the 'sp' object
             from spotify_logic import load_album_data
             album_data = load_album_data(sp, album_id) # Pass sp as the first argument
         except Exception as e:
