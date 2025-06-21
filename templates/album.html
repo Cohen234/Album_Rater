@@ -792,71 +792,54 @@
         saveRankings("final");
     });
 
-    function saveRankings(status) {
+    function saveRankings() { // Removed 'status' parameter
         const allRankedData = [];
-        const prelimRankData = {};
-
-        // Collect all ranked songs from allRankedSongsByGroup (excluding the '?' group for "final" submission)
-        for (const groupKey in allRankedSongsByGroup) {
-            if (groupKey !== '?') { // Only include explicitly ranked groups in the main submission data
-                allRankedSongsByGroup[groupKey].forEach((song, index) => {
-                    const finalScore = parseFloat(calculateScore(index, allRankedSongsByGroup[groupKey].length, parseFloat(groupKey)).slice(1,-1));
+        // Iterate through all numeric rank groups and collect song data
+        for (const rankGroup in allRankedSongsByGroup) {
+            if (rankGroup !== '?') { // Exclude '?' if you still want to differentiate, but it won't be used
+                allRankedSongsByGroup[rankGroup].forEach((song, index) => {
                     allRankedData.push({
                         song_id: song.song_id,
                         song_name: song.song_name,
-                        rank_group: parseFloat(groupKey),
-                        rank_position: index,
-                        prelim_rank: song.prelim_rank, // Include prelim rank
-                        calculated_score: finalScore
+                        rank_group: rankGroup, // Stored as a string like "5.0"
+                        rank_position: index + 1, // 1-based index within group
+                        calculated_score: song.calculated_score,
+                        prelim_rank: song.prelim_rank // Pass prelim_rank if it exists on the song object
                     });
                 });
             }
         }
 
-        // Collect preliminary ranks from the left song list (only unranked ones)
-        // Also collect songs from the '?' group as preliminary.
-        document.querySelectorAll('.song-item').forEach(item => {
-            const songId = item.dataset.songId;
-            const prelimInput = item.querySelector('.prelim-rank-input');
+    const prelimRankData = {};
+    // Collect preliminary ranks from the left song list (only unranked ones)
+    document.querySelectorAll('.song-item').forEach(item => {
+        const songId = item.dataset.songId;
+        const prelimInput = item.querySelector('.prelim-rank-input');
 
-            // If the song is NOT globally ranked (i.e., not in a numeric rank group)
-            if (!isSongRankedGlobally(songId) && prelimInput && prelimInput.value.trim() !== '') {
-                // Ensure the value is a number
-                const parsedValue = parseFloat(prelimInput.value);
-                if (!isNaN(parsedValue)) {
-                    prelimRankData[songId] = parsedValue;
-                } else {
-                    console.warn(`Invalid preliminary rank for song ${songId}: ${prelimInput.value}`);
-                }
+        // Only collect prelim rank if song is NOT in a final/numeric group AND has an input value
+        const isSongInRankedGroup = allRankedData.some(s => s.song_id === songId);
+
+        if (!isSongInRankedGroup && prelimInput && prelimInput.value.trim() !== '') {
+            const parsedValue = parseFloat(prelimInput.value);
+            if (!isNaN(parsedValue)) {
+                prelimRankData[songId] = parsedValue;
+            } else {
+                console.warn(`Invalid preliminary rank for song ${songId}: ${prelimInput.value}`);
             }
-        });
+        }
+    });
 
-        // Add songs from the '?' group to prelim_rank_data as well
-        allRankedSongsByGroup['?'].forEach(song => {
-            const isInFinalGroup = allRankedData.some(s => s.song_id === song.song_id);
-            if (!isInFinalGroup) {
-                // Ensure song.prelim_rank exists and is a number
-                const prelimValue = parseFloat(song.prelim_rank);
-                if (!isNaN(prelimValue)) {
-                    prelimRankData[song.song_id] = prelimValue;
-                } else {
-                    console.warn(`Invalid preliminary rank in '?' group for song ${song.song_id}: ${song.prelim_rank}`);
-                }
-            }
-        });
+    // Hidden inputs
+    document.getElementById('all_ranked_data').value = JSON.stringify(allRankedData);
+    document.getElementById('prelim_rank_data').value = JSON.stringify(prelimRankData);
+    document.getElementById('status_input').value = 'final'; // Hardcode status to 'final'
 
+    console.log("Submitting with all_ranked_data:", allRankedData);
+    console.log("Submitting with prelim_rank_data:", prelimRankData);
+    console.log("Submitting with status:", document.getElementById('status_input').value);
 
-        document.getElementById('selected_rank').value = currentRankGroup || ''; // Store the last active rank group if needed
-        document.getElementById('status').value = status;
-        document.getElementById('all_ranked_data').value = JSON.stringify(allRankedData);
-        document.getElementById('prelim_rank_data').value = JSON.stringify(prelimRankData);
-
-        console.log("Submitting with all_ranked_data:", allRankedData);
-        console.log("Submitting with prelim_rank_data:", prelimRankData);
-        document.getElementById('prelim_rank_data').value = JSON.stringify(prelimRankData);
-
-        document.getElementById('rankingForm').submit();
-    }
+    document.getElementById('rankingForm').submit();
+}
 
     // Initial render and update of button icons on page load
     document.addEventListener('DOMContentLoaded', () => {

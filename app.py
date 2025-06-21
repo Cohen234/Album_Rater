@@ -19,6 +19,8 @@ from google.oauth2.service_account import Credentials
 import gspread
 import traceback
 from collections import Counter
+import spotipy # <--- ADD THIS
+from spotipy.oauth2 import SpotifyClientCredentials
 
 import os
 from dotenv import load_dotenv # New import
@@ -43,6 +45,23 @@ from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'a_temporary_dev_key')
+SPOTIPY_CLIENT_ID = os.getenv('SPOTIPY_CLIENT_ID')
+SPOTIPY_CLIENT_SECRET = os.getenv('SPOTIPY_CLIENT_SECRET')
+
+if not SPOTIPY_CLIENT_ID or not SPOTIPY_CLIENT_SECRET:
+    print("WARNING: Spotify API client ID or secret not found in environment variables.")
+    print("Please set SPOTIPY_CLIENT_ID and SPOTIPY_CLIENT_SECRET.")
+    # You might want to halt execution or provide a default error page here
+else:
+    try:
+        sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(
+            client_id=SPOTIPY_CLIENT_ID,
+            client_secret=SPOTIPY_CLIENT_SECRET
+        ))
+        print("Spotify client (sp) initialized successfully.")
+    except Exception as e:
+        print(f"ERROR: Failed to initialize Spotify client: {e}")
+        sp = None
 def group_ranked_songs(sheet_rows):
     group_bins = {round(x * 0.5, 1): [] for x in range(2, 21)}  # 1.0 to 10.0
 
@@ -133,17 +152,18 @@ from flask import request, redirect, url_for, flash
 
 from datetime import datetime
 import json
-import pandas as pd  # Assuming get_as_dataframe returns a pandas DataFrame
+import pandas as pd
+
 
 @app.route("/submit_rankings", methods=["POST"])
 def submit_rankings():
     try:
         album_name = request.form.get("album_name")
         artist_name = request.form.get("artist_name")
-        album_id = request.form.get("album_id")  # *** IMPORTANT: Get album_id from form ***
-        submission_status = request.form.get("status")  # 'final' or 'paused'
+        album_id = request.form.get("album_id")
+        # submission_status will always be 'final' now
+        submission_status = 'final'
 
-        # --- DEBUG: Initial Submission Data ---
         print(f"\n--- SUBMIT RANKINGS START ---")
         print(
             f"DEBUG: submit_rankings called for Album: '{album_name}' (ID: {album_id}), Artist: '{artist_name}', Status: '{submission_status}'")
@@ -151,16 +171,14 @@ def submit_rankings():
         all_ranked_data_json = request.form.get("all_ranked_data", "[]")
         prelim_rank_data_json = request.form.get("prelim_rank_data", "{}")
 
-        # Parse JSON data
         try:
             all_ranked_songs_from_js = json.loads(all_ranked_data_json)
-            # Ensure calculated_score is float
             for song in all_ranked_songs_from_js:
                 if 'calculated_score' in song:
                     try:
                         song['calculated_score'] = float(song['calculated_score'])
                     except (ValueError, TypeError):
-                        song['calculated_score'] = 0.0  # Default if conversion fails
+                        song['calculated_score'] = 0.0
         except json.JSONDecodeError as e:
             flash(f"Error parsing ranked songs data: {e}", "error")
             print(f"ERROR: JSONDecodeError on all_ranked_data: {e}")
@@ -168,12 +186,11 @@ def submit_rankings():
 
         try:
             prelim_ranks_from_js = json.loads(prelim_rank_data_json)
-            # Ensure prelim scores are float
             for song_id, score in prelim_ranks_from_js.items():
                 try:
                     prelim_ranks_from_js[song_id] = float(score)
                 except (ValueError, TypeError):
-                    prelim_ranks_from_js[song_id] = 0.0  # Default if conversion fails
+                    prelim_ranks_from_js[song_id] = 0.0
         except json.JSONDecodeError as e:
             flash(f"Error parsing prelim ranks data: {e}", "error")
             print(f"ERROR: JSONDecodeError on prelim_rank_data: {e}")
@@ -188,15 +205,11 @@ def submit_rankings():
         main_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
 
         # 1. DELETE ALL EXISTING ROWS FOR THIS ALBUM
-        # Get all records to find row indices for deletion
-        # IMPORTANT: get_all_records() gives a list of dicts, not a DataFrame with original indices.
-        # So we need to work with row numbers directly.
-        all_sheet_values = main_sheet.get_all_values()  # Get all values including header
+        all_sheet_values = main_sheet.get_all_values()
         header = all_sheet_values[0]
-        data_rows = all_sheet_values[1:]  # Actual data rows
+        data_rows = all_sheet_values[1:]
 
-        rows_to_delete_indices = []  # 1-based sheet row numbers
-        album_id_col_idx = -1
+        rows_to_delete_indices = []
         try:
             album_id_col_idx = header.index("Spotify Album ID")
         except ValueError:
@@ -206,9 +219,9 @@ def submit_rankings():
 
         for i, row in enumerate(data_rows):
             if len(row) > album_id_col_idx and str(row[album_id_col_idx]) == str(album_id):
-                rows_to_delete_indices.append(i + 2)  # +1 for 0-based to 1-based, +1 for header row
+                rows_to_delete_indices.append(i + 2)
 
-        rows_to_delete_indices.sort(reverse=True)  # Delete from bottom up
+        rows_to_delete_indices.sort(reverse=True)
         if rows_to_delete_indices:
             for idx in rows_to_delete_indices:
                 main_sheet.delete_rows(idx)
@@ -219,91 +232,88 @@ def submit_rankings():
 
         # 2. PREPARE NEW ROWS FOR INSERTION
         new_rows_for_sheet = []
-        submitted_ranked_song_ids = {s.get('song_id') for s in all_ranked_songs_from_js}
+        submitted_ranked_song_ids = {str(s.get('song_id')) for s in all_ranked_songs_from_js if s.get('song_id')}
 
-        # Lookup Spotify Song Names (efficient way: fetch once)
         spotify_tracks_for_album = {}
         try:
             album_spotify_data = sp.album(album_id)
             for track in album_spotify_data['tracks']['items']:
                 spotify_tracks_for_album[track['id']] = track['name']
         except Exception as e:
-            print(f"WARNING: Could not fetch Spotify tracks for album {album_id}: {e}")
-            # Fallback if Spotify lookup fails
-            spotify_tracks_for_album = {s.get('song_id'): s.get('song_name', f"Unknown Song {s.get('song_id', 'N/A')}")
-                                        for s in all_ranked_songs_from_js}
-            # For prelims not in all_ranked_songs_from_js, we might need a more general lookup
+            print(
+                f"WARNING: Could not fetch Spotify tracks for album {album_id}: {e}. Falling back to submission data for song names.")
+            # Fallback for song names in case Spotify API fails (e.g., rate limits)
+            spotify_tracks_for_album = {
+                str(s.get('song_id')): s.get('song_name', f"Unknown Song {str(s.get('song_id', 'N/A'))}")
+                for s in all_ranked_songs_from_js
+            }
+            # Add prelims from JS to lookup if not already there
+            for song_id, prelim_score in prelim_ranks_from_js.items():
+                if song_id not in spotify_tracks_for_album:
+                    spotify_tracks_for_album[song_id] = f"Unknown Song {song_id}"
 
         # Define the exact column order expected by your Google Sheet
-        # Make sure 'Preliminary Rank' is in this list at its actual column position
-        # Assuming your main sheet has these columns:
-        # 'Album Name', 'Artist Name', 'Song Name', 'Ranking', 'Ranking Status',
-        # 'Ranked Date', 'Position In Group', 'Rank Group', 'Spotify Song ID', 'Preliminary Rank'
+        # Based on your current sheet and previous discussion:
         column_names_main_sheet = [
-            'Album Name', 'Spotify Album ID','Artist Name', 'Song Name', 'Ranking', 'Ranking Status', 'Ranked Date',
-            'Position In Group', 'Rank Group', 'Spotify Song ID', 'Preliminary Rank',
+            'Album Name', 'Artist Name', 'Spotify Album ID', 'Song Name', 'Ranking',
+            'Ranking Status', 'Ranked Date', 'Position In Group', 'Rank Group',
+            'Spotify Song ID', 'Preliminary Rank'
         ]
 
-        # Add songs that were explicitly ranked (in numeric groups or '?' group, if moved there)
-        for song_data in all_ranked_songs_from_js:
-            song_id = str(song_data.get("song_id"))
-            song_name = song_data.get("song_name")
-            rank_group = song_data.get("rank_group")
-            rank_position = song_data.get("rank_position")
-            calculated_score = song_data.get("calculated_score")
-            prelim_rank_from_js = prelim_ranks_from_js.get(song_id, '')  # Get the prelim if it exists in JS payload
+        # Get all unique song IDs from Spotify (all album tracks) to ensure we save prelims for ALL of them.
+        # This is robust because it ensures any song on the album can have a prelim, even if not explicitly submitted.
+        # Ensure we always get song names from Spotify for accurate mapping
+        all_spotify_album_song_ids = {str(track.get('id')) for track in
+                                      album_spotify_data.get('tracks', {}).get('items', [])}
 
-            # Ensure data types are correct for Google Sheet
-            calculated_score_str = f"{calculated_score:.2f}" if isinstance(calculated_score, (float, int)) else ""
-            rank_group_str = f"{rank_group:.1f}" if isinstance(rank_group, (float, int)) else str(
-                rank_group)  # Handle '?'
-            rank_position_str = str(rank_position) if rank_position is not None else ""
-            prelim_rank_str = f"{prelim_rank_from_js:.2f}" if isinstance(prelim_rank_from_js, (float, int)) else str(
-                prelim_rank_from_js)
+        # Iterate through ALL songs on the album to determine their status and data for the sheet
+        # This handles both ranked songs and unranked songs with prelim scores.
+        for song_id in all_spotify_album_song_ids:
+            song_name = spotify_tracks_for_album.get(song_id, f"Unknown Song {song_id}")
 
+            # Find if this song was submitted as ranked
+            ranked_song_data = next((s for s in all_ranked_songs_from_js if str(s.get('song_id')) == song_id), None)
+
+            # Get preliminary rank, preferring the submitted one, then from existing in sheet (though we just deleted, so JS is source)
+            prelim_rank_val = prelim_ranks_from_js.get(song_id, '')
+
+            # Initialize row values with defaults (for unranked)
             row_values_dict = {
-                'Spotify Album ID': album_id,
                 'Album Name': album_name,
                 'Artist Name': artist_name,
-                'Spotify Song ID': song_id,
+                'Spotify Album ID': album_id,
                 'Song Name': song_name,
-                'Rank Group': rank_group_str,
-                'Position In Group': rank_position_str,
-                'Ranking': calculated_score_str,
-                'Ranking Status': submission_status,  # Use the global submission status ('final' or 'paused')
-                'Preliminary Rank': prelim_rank_str,  # Save the prelim rank that was associated with it
-                'Ranked Date': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                'Spotify Song ID': song_id,
+                'Ranking': '',
+                'Ranking Status': 'unranked',  # Default status
+                'Ranked Date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'Position In Group': '',
+                'Rank Group': '',
+                'Preliminary Rank': prelim_rank_val  # Always include prelim if available
             }
-            # Convert dictionary to ordered list based on column_names_main_sheet
+
+            if ranked_song_data:
+                # This song was ranked (dragged into a numerical group)
+                row_values_dict.update({
+                    'Ranking': f"{ranked_song_data['calculated_score']:.2f}",
+                    'Ranking Status': submission_status,  # Which is 'final'
+                    'Position In Group': str(ranked_song_data['rank_position']),
+                    'Rank Group': f"{float(ranked_song_data['rank_group']):.1f}"
+                    # Ensure correct format for numeric group
+                })
+                print(
+                    f"DEBUG: Prepared ranked song '{song_name}' (ID: {song_id}) for insertion. Status: {submission_status}")
+            else:
+                # This song was NOT ranked (remained on left panel)
+                # It might still have a preliminary rank
+                if prelim_rank_val:
+                    row_values_dict[
+                        'Ranking Status'] = 'preliminary'  # If it has a prelim score, set status to 'preliminary'
+                print(
+                    f"DEBUG: Prepared unranked/prelim song '{song_name}' (ID: {song_id}) for insertion. Status: {row_values_dict['Ranking Status']}")
+
             ordered_row = [row_values_dict.get(col, '') for col in column_names_main_sheet]
             new_rows_for_sheet.append(ordered_row)
-            print(
-                f"DEBUG: Prepared ranked song '{song_name}' (ID: {song_id}) for insertion. Status: {submission_status}")
-
-        # Add preliminary songs that were NOT part of the explicit ranked submission
-        for song_id, prelim_score in prelim_ranks_from_js.items():
-            if song_id not in submitted_ranked_song_ids:
-                song_name = spotify_tracks_for_album.get(song_id, f"Unknown Song {song_id}")
-
-                prelim_rank_str = f"{prelim_score:.2f}" if isinstance(prelim_score, (float, int)) else str(prelim_score)
-
-                row_values_dict = {
-                    'Spotify Album ID': album_id,
-                    'Album Name': album_name,
-                    'Artist Name': artist_name,
-                    'Spotify Song ID': song_id,
-                    'Song Name': song_name,
-                    'Rank Group': '?',  # Prelims go into '?' group
-                    'Position In Group': '',
-                    'Ranking': '',
-                    'Ranking Status': 'preliminary',  # Explicitly 'preliminary' status
-                    'Preliminary Rank': prelim_rank_str,  # The prelim score
-                    'Ranked Date': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                }
-                ordered_row = [row_values_dict.get(col, '') for col in column_names_main_sheet]
-                new_rows_for_sheet.append(ordered_row)
-                print(
-                    f"DEBUG: Prepared preliminary song '{song_name}' (ID: {song_id}) for insertion. Status: preliminary.")
 
         # 3. APPEND NEW ROWS TO SHEET
         if new_rows_for_sheet:
@@ -313,8 +323,6 @@ def submit_rankings():
             print("DEBUG: No new rows to append to main sheet.")
 
         # --- START: Album Averages Sheet Logic ---
-        # This section remains largely the same, but ensure 'album_id' is passed if needed.
-        # It's primarily driven by 'final' submission status.
         if submission_status == 'final' and all_ranked_songs_from_js:
             print("DEBUG: Entering FINAL ranking logic for Album Averages sheet.")
 
@@ -335,9 +343,10 @@ def submit_rankings():
                 return redirect(url_for('load_albums_by_artist_route', artist_name=artist_name))
 
             album_averages_df = get_as_dataframe(album_averages_sheet, evaluate_formulas=True).fillna("")
-            # print(f"DEBUG: Loaded Album Averages DataFrame (first 5 rows):\n{album_averages_df.head().to_string()}") # Comment out for cleaner logs
 
-            # Try to find the album's existing entry using Album Name and Artist Name
+            form_album_name_lower = album_name.strip().lower()
+            form_artist_name_lower = artist_name.strip().lower()
+
             matching_album_row = album_averages_df[
                 (album_averages_df["Album Name"].astype(str).str.strip().str.lower() == form_album_name_lower) &
                 (album_averages_df["Artist Name"].astype(str).str.strip().str.lower() == form_artist_name_lower)
@@ -357,14 +366,20 @@ def submit_rankings():
                     f"DEBUG: Found existing row for '{album_name}' at sheet row {album_row_idx}. New Times Ranked: {times_ranked}")
 
                 update_cells_avg = []
-                # Column mapping for Album Averages sheet (Adjust these if your sheet differs)
-                # Assumed header: Album Name, Artist Name, Average Score, Times Ranked, Last Ranked Date
-                avg_col_idx = album_averages_sheet.find('Average Score').col if album_averages_sheet.find(
-                    'Average Score') else 3  # C
-                times_col_idx = album_averages_sheet.find('Times Ranked').col if album_averages_sheet.find(
-                    'Times Ranked') else 4  # D
-                date_col_idx = album_averages_sheet.find('Last Ranked Date').col if album_averages_sheet.find(
-                    'Last Ranked Date') else 5  # E
+
+                # Dynamic column finding for Album Averages sheet (more robust)
+                avg_col_idx = -1
+                times_col_idx = -1
+                date_col_idx = -1
+                avg_sheet_header = album_averages_sheet.row_values(1)  # Get header again for dynamic lookup
+                try:
+                    avg_col_idx = avg_sheet_header.index('Average Score') + 1  # +1 for gspread 1-based indexing
+                    times_col_idx = avg_sheet_header.index('Times Ranked') + 1
+                    date_col_idx = avg_sheet_header.index('Last Ranked Date') + 1
+                except ValueError as ve:
+                    print(f"ERROR: Missing expected column in Album Averages sheet header: {ve}")
+                    flash(f"Configuration error: Missing column in 'Album Averages' sheet: {ve}", "error")
+                    return redirect(url_for('load_albums_by_artist_route', artist_name=artist_name))
 
                 cell_avg = album_averages_sheet.cell(album_row_idx, avg_col_idx)
                 if cell_avg.value != str(average_album_score):
@@ -392,13 +407,12 @@ def submit_rankings():
                         flash(f"Error updating album average: {e}", "error")
             else:
                 print(f"DEBUG: No existing row found for '{album_name}'. Appending new row to Album Averages sheet.")
-                # This should match the column order for Album Averages sheet
                 new_album_row_values = [
                     album_name,
                     artist_name,
                     average_album_score,
-                    1,  # First time ranked
-                    datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # Last Ranked Date
+                    1,
+                    datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 ]
                 try:
                     album_averages_sheet.append_row(new_album_row_values)
@@ -411,11 +425,9 @@ def submit_rankings():
                 "DEBUG: Skipping Album Averages update: Submission status is not 'final' OR no ranked songs submitted.")
         # --- END: Album Averages Sheet Logic ---
 
-        flash('Rankings submitted successfully!' if submission_status == 'final' else 'Rankings paused and saved.',
-              "success")
+        flash('Rankings submitted successfully!', "success")
         print(f"--- SUBMIT RANKINGS END (Redirecting to album) ---\n")
 
-        # Pass all necessary data to view_album for a seamless reload
         return redirect(url_for('view_album', album_id=album_id, album_name=album_name,
                                 artist_name=artist_name, album_cover_url=request.form.get('album_cover_url')))
 
@@ -581,20 +593,21 @@ def view_album():
         album_artist_filtered_df = all_existing_rows_df[
             (all_existing_rows_df["Album Name"].astype(str).str.strip().str.lower() == form_album_name_lower) &
             (all_existing_rows_df["Artist Name"].astype(str).str.strip().str.lower() == form_artist_name_lower)
-            ].copy()  # Use .copy() to avoid SettingWithCopyWarning
+            ].copy()
         print(
             f"DEBUG: Found {len(album_artist_filtered_df)} existing entries in sheet for '{album_name_final}' by '{artist_name_final}'.")
 
         # --- Initialize data structures for the frontend ---
+        # Remove the '?' group initialization
         rank_groups_for_js = {f"{(i * 0.5):.1f}": [] for i in range(1, 21)}
-        rank_groups_for_js["?"] = []  # This group will hold 'preliminary' status songs from sheet
-        # and songs that were previously in numbered groups but got
-        # removed (this should be handled by frontend JS primarily)
 
         # Keep track of song IDs that are 'final' or 'paused' in a NUMERIC group
-        final_or_paused_song_ids = set()
-        # Keep track of all song IDs that have any data in the sheet (final, paused, or preliminary)
-        # This helps pre-populate prelim inputs
+        # Since we're removing '?', 'paused' status will effectively make songs appear 'unranked' on load
+        # unless they are explicitly in a numerical group. If 'paused' means they should disappear from left panel
+        # then their status must be 'final' for them to be in the numeric groups.
+        # For this setup, we'll assume only 'final' status means they appear in the numeric groups.
+        final_ranked_song_ids = set()
+        # Store all sheet data for this song ID for later lookup
         all_sheet_song_data = {}  # {song_id: {prelim_rank: X, status: Y, ...}}
 
         if not album_artist_filtered_df.empty:
@@ -618,34 +631,24 @@ def view_album():
                     "song_name": row.get("Song Name", ""),
                     "song_id": song_id,
                     "prelim_rank": prelim_rank_val,  # Always pass the prelim from sheet
-                    # Default values for position and score; will be updated for final/paused
                     "rank_position": row.get("Position In Group", 999),
                     "calculated_score": row.get("Ranking", "")
                 }
 
-                if ranking_status in ["final", "paused"] and rank_group_val not in [None, '?', '']:
+                # Only load into numeric groups if status is 'final' and rank_group is numeric
+                if ranking_status == "final" and rank_group_val not in [None, '?', '']:
                     try:
-                        # Ensure rank_group_val is a float for comparison
                         float_rank_group = float(rank_group_val)
                         rank_group_str = f"{float_rank_group:.1f}"
                     except (ValueError, TypeError):
-                        rank_group_str = "?"  # If invalid numeric, treat as '?' for now
+                        rank_group_str = None  # Invalid numeric, will not be placed
 
                     if rank_group_str in rank_groups_for_js:
                         rank_groups_for_js[rank_group_str].append(song_data_for_group)
-                        final_or_paused_song_ids.add(song_id)
-                    else:
-                        # This should ideally not happen if numeric groups are fixed to 0.5 increments
-                        # but as a fallback, if a numeric group is unexpected, put it in '?'
-                        rank_groups_for_js["?"].append(song_data_for_group)
-                        final_or_paused_song_ids.add(song_id)
-                elif ranking_status == "preliminary":
-                    # Songs with 'preliminary' status always go to the '?' group on load
-                    # unless they are also in a final/paused group (which should ideally not happen with clean data)
-                    if song_id not in final_or_paused_song_ids:
-                        rank_groups_for_js["?"].append(song_data_for_group)
-                    # Note: We do NOT add to `final_or_paused_song_ids` here, as `preliminary` status
-                    # means it's still considered un-ranked in the main UI.
+                        final_ranked_song_ids.add(song_id)
+
+
+
 
         # Sort songs within each group by rank_position
         for group_key in rank_groups_for_js:
@@ -658,17 +661,12 @@ def view_album():
             song_name = spotify_track.get("song_name")
             song_id = str(spotify_track.get("song_id"))
 
-            # Determine `prelim_rank` and `already_ranked` status for the left panel
-            # based on all_sheet_song_data
             song_data_from_sheet = all_sheet_song_data.get(song_id, {})
 
-            # `prelim_rank` for display: use what's in the sheet for this song
             prelim_value_for_display = song_data_from_sheet.get("prelim_rank", "")
 
-            # `already_ranked` for display (checkmark and disable input):
-            # True if it's in a final/paused (numeric) group.
-            # This means it's "locked in" to a rank group on the right.
-            already_ranked_flag = song_id in final_or_paused_song_ids
+            # A song is "already_ranked" if it's in a final numeric group
+            already_ranked_flag = song_id in final_ranked_song_ids
 
             songs_for_left_panel.append({
                 "song_name": song_name,
@@ -683,8 +681,8 @@ def view_album():
             "album_name": album_name_final,
             "artist_name": artist_name_final,
             "album_cover_url": album_cover_url_final,
-            "url": spotify_uri_to_fetch,  # Spotify URI (e.g., spotify:album:...)
-            "album_id": album_id_from_form,  # Pass album_id explicitly
+            "url": spotify_uri_to_fetch,
+            "album_id": album_id_from_form,
             "songs": songs_for_left_panel,
         }
 
