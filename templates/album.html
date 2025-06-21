@@ -447,10 +447,6 @@
                             <span class="rank-button-icon"></span>
                         </button>
                     {% endfor %}
-                    <button type="button" class="rank-button" data-rank="?" id="rank-btn-question">
-                        ?
-                        <span class="rank-button-icon"></span>
-                    </button>
                 </div>
 
                 <div id="activeRankGroupDisplay">
@@ -506,9 +502,9 @@
     // Helper to check if a song (by ID) is ranked in *any* group
     function isSongRankedGlobally(songId) {
         for (const group in allRankedSongsByGroup) {
-            // Check if the song exists in this group AND it's not the '?' group
-            // (songs in '?' are considered "preliminary" and can still be dragged/moved)
-            if (group !== '?' && allRankedSongsByGroup[group].some(s => s.song_id === songId)) {
+            // If you remove '?', this simplifies
+            // Just check if the song exists in any group
+            if (allRankedSongsByGroup[group].some(s => s.song_id === songId)) {
                 return true;
             }
         }
@@ -589,9 +585,9 @@
         return li;
     }
 
-    function calculateScore(position, totalSongs, rankGroup) {
-        if (totalSongs === 0) return `(N/A)`;
-        if (totalSongs === 1) return `(${rankGroup.toFixed(2)})`;
+    function calculateScoreValue(position, totalSongs, rankGroup) {
+        if (totalSongs === 0) return 0; // Should not happen if totalSongs is passed correctly after adding
+        if (totalSongs === 1) return rankGroup;
 
         const range = 0.49;
         const effectiveTotalSongs = Math.max(1, totalSongs);
@@ -599,7 +595,13 @@
         const highestScore = parseFloat(rankGroup) + range;
         const score = highestScore - (step * position);
 
-        return `(${score.toFixed(2)})`;
+        return parseFloat(score.toFixed(2)); // Return as a number, rounded to 2 decimal places
+    }
+
+    // Modify your existing calculateScore to use this for display:
+    function calculateScore(position, totalSongs, rankGroup) {
+        const score = calculateScoreValue(position, totalSongs, rankGroup);
+        return `(${score.toFixed(2)})`; // Return as a formatted string for display
     }
 
     // Update checkmarks and drag-ability for songs in the left panel
@@ -760,6 +762,8 @@
 
         // 3. Add to the new group
         songDataToMove.rank_group = parseFloat(currentRankGroup); // Assign the new rank group
+        const provisionalTotalSongs = currentGroupSongs.length + 1; // Temporarily assume it's added
+        songDataToMove.calculated_score = calculateScoreValue(insertIndex, provisionalTotalSongs, parseFloat(currentRankGroup));
         currentGroupSongs.splice(insertIndex, 0, songDataToMove);
         console.log(`Added song ${songName} to group ${currentRankGroup} at index ${insertIndex}`);
 
@@ -807,7 +811,7 @@
                         song_name: song.song_name,
                         rank_group: rankGroup, // Stored as a string like "5.0"
                         rank_position: index + 1, // 1-based index within group
-                        calculated_score: song.calculated_score,
+                        calculated_score: song.calculated_score, // <--- THIS IS THE ISSUE
                         prelim_rank: song.prelim_rank // Pass prelim_rank if it exists on the song object
                     });
                 });
