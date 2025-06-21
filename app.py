@@ -45,8 +45,11 @@ from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'a_temporary_dev_key')
-SPOTIPY_CLIENT_ID_APP = os.environ.get('SPOTIPY_CLIENT_ID')
-SPOTIPY_CLIENT_SECRET_APP = os.environ.get('SPOTIPY_CLIENT_SECRET')
+SPOTIFY_CLIENT_ID_APP = os.environ.get('SPOTIPY_CLIENT_ID')
+SPOTIFY_CLIENT_SECRET_APP = os.environ.get('SPOTIPY_CLIENT_SECRET')
+
+SPOTIPY_CLIENT_ID_APP = os.environ.get('SPOTIFY_CLIENT_ID')
+SPOTIPY_CLIENT_SECRET_APP = os.environ.get('SPOTIFY_CLIENT_SECRET')
 
 sp = None # Initialize sp to None
 if SPOTIPY_CLIENT_ID_APP and SPOTIPY_CLIENT_SECRET_APP:
@@ -58,10 +61,10 @@ if SPOTIPY_CLIENT_ID_APP and SPOTIPY_CLIENT_SECRET_APP:
         print("DEBUG: Spotify client (sp) initialized successfully in app.py.")
     except Exception as e:
         print(f"ERROR: Failed to initialize Spotify client (sp) in app.py: {e}")
-        print("Ensure SPOTIPY_CLIENT_ID and SPOTIPY_CLIENT_SECRET are correctly set.")
+        print("Ensure SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET are correctly set.")
         sp = None # Ensure sp is None if initialization fails
 else:
-    print("WARNING: SPOTIPY_CLIENT_ID or SPOTIPY_CLIENT_SECRET environment variables not found for app.py.")
+    print("WARNING: SPOTIFY_CLIENT_ID or SPOTIFY_CLIENT_SECRET environment variables not found for app.py.")
     print("Spotify functionality may be limited.")
 
 def group_ranked_songs(sheet_rows):
