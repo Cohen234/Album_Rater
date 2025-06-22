@@ -493,17 +493,20 @@ def load_albums_by_artist_route():
     albums_from_spotify = get_albums_by_artist(artist_name) # Renamed variable for clarity
 
     # --- DEBUG: Raw albums from Spotify API ---
-    print("DEBUG: Raw albums from Spotify API:")
-    if albums_from_spotify: # Changed from 'albums' to 'albums_from_spotify'
+    logging.debug("Raw albums from Spotify API:")  # Changed print to logging.debug
+    if albums_from_spotify:
         for i, album_data in enumerate(albums_from_spotify[:3]):
-            print(f"  Album {i+1}: {album_data}")
+            logging.debug(f"  Album {i + 1}: {album_data}")
     else:
-        print("  No albums returned from Spotify API.")
+        logging.debug("  No albums returned from Spotify API.")
     # --- END DEBUG ---
 
-    album_averages_sheet_name = "Album Averages"
-    album_averages_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(album_averages_sheet_name)
-    album_averages_df = get_as_dataframe(album_averages_sheet, evaluate_formulas=True).fillna("")
+    try:
+        album_averages_df = get_album_averages_df(client, SPREADSHEET_ID, "Album Averages")
+    except Exception as e:
+        logging.error(f"Error loading Album Averages DataFrame: {e}", exc_info=True)
+        flash(f"Error loading album averages data: {e}", "error")
+        return redirect(url_for('index'))
     logging.debug(f"*** DEBUG: Album Averages DataFrame IMMEDIATELY after get_as_dataframe ***")
     logging.debug(f"*** DEBUG: DataFrame Empty: {album_averages_df.empty}")
     logging.debug(f"*** DEBUG: DataFrame Shape: {album_averages_df.shape}")
@@ -515,69 +518,86 @@ def load_albums_by_artist_route():
 
     # Create a dictionary for quick lookup of averages/times ranked
     album_metadata = {}
+    processed_rows_count = 0
     if not album_averages_df.empty: # Added check for empty df
         for _, row in album_averages_df.iterrows():
-            album_key = (str(row.get("Album Name", "")).strip().lower(), str(row.get("Artist Name", "")).strip().lower())
-            album_metadata[album_key] = {
-                "average_score": row.get("Average Score", None),
-                "times_ranked": row.get("Times Ranked", 0)
-            }
-    print(f"DEBUG: Loaded {len(album_metadata)} album metadata entries from sheet.")
+            processed_rows_count += 1
+            # --- FIX: Use 'album_id' as key and correct column names from the sheet ---
+            album_id_from_sheet = str(row.get("album_id", "")).strip()  # Use 'album_id'
+            average_score_from_sheet = row.get("average_score", None)  # Use 'average_score'
+            times_ranked_from_sheet = row.get("times_ranked", 0)
+            logging.debug(f"DEBUG: Raw row from Album Averages sheet (loop): {row.to_dict()}")
+            logging.debug(
+                f"DEBUG: Processing sheet row in loop: ID='{album_id_from_sheet}', Avg='{average_score_from_sheet}', Times='{times_ranked_from_sheet}'")
+
+            if album_id_from_sheet:  # Only add if album_id is not empty
+                album_metadata[album_id_from_sheet] = {
+                    "average_score": average_score_from_sheet,
+                    "times_ranked": times_ranked_from_sheet
+                }
+                logging.debug(
+                    f"DEBUG: Stored in album_metadata[{album_id_from_sheet}]: Avg={album_metadata[album_id_from_sheet]['average_score']}, Times={album_metadata[album_id_from_sheet]['times_ranked']}")
+    logging.debug(f"DEBUG: Completed processing {processed_rows_count} rows from Album Averages DataFrame (loop).")
+    logging.debug(f"DEBUG: Loaded {len(album_metadata)} album metadata entries from sheet into dict.")
     prelim_sheet_name = "Preliminary Ranks"
-    prelim_ranked_albums_keys = set()  # Store (album_name_lower, artist_name_lower)
+    prelim_ranked_albums_ids = set()  # Store album_ids for consistency
     try:
         prelim_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(prelim_sheet_name)
         prelim_sheet_data = get_as_dataframe(prelim_sheet, evaluate_formulas=False).fillna("")
 
         if not prelim_sheet_data.empty:
-            # Filter for entries that actually have a prelim_rank for the current artist
             current_artist_prelim_ranks = prelim_sheet_data[
                 prelim_sheet_data["artist_name"].astype(str).str.strip().str.lower() == artist_name.strip().lower()
                 ]
-
             for _, row in current_artist_prelim_ranks.iterrows():
-                album_name_p = str(row.get('album_name', '')).strip().lower()
-                artist_name_p = str(row.get('artist_name', '')).strip().lower()
+                # --- FIX: Use 'album_id' for prelim ranks lookup as well ---
+                album_id_p = str(row.get('album_id', '')).strip()
                 prelim_rank_value = row.get('prelim_rank')
-                # Check if prelim_rank_value is not empty/null/0 (advjust if 0 is a valid prelim rank)
-                if prelim_rank_value not in ["", None, 0, "0", "0.0"]:  # Ensures it's a meaningful preliminary rank
-                    prelim_ranked_albums_keys.add((album_name_p, artist_name_p))
-        print(f"DEBUG: Found {len(prelim_ranked_albums_keys)} albums with preliminary ranks for '{artist_name}'.")
+                if album_id_p and prelim_rank_value not in ["", None, 0, "0", "0.0"]:
+                    prelim_ranked_albums_ids.add(album_id_p)
+                # --- END FIX ---
+        logging.debug(
+            f"DEBUG: Found {len(prelim_ranked_albums_ids)} albums with preliminary ranks for '{artist_name}'.")
 
     except gspread.exceptions.WorksheetNotFound:
-        print(f"WARNING: Preliminary Ranks sheet '{prelim_sheet_name}' not found. No prelim rank check for pause icon.")
+        logging.warning(
+            f"WARNING: Preliminary Ranks sheet '{prelim_sheet_name}' not found. No prelim rank check for pause icon.")
     except Exception as e:
-        print(f"ERROR: Error loading preliminary ranks for pause icon: {e}")
+        logging.error(f"ERROR: Error loading preliminary ranks for pause icon: {e}", exc_info=True)
 
     # Prepare albums for template, adding average score and times ranked
     albums_for_template = []
-    for album_data in albums_from_spotify:  # Iterate through the raw Spotify data
-        album_name_lower = album_data.get("name", "").strip().lower()  # Use 'name' from Spotify
-        artist_name_for_lookup_lower = artist_name.strip().lower()  # Use the artist_name from the request/route
+    for album_data in albums_from_spotify:
+        album_id_spotify = album_data.get("id")  # Get the Spotify Album ID
+        album_name_spotify = album_data.get("name")
+        artist_name_current_album = artist_name  # The artist name for this context
 
-        metadata = album_metadata.get((album_name_lower, artist_name_for_lookup_lower), {})
+        logging.debug(f"DEBUG: Processing Spotify album: ID='{album_id_spotify}', Name='{album_name_spotify}'")
 
-        # --- START ADDITION: Determine if album has preliminary ranks ---
-        # Check if this album's (name, artist) tuple exists in our set of prelim-ranked albums
-        has_prelim_ranks = (album_name_lower, artist_name_for_lookup_lower) in prelim_ranked_albums_keys
-        # --- END ADDITION ---
+        # --- FIX: Lookup metadata using album_id_spotify ---
+        metadata = album_metadata.get(album_id_spotify, {})
+        # --- END FIX ---
+
+        has_prelim_ranks = album_id_spotify in prelim_ranked_albums_ids  # Check using album_id
+
+        logging.debug(
+            f"DEBUG: Album '{album_name_spotify}' (ID: {album_id_spotify}) - Metadata: {metadata}, Has Prelim Ranks: {has_prelim_ranks}")
 
         albums_for_template.append({
-            "album_name": album_data.get("name"),
-            "artist_name": artist_name,
+            "album_name": album_name_spotify,
+            "artist_name": artist_name_current_album,
             "image": album_data.get("image"),
-            "id": album_data.get("id"),
+            "id": album_id_spotify,
             "average_score": metadata.get("average_score"),
             "times_ranked": metadata.get("times_ranked"),
             "url": album_data.get("url"),
-            # --- START ADDITION: Include the flag for the template ---
-            "has_prelim_ranks": has_prelim_ranks  # This directly matches your Jinja2 `{% if album.has_prelim_ranks %}`
-            # --- END ADDITION ---
+            "has_prelim_ranks": has_prelim_ranks
         })
-    print(f"DEBUG: Prepared {len(albums_for_template)} albums for select_album.html with metadata and prelim status.")
+    logging.debug(
+        f"DEBUG: Prepared {len(albums_for_template)} albums for albums.html with metadata, prelim status, and averages.")
 
     # Pass the enriched list to the template
-    return render_template("select_album.html", artist_name=artist_name, albums=albums_for_template)
+    return render_template("albums.html", artist_name=artist_name, albums=albums_for_template)
 @app.route("/ranking_page")
 def ranking_page():
     sheet_rows = load_google_sheet_data()
