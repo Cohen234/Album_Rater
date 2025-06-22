@@ -597,7 +597,7 @@ def load_albums_by_artist_route():
         f"DEBUG: Prepared {len(albums_for_template)} albums for album.html with metadata, prelim status, and averages.")
 
     # Pass the enriched list to the template
-    return render_template("album.html", artist_name=artist_name, albums=albums_for_template)
+    return render_template("select_album.html", artist_name=artist_name, albums=albums_for_template)
 @app.route("/ranking_page")
 def ranking_page():
     sheet_rows = load_google_sheet_data()
