@@ -396,55 +396,75 @@ def submit_rankings():
 
             album_averages_df = get_as_dataframe(album_averages_sheet, evaluate_formulas=True).fillna("")
 
-            form_album_name_lower = album_name.strip().lower()
-            form_artist_name_lower = artist_name.strip().lower()
+            if album_averages_df.empty:
+                expected_album_average_columns = [
+                    'album_id', 'album_name', 'artist_name', 'average_score', 'times_ranked', 'last_ranked_date'
+                ]
+                album_averages_df = pd.DataFrame(columns=expected_album_average_columns)
+                # Fill NA values AFTER ensuring columns exist
+            album_averages_df = album_averages_df.fillna("")
 
             matching_album_row = album_averages_df[
-                (album_averages_df["Album Name"].astype(str).str.strip().str.lower() == form_album_name_lower) &
-                (album_averages_df["Artist Name"].astype(str).str.strip().str.lower() == form_artist_name_lower)
+                album_averages_df['album_id'].astype(str) == str(album_id)
                 ]
 
+            if matching_album_row.empty:  # If not found by ID, try by name/artist (fallback for old data)
+                matching_album_row = album_averages_df[
+                    (album_averages_df["album_name"].astype(
+                        str).str.strip().str.lower() == album_name.strip().lower()) &
+                    (album_averages_df["artist_name"].astype(
+                        str).str.strip().str.lower() == artist_name.strip().lower())
+                    ]
+
             if not matching_album_row.empty:
-                album_row_idx = matching_album_row.index[0] + 2
-                times_ranked = matching_album_row.iloc[0].get("Times Ranked", 0)
+                album_row_idx = matching_album_row.index[0] + 2  # +2 for 1-based indexing and header
+                times_ranked = matching_album_row.iloc[0].get("times_ranked", 0)  # Use 'times_ranked' header
                 try:
                     times_ranked = int(times_ranked) + 1
                 except ValueError:
                     print(
-                        f"WARNING: 'Times Ranked' value '{times_ranked}' is not an integer. Resetting to 1 for '{album_name}'.")
+                        f"WARNING: 'times_ranked' value '{times_ranked}' is not an integer. Resetting to 1 for '{album_name}'.")
                     times_ranked = 1
 
                 print(
                     f"DEBUG: Found existing row for '{album_name}' at sheet row {album_row_idx}. New Times Ranked: {times_ranked}")
 
-                update_cells_avg = []
-
                 # Dynamic column finding for Album Averages sheet (more robust)
                 avg_col_idx = -1
                 times_col_idx = -1
                 date_col_idx = -1
-                avg_sheet_header = album_averages_sheet.row_values(1)  # Get header again for dynamic lookup
+                # CRITICAL: Use the actual DataFrame columns which come from headers
+                actual_avg_sheet_header = album_averages_df.columns.tolist()
+
                 try:
-                    avg_col_idx = avg_sheet_header.index('Average Score') + 1  # +1 for gspread 1-based indexing
-                    times_col_idx = avg_sheet_header.index('Times Ranked') + 1
-                    date_col_idx = avg_sheet_header.index('Last Ranked Date') + 1
+                    # These must match your Google Sheet Headers exactly!
+                    avg_col_idx = actual_avg_sheet_header.index('average_score') + 1
+                    times_col_idx = actual_avg_sheet_header.index('times_ranked') + 1
+                    date_col_idx = actual_avg_sheet_header.index('last_ranked_date') + 1
                 except ValueError as ve:
                     print(f"ERROR: Missing expected column in Album Averages sheet header: {ve}")
                     flash(f"Configuration error: Missing column in 'Album Averages' sheet: {ve}", "error")
                     return redirect(url_for('load_albums_by_artist_route', artist_name=artist_name))
 
+                update_cells_avg = []
+                current_date_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+                # Using sheet.update_cell which is for single cell updates.
+                # A batch update with `update_cells` is generally more efficient.
+                # Or, even better, update the DataFrame and use set_with_dataframe.
+                # Let's stick with updating cells for consistency with your existing style.
+
                 cell_avg = album_averages_sheet.cell(album_row_idx, avg_col_idx)
-                if cell_avg.value != str(average_album_score):
+                if cell_avg.value != str(average_album_score):  # Compare as string because gspread reads as string
                     cell_avg.value = average_album_score
                     update_cells_avg.append(cell_avg)
 
                 cell_times = album_averages_sheet.cell(album_row_idx, times_col_idx)
-                if cell_times.value != str(times_ranked):
+                if cell_times.value != str(times_ranked):  # Compare as string
                     cell_times.value = times_ranked
                     update_cells_avg.append(cell_times)
 
                 cell_date = album_averages_sheet.cell(album_row_idx, date_col_idx)
-                current_date_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 if cell_date.value != current_date_str:
                     cell_date.value = current_date_str
                     update_cells_avg.append(cell_date)
@@ -459,7 +479,10 @@ def submit_rankings():
                         flash(f"Error updating album average: {e}", "error")
             else:
                 print(f"DEBUG: No existing row found for '{album_name}'. Appending new row to Album Averages sheet.")
+                # CRITICAL: Ensure album_id is included here and matches the column header name
+                # Column order MUST match your Google Sheet
                 new_album_row_values = [
+                    album_id,  # <<< ADDED album_id HERE
                     album_name,
                     artist_name,
                     average_album_score,
