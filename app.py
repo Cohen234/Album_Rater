@@ -89,6 +89,38 @@ def load_album_data(sp_param, album_id):
         'url': album_url,
         'songs': songs
     }
+def get_album_averages_df(client_gspread, spreadsheet_id, sheet_name):
+    try:
+        sheet = client_gspread.open_by_key(spreadsheet_id).worksheet(sheet_name)
+    except Exception as e:
+        logging.error(f"Failed to open sheet '{sheet_name}': {e}", exc_info=True)
+        # Attempt to create if not found (only for Album Averages if it's new)
+        if isinstance(e, gspread.exceptions.WorksheetNotFound):
+            logging.info(f"Worksheet '{sheet_name}' not found, attempting to create.")
+            try:
+                sheet = client_gspread.open_by_key(spreadsheet_id).add_worksheet(sheet_name, rows=1, cols=6) # 6 for the 6 columns
+                sheet.append_row(['album_id', 'album_name', 'artist_name', 'average_score', 'times_ranked', 'last_ranked_date'])
+                logging.info(f"Successfully created sheet '{sheet_name}' with header.")
+            except Exception as create_e:
+                logging.critical(f"CRITICAL ERROR: Could not create sheet '{sheet_name}': {create_e}", exc_info=True)
+                raise create_e # Re-raise to stop execution
+
+        raise e # Re-raise if it's another error
+
+    df = get_as_dataframe(sheet, evaluate_formulas=True)
+
+    expected_cols = ['album_id', 'album_name', 'artist_name', 'average_score', 'times_ranked', 'last_ranked_date']
+    if df.empty:
+        logging.debug(f"Album Averages DataFrame is empty. Initializing with expected columns: {expected_cols}")
+        df = pd.DataFrame(columns=expected_cols)
+    else:
+        # Ensure all expected columns exist, add if missing
+        for col in expected_cols:
+            if col not in df.columns:
+                df[col] = None # Add missing column with None values
+                logging.warning(f"Added missing column '{col}' to Album Averages DataFrame.")
+
+    return df.fillna("")
 def group_ranked_songs(sheet_rows):
     group_bins = {round(x * 0.5, 1): [] for x in range(2, 21)}  # 1.0 to 10.0
     for row in sheet_rows:
@@ -159,358 +191,282 @@ def load_google_sheet_data():
     sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
     return sheet.get_all_records()
 
+
 @app.route("/submit_rankings", methods=["POST"])
 def submit_rankings():
-    # Ensure `sp` is globally accessible
-    global sp
+    global sp, client  # Ensure access to global Spotify and GSheets client
 
     try:
         album_name = request.form.get("album_name")
         artist_name = request.form.get("artist_name")
         album_id = request.form.get("album_id")
-        # CRITICAL FIX: Get submission_status from the form, not hardcode
         submission_status = request.form.get("status", "final")
-        album_cover_url = request.form.get('album_cover_url') # Ensure this is passed for redirects
+        album_cover_url = request.form.get('album_cover_url')
 
-        print(f"\n--- SUBMIT RANKINGS START ---")
-        print(
-            f"DEBUG: submit_rankings called for Album: '{album_name}' (ID: {album_id}), Artist: '{artist_name}', Status: '{submission_status}'")
+        logging.info(f"\n--- SUBMIT RANKINGS START ---")
+        logging.info(
+            f"submit_rankings called for Album: '{album_name}' (ID: {album_id}), Artist: '{artist_name}', Status: '{submission_status}'")
 
         all_ranked_data_json = request.form.get("all_ranked_data", "[]")
         prelim_rank_data_json = request.form.get("prelim_rank_data", "{}")
 
         try:
             all_ranked_songs_from_js = json.loads(all_ranked_data_json)
-            # Ensure calculated_score is a float, defaulting to 0.0 if invalid
             for song in all_ranked_songs_from_js:
-                score = song.get('calculated_score')
-                try:
-                    song['calculated_score'] = float(score) if score is not None else 0.0
-                except (ValueError, TypeError):
-                    song['calculated_score'] = 0.0
+                song['calculated_score'] = float(song.get('calculated_score', 0.0))
         except json.JSONDecodeError as e:
             flash(f"Error parsing ranked songs data: {e}", "error")
-            print(f"ERROR: JSONDecodeError on all_ranked_data: {e}")
+            logging.error(f"JSONDecodeError on all_ranked_data: {e}", exc_info=True)
             return redirect(url_for('index'))
 
         try:
             prelim_ranks_from_js = json.loads(prelim_rank_data_json)
-            # Ensure preliminary scores are floats, defaulting to 0.0 if invalid
             for song_id, score in prelim_ranks_from_js.items():
-                try:
-                    prelim_ranks_from_js[song_id] = float(score) if score is not None else 0.0
-                except (ValueError, TypeError):
-                    prelim_ranks_from_js[song_id] = 0.0
+                prelim_ranks_from_js[song_id] = float(score if score is not None else 0.0)
         except json.JSONDecodeError as e:
             flash(f"Error parsing prelim ranks data: {e}", "error")
-            print(f"ERROR: JSONDecodeError on prelim_rank_data: {e}")
+            logging.error(f"JSONDecodeError on prelim_rank_data: {e}", exc_info=True)
             return redirect(url_for('index'))
 
-        print(
-            f"DEBUG: Parsed all_ranked_songs_from_js ({len(all_ranked_songs_from_js)} songs): {all_ranked_songs_from_js[:2] if all_ranked_songs_from_js else '[]'}")
-        print(
-            f"DEBUG: Parsed prelim_ranks_from_js ({len(prelim_ranks_from_js)} entries): {list(prelim_ranks_from_js.items())[:2] if prelim_ranks_from_js else '[]'}")
-
+        logging.debug(f"Parsed all_ranked_songs_from_js ({len(all_ranked_songs_from_js)} songs).")
+        logging.debug(f"Parsed prelim_ranks_from_js ({len(prelim_ranks_from_js)} entries).")
 
         # --- Fetch Song Names (centralized for both main and prelim sheets) ---
         spotify_tracks_for_album = {}
-        album_spotify_data = {'tracks': {'items': []}} # Initialize to prevent UnboundLocalError
         try:
-            if sp is not None:
+            if sp:  # Check if sp is initialized
                 album_spotify_data = sp.album(album_id)
                 for track in album_spotify_data['tracks']['items']:
                     spotify_tracks_for_album[track['id']] = track['name']
             else:
-                raise Exception("Spotify client (sp) not initialized.")
+                logging.warning("Spotify client (sp) not initialized. Cannot fetch accurate track names from Spotify.")
+                # Fallback to submitted data for song names
+                spotify_tracks_for_album.update(
+                    {str(s.get('song_id')): s.get('song_name', f"Unknown Song {str(s.get('song_id', 'N/A'))}") for s in
+                     all_ranked_songs_from_js})
+                spotify_tracks_for_album.update(
+                    {song_id: f"Unknown Song {song_id}" for song_id in prelim_ranks_from_js.keys() if
+                     song_id not in spotify_tracks_for_album})
         except Exception as e:
-            print(f"WARNING: Could not fetch Spotify tracks for album {album_id}: {e}. Falling back to submission data for song names.")
+            logging.warning(
+                f"Could not fetch Spotify tracks for album {album_id}: {e}. Falling back to submission data for song names.",
+                exc_info=True)
             # Fallback for final ranks:
-            spotify_tracks_for_album.update({
-                str(s.get('song_id')): s.get('song_name', f"Unknown Song {str(s.get('song_id', 'N/A'))}")
-                for s in all_ranked_songs_from_js
-            })
+            spotify_tracks_for_album.update(
+                {str(s.get('song_id')): s.get('song_name', f"Unknown Song {str(s.get('song_id', 'N/A'))}") for s in
+                 all_ranked_songs_from_js})
             # Fallback for prelim ranks:
-            spotify_tracks_for_album.update({
-                song_id: f"Unknown Song {song_id}"
-                for song_id in prelim_ranks_from_js.keys()
-                if song_id not in spotify_tracks_for_album
-            })
-
+            spotify_tracks_for_album.update(
+                {song_id: f"Unknown Song {song_id}" for song_id in prelim_ranks_from_js.keys() if
+                 song_id not in spotify_tracks_for_album})
 
         # --- Main Ranking Sheet Operations ---
         main_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
+        main_df = get_as_dataframe(main_sheet, evaluate_formulas=False).fillna("")
 
-        # 1. DELETE ALL EXISTING ROWS FOR THIS ALBUM IN MAIN SHEET
-        all_main_sheet_values = main_sheet.get_all_values()
-        main_sheet_header = all_main_sheet_values[0]
-        main_sheet_data_rows = all_main_sheet_values[1:]
-
-        main_rows_to_delete_indices = []
-        try:
-            album_id_col_idx_main = main_sheet_header.index("Spotify Album ID")
-        except ValueError:
-            print("ERROR: 'Spotify Album ID' column not found in main sheet header. Cannot reliably delete rows.")
-            flash("Configuration error: 'Spotify Album ID' column missing in sheet.", "error")
-            return redirect(url_for('index'))
-
-        for i, row in enumerate(main_sheet_data_rows):
-            if len(row) > album_id_col_idx_main and str(row[album_id_col_idx_main]) == str(album_id):
-                main_rows_to_delete_indices.append(i + 2) # +2 for 1-based indexing and header
-
-        main_rows_to_delete_indices.sort(reverse=True)
-        if main_rows_to_delete_indices:
-            for idx in main_rows_to_delete_indices:
-                main_sheet.delete_rows(idx)
-            print(f"DEBUG: Deleted {len(main_rows_to_delete_indices)} existing FINAL rank rows for album '{album_name}' (ID: {album_id}).")
+        # Delete existing rows for this album in main sheet using DataFrame filtering
+        if 'Spotify Album ID' in main_df.columns:
+            initial_main_rows = len(main_df)
+            main_df_filtered = main_df[main_df['Spotify Album ID'].astype(str) != str(album_id)]
+            rows_deleted_main = initial_main_rows - len(main_df_filtered)
+            if rows_deleted_main > 0:
+                set_with_dataframe(main_sheet, main_df_filtered, include_index=False)
+                logging.info(
+                    f"Deleted {rows_deleted_main} existing FINAL rank rows for album '{album_name}' (ID: {album_id}) from main sheet.")
+            else:
+                logging.debug(
+                    f"No existing FINAL rank rows found for album '{album_name}' (ID: {album_id}) to delete from main sheet.")
         else:
-            print(f"DEBUG: No existing FINAL rank rows found for album '{album_name}' (ID: {album_id}) to delete.")
+            logging.warning(
+                "Main sheet does not have 'Spotify Album ID' column. Cannot delete existing entries reliably.")
 
-        # 2. PREPARE AND APPEND NEW FINAL RANK ROWS TO MAIN SHEET
-        new_final_rows_for_sheet = []
-        column_names_main_sheet = [
-            'Album Name', 'Artist Name', 'Spotify Album ID', 'Song Name', 'Ranking',
-            'Ranking Status', 'Ranked Date', 'Position In Group', 'Rank Group',
-            'Spotify Song ID', 'Preliminary Rank'
-        ]
-
+        # Prepare and append new final rank rows to main sheet
+        new_final_rows_data = []
         if all_ranked_songs_from_js:
             for ranked_song_data in all_ranked_songs_from_js:
                 song_id = str(ranked_song_data['song_id'])
-                song_name = spotify_tracks_for_album.get(song_id, f"Unknown Song {song_id}") # Use centralized lookup
-                prelim_rank_val = ranked_song_data.get('prelim_rank', '') # Use the prelim rank passed from JS if exists
+                song_name = spotify_tracks_for_album.get(song_id, f"Unknown Song {song_id}")
+                prelim_rank_val = ranked_song_data.get('prelim_rank', '')
 
-                row_values_dict = {
+                new_final_rows_data.append({
                     'Album Name': album_name,
                     'Artist Name': artist_name,
                     'Spotify Album ID': album_id,
                     'Song Name': song_name,
-                    'Spotify Song ID': song_id,
                     'Ranking': f"{ranked_song_data['calculated_score']:.2f}",
-                    'Ranking Status': 'final', # Always 'final' for songs in all_ranked_songs_from_js
+                    'Ranking Status': 'final',
                     'Ranked Date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                     'Position In Group': str(ranked_song_data['rank_position']),
                     'Rank Group': f"{float(ranked_song_data['rank_group']):.1f}",
+                    'Spotify Song ID': song_id,
                     'Preliminary Rank': prelim_rank_val
-                }
-                ordered_row = [row_values_dict.get(col, '') for col in column_names_main_sheet]
-                new_final_rows_for_sheet.append(ordered_row)
+                })
 
-            if new_final_rows_for_sheet:
-                main_sheet.append_rows(new_final_rows_for_sheet, value_input_option='USER_ENTERED')
-                print(f"DEBUG: Appended {len(new_final_rows_for_sheet)} FINAL rank rows to main sheet.")
+            if new_final_rows_data:
+                # Convert to DataFrame to handle column order and append
+                new_final_df = pd.DataFrame(new_final_rows_data)
+
+                # Get current main sheet header to ensure correct column order for append
+                # This ensures we append correctly even if the sheet was manually altered
+                current_main_sheet_header = main_sheet.row_values(1)
+
+                # Reorder new_final_df columns to match current_main_sheet_header
+                # Fill missing columns in new_final_df with None, or drop extra columns
+                cols_to_append = [col for col in current_main_sheet_header if col in new_final_df.columns]
+                missing_cols_in_new_data = [col for col in current_main_sheet_header if col not in new_final_df.columns]
+
+                if missing_cols_in_new_data:
+                    logging.warning(
+                        f"Missing columns in new final rank data that exist in main sheet: {missing_cols_in_new_data}. Appending as empty.")
+                    for col in missing_cols_in_new_data:
+                        new_final_df[col] = None  # Add missing columns
+
+                new_final_df = new_final_df[
+                    cols_to_append + missing_cols_in_new_data].to_numpy().tolist()  # Convert to list of lists for append_rows
+
+                main_sheet.append_rows(new_final_df, value_input_option='USER_ENTERED')
+                logging.info(f"Appended {len(new_final_rows_data)} FINAL rank rows to main sheet.")
         else:
-            print("DEBUG: No new FINAL rank rows to append to main sheet.")
+            logging.info("No new FINAL rank rows to append to main sheet.")
 
-
-        # --- PRELIMINARY RANKING SHEET OPERATIONS (NEW SECTION) ---
-        prelim_sheet_name = "Preliminary Ranks"
-        prelim_sheet_header_cols = [
-            'album_id', 'album_name', 'artist_name', 'album_cover_url',
-            'song_id', 'song_name', 'prelim_rank', 'timestamp'
-        ]
+        # --- PRELIMINARY RANKING SHEET OPERATIONS ---
+        prelim_sheet = None
         try:
-            prelim_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(prelim_sheet_name)
-            print(f"DEBUG: Successfully opened Preliminary Ranks sheet: '{prelim_sheet_name}'")
+            prelim_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(PRELIM_SHEET_NAME)
+            logging.debug(f"Successfully opened Preliminary Ranks sheet: '{PRELIM_SHEET_NAME}'")
         except gspread.exceptions.WorksheetNotFound:
-            print(f"ERROR: Preliminary Ranks worksheet '{prelim_sheet_name}' not found. Attempting to create it.")
+            logging.warning(f"Preliminary Ranks worksheet '{PRELIM_SHEET_NAME}' not found. Attempting to create it.")
+            prelim_sheet_header_cols = [
+                'album_id', 'album_name', 'artist_name', 'album_cover_url',
+                'song_id', 'song_name', 'prelim_rank', 'timestamp'
+            ]
             try:
-                prelim_sheet = client.open_by_key(SPREADSHEET_ID).add_worksheet(prelim_sheet_name, rows=1, cols=len(prelim_sheet_header_cols))
+                prelim_sheet = client.open_by_key(SPREADSHEET_ID).add_worksheet(PRELIM_SHEET_NAME, rows=1,
+                                                                                cols=len(prelim_sheet_header_cols))
                 prelim_sheet.append_row(prelim_sheet_header_cols)
-                print(f"DEBUG: Successfully created new Preliminary Ranks sheet with header: {prelim_sheet_header_cols}")
+                logging.info(
+                    f"Successfully created new Preliminary Ranks sheet with header: {prelim_sheet_header_cols}")
             except Exception as e:
-                print(f"CRITICAL ERROR: Failed to create Preliminary Ranks sheet '{prelim_sheet_name}': {e}")
+                logging.critical(f"CRITICAL ERROR: Failed to create Preliminary Ranks sheet '{PRELIM_SHEET_NAME}': {e}",
+                                 exc_info=True)
                 flash(f"Critical error: Failed to create Preliminary Ranks sheet. Check permissions. {e}", "error")
                 return redirect(url_for('index'))
         except Exception as e:
-            print(f"ERROR: Could not open Preliminary Ranks sheet '{prelim_sheet_name}': {e}")
+            logging.error(f"Could not open Preliminary Ranks sheet '{PRELIM_SHEET_NAME}': {e}", exc_info=True)
             flash(f"Error accessing preliminary ranks sheet: {e}", "error")
             return redirect(url_for('index'))
 
+        # Get existing prelim data as DataFrame
+        prelim_df = get_as_dataframe(prelim_sheet, evaluate_formulas=False).fillna("")
+
         # Delete existing preliminary ranks for this album
-        all_prelim_sheet_values = prelim_sheet.get_all_values()
-        prelim_sheet_header_actual = all_prelim_sheet_values[0] if all_prelim_sheet_values else []
-        prelim_sheet_data_rows = all_prelim_sheet_values[1:] if all_prelim_sheet_values else []
-
-        prelim_rows_to_delete_indices = []
-        try:
-            album_id_col_idx_prelim = prelim_sheet_header_actual.index("album_id")
-        except ValueError:
-            print("ERROR: 'album_id' column not found in Preliminary Ranks sheet header. Cannot reliably delete rows.")
-            flash("Configuration error: 'album_id' column missing in Preliminary Ranks sheet header.", "error")
-            return redirect(url_for('index'))
-
-        for i, row in enumerate(prelim_sheet_data_rows):
-            if len(row) > album_id_col_idx_prelim and str(row[album_id_col_idx_prelim]) == str(album_id):
-                prelim_rows_to_delete_indices.append(i + 2) # +2 for 1-based indexing and header
-
-        prelim_rows_to_delete_indices.sort(reverse=True)
-        if prelim_rows_to_delete_indices:
-            for idx in prelim_rows_to_delete_indices:
-                prelim_sheet.delete_rows(idx)
-            print(f"DEBUG: Deleted {len(prelim_rows_to_delete_indices)} existing PRELIMINARY rank rows for album '{album_name}' (ID: {album_id}).")
+        if 'album_id' in prelim_df.columns:
+            initial_prelim_rows = len(prelim_df)
+            prelim_df_filtered = prelim_df[prelim_df['album_id'].astype(str) != str(album_id)]
+            rows_deleted_prelim = initial_prelim_rows - len(prelim_df_filtered)
+            if rows_deleted_prelim > 0:
+                set_with_dataframe(prelim_sheet, prelim_df_filtered, include_index=False)
+                logging.info(
+                    f"Deleted {rows_deleted_prelim} existing PRELIMINARY rank rows for album '{album_name}' (ID: {album_id}).")
+            else:
+                logging.debug(
+                    f"No existing PRELIMINARY rank rows found for album '{album_name}' (ID: {album_id}) to delete.")
         else:
-            print(f"DEBUG: No existing PRELIMINARY rank rows found for album '{album_name}' (ID: {album_id}) to delete.")
+            logging.warning(
+                "Preliminary Ranks sheet does not have 'album_id' column. Cannot delete existing entries reliably.")
 
         # Append new preliminary ranks if any were submitted
-        new_prelim_rows_for_sheet = []
+        new_prelim_rows_data = []
         if prelim_ranks_from_js:
             for song_id, prelim_rank_value in prelim_ranks_from_js.items():
                 song_name = spotify_tracks_for_album.get(song_id, f"Unknown Song (ID: {song_id})")
-                new_prelim_rows_for_sheet.append([
-                    album_id,
-                    album_name,
-                    artist_name,
-                    album_cover_url,
-                    song_id,
-                    song_name,
-                    prelim_rank_value,
-                    datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                ])
-            if new_prelim_rows_for_sheet:
-                prelim_sheet.append_rows(new_prelim_rows_for_sheet, value_input_option='USER_ENTERED')
-                print(f"DEBUG: Appended {len(new_prelim_rows_for_sheet)} PRELIMINARY rank rows to Preliminary Ranks sheet.")
-        else:
-            print("DEBUG: No new PRELIMINARY rank rows to append to Preliminary Ranks sheet.")
+                new_prelim_rows_data.append({
+                    'album_id': album_id,
+                    'album_name': album_name,
+                    'artist_name': artist_name,
+                    'album_cover_url': album_cover_url,
+                    'song_id': song_id,
+                    'song_name': song_name,
+                    'prelim_rank': prelim_rank_value,
+                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                })
 
+            if new_prelim_rows_data:
+                new_prelim_df = pd.DataFrame(new_prelim_rows_data)
+                # Append to existing DataFrame to maintain structure then write back
+                combined_prelim_df = pd.concat([prelim_df_filtered, new_prelim_df], ignore_index=True)
+                set_with_dataframe(prelim_sheet, combined_prelim_df, include_index=False)
+                logging.info(f"Appended {len(new_prelim_rows_data)} PRELIMINARY rank rows to Preliminary Ranks sheet.")
+        else:
+            logging.info("No new PRELIMINARY rank rows to append to Preliminary Ranks sheet.")
 
         # --- START: Album Averages Sheet Logic ---
-        # This logic correctly depends on 'final' status and actual ranked songs
         if submission_status == 'final' and all_ranked_songs_from_js:
-            print("DEBUG: Entering FINAL ranking logic for Album Averages sheet.")
+            logging.info("Entering FINAL ranking logic for Album Averages sheet.")
 
             total_score = sum(s.get('calculated_score', 0) for s in all_ranked_songs_from_js)
             num_ranked_songs = len(all_ranked_songs_from_js)
             average_album_score = round(total_score / num_ranked_songs, 2) if num_ranked_songs > 0 else 0
 
-            print(
-                f"DEBUG: Calculated Album Average Score: {average_album_score} (Total: {total_score}, Count: {num_ranked_songs})")
+            logging.info(
+                f"Calculated Album Average Score: {average_album_score} (Total: {total_score}, Count: {num_ranked_songs})")
 
-            album_averages_sheet_name = "Album Averages"
-            try:
-                album_averages_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(album_averages_sheet_name)
-                print(f"DEBUG: Successfully opened Album Averages sheet: '{album_averages_sheet_name}'")
-            except Exception as e:
-                print(f"ERROR: Could not open Album Averages sheet '{album_averages_sheet_name}': {e}")
-                flash(f"Error accessing album averages sheet: {e}", "error")
-                return redirect(url_for('load_albums_by_artist_route', artist_name=artist_name))
+            # Get the Album Averages DataFrame, ensuring it has correct columns
+            album_averages_df = get_album_averages_df(client, SPREADSHEET_ID, ALBUM_AVERAGES_SHEET_NAME)
 
-            album_averages_df = get_as_dataframe(album_averages_sheet, evaluate_formulas=True).fillna("")
+            # Find matching row by album_id
+            matching_album_row_df = album_averages_df[album_averages_df['album_id'].astype(str) == str(album_id)]
 
-            if album_averages_df.empty:
-                expected_album_average_columns = [
-                    'album_id', 'album_name', 'artist_name', 'average_score', 'times_ranked', 'last_ranked_date'
-                ]
-                album_averages_df = pd.DataFrame(columns=expected_album_average_columns)
-                # Fill NA values AFTER ensuring columns exist
-            album_averages_df = album_averages_df.fillna("")
-
-            matching_album_row = album_averages_df[
-                album_averages_df['album_id'].astype(str) == str(album_id)
-                ]
-
-            if matching_album_row.empty:  # If not found by ID, try by name/artist (fallback for old data)
-                matching_album_row = album_averages_df[
-                    (album_averages_df["album_name"].astype(
-                        str).str.strip().str.lower() == album_name.strip().lower()) &
-                    (album_averages_df["artist_name"].astype(
-                        str).str.strip().str.lower() == artist_name.strip().lower())
-                    ]
-
-            if not matching_album_row.empty:
-                album_row_idx = matching_album_row.index[0] + 2  # +2 for 1-based indexing and header
-                times_ranked = matching_album_row.iloc[0].get("times_ranked", 0)  # Use 'times_ranked' header
+            if not matching_album_row_df.empty:
+                # Update existing row
+                row_index_in_df = matching_album_row_df.index[0]  # Index within the DataFrame
+                times_ranked_current = album_averages_df.loc[row_index_in_df, 'times_ranked']
                 try:
-                    times_ranked = int(times_ranked) + 1
-                except ValueError:
-                    print(
-                        f"WARNING: 'times_ranked' value '{times_ranked}' is not an integer. Resetting to 1 for '{album_name}'.")
-                    times_ranked = 1
+                    times_ranked_new = int(times_ranked_current) + 1
+                except (ValueError, TypeError):
+                    logging.warning(
+                        f"'times_ranked' value '{times_ranked_current}' is not an integer. Resetting to 1 for '{album_name}'.")
+                    times_ranked_new = 1
 
-                print(
-                    f"DEBUG: Found existing row for '{album_name}' at sheet row {album_row_idx}. New Times Ranked: {times_ranked}")
+                album_averages_df.loc[row_index_in_df, 'average_score'] = average_album_score
+                album_averages_df.loc[row_index_in_df, 'times_ranked'] = times_ranked_new
+                album_averages_df.loc[row_index_in_df, 'last_ranked_date'] = datetime.now().strftime(
+                    '%Y-%m-%d %H:%M:%S')
 
-                # Dynamic column finding for Album Averages sheet (more robust)
-                avg_col_idx = -1
-                times_col_idx = -1
-                date_col_idx = -1
-                # CRITICAL: Use the actual DataFrame columns which come from headers
-                actual_avg_sheet_header = album_averages_df.columns.tolist()
-
-                try:
-                    # These must match your Google Sheet Headers exactly!
-                    avg_col_idx = actual_avg_sheet_header.index('average_score') + 1
-                    times_col_idx = actual_avg_sheet_header.index('times_ranked') + 1
-                    date_col_idx = actual_avg_sheet_header.index('last_ranked_date') + 1
-                except ValueError as ve:
-                    print(f"ERROR: Missing expected column in Album Averages sheet header: {ve}")
-                    flash(f"Configuration error: Missing column in 'Album Averages' sheet: {ve}", "error")
-                    return redirect(url_for('load_albums_by_artist_route', artist_name=artist_name))
-
-                update_cells_avg = []
-                current_date_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-                # Using sheet.update_cell which is for single cell updates.
-                # A batch update with `update_cells` is generally more efficient.
-                # Or, even better, update the DataFrame and use set_with_dataframe.
-                # Let's stick with updating cells for consistency with your existing style.
-
-                cell_avg = album_averages_sheet.cell(album_row_idx, avg_col_idx)
-                if cell_avg.value != str(average_album_score):  # Compare as string because gspread reads as string
-                    cell_avg.value = average_album_score
-                    update_cells_avg.append(cell_avg)
-
-                cell_times = album_averages_sheet.cell(album_row_idx, times_col_idx)
-                if cell_times.value != str(times_ranked):  # Compare as string
-                    cell_times.value = times_ranked
-                    update_cells_avg.append(cell_times)
-
-                cell_date = album_averages_sheet.cell(album_row_idx, date_col_idx)
-                if cell_date.value != current_date_str:
-                    cell_date.value = current_date_str
-                    update_cells_avg.append(cell_date)
-
-                if update_cells_avg:
-                    try:
-                        album_averages_sheet.update_cells(update_cells_avg)
-                        print(
-                            f"DEBUG: Batch updated {len(update_cells_avg)} cells in Album Averages sheet for '{album_name}'.")
-                    except Exception as e:
-                        print(f"ERROR: Failed to batch update cells in Album Averages sheet: {e}")
-                        flash(f"Error updating album average: {e}", "error")
+                logging.info(
+                    f"Updated existing row for album '{album_name}' (ID: {album_id}). New Times Ranked: {times_ranked_new}")
             else:
-                print(f"DEBUG: No existing row found for '{album_name}'. Appending new row to Album Averages sheet.")
-                # CRITICAL: Ensure album_id is included here and matches the column header name
-                # Column order MUST match your Google Sheet
-                new_album_row_values = [
-                    album_id,  # <<< ADDED album_id HERE
-                    album_name,
-                    artist_name,
-                    average_album_score,
-                    1,
-                    datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                ]
-                try:
-                    album_averages_sheet.append_row(new_album_row_values)
-                    print(f"DEBUG: Added new entry: {new_album_row_values} to Album Averages sheet.")
-                except Exception as e:
-                    print(f"ERROR: Failed to append new row to Album Averages sheet: {e}")
-                    flash(f"Error adding new album average: {e}", "error")
+                # Add new row
+                new_row_data = {
+                    'album_id': album_id,
+                    'album_name': album_name,
+                    'artist_name': artist_name,
+                    'average_score': average_album_score,
+                    'times_ranked': 1,
+                    'last_ranked_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                }
+                # Create a new DataFrame for the single row to ensure correct columns
+                new_row_df = pd.DataFrame([new_row_data], columns=album_averages_df.columns)
+                album_averages_df = pd.concat([album_averages_df, new_row_df], ignore_index=True)
+                logging.info(f"Added new entry for album '{album_name}' (ID: {album_id}) to Album Averages sheet.")
+
+            # Write the entire updated DataFrame back to the sheet
+            album_averages_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(album_averages_sheet_name)
+            set_with_dataframe(album_averages_sheet, album_averages_df, include_index=False, include_column_header=True)
+            logging.info(f"Successfully wrote updated Album Averages DataFrame to sheet.")
+
         else:
-            print(
-                "DEBUG: Skipping Album Averages update: Submission status is not 'final' OR no ranked songs submitted.")
+            logging.info(
+                "Skipping Album Averages update: Submission status is not 'final' OR no ranked songs submitted.")
         # --- END: Album Averages Sheet Logic ---
 
         flash('Rankings submitted successfully!', "success")
-        print(f"--- SUBMIT RANKINGS END (Redirecting to album) ---\n")
+        logging.info(f"--- SUBMIT RANKINGS END (Redirecting to album) ---\n")
 
-        # Redirect to the view_album page after submission
-        # Redirect to the album selection page for the artist after submission
         return redirect(url_for('load_albums_by_artist_route', artist_name=artist_name))
 
     except Exception as e:
-        import traceback
-        print("\n🔥 ERROR in /submit_rankings route:")
-        traceback.print_exc()
+        logging.critical(f"\n🔥 CRITICAL ERROR in /submit_rankings route: {e}", exc_info=True)
         flash(f"An unexpected error occurred during submission: {e}", "error")
         return redirect(url_for('index'))
 @app.route('/')
