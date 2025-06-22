@@ -655,6 +655,42 @@
             }
         });
     }
+    function updateAlbumMetrics() {
+        let totalScoreForAlbum = 0;
+        let songsRankedFromThisAlbum = 0;
+        const currentAlbumId = albumData.album_id; // Get the ID of the current album from global albumData
+
+        // Iterate through all ranked groups
+        for (const groupKey in allRankedSongsByGroup) {
+            if (allRankedSongsByGroup.hasOwnProperty(groupKey)) {
+                allRankedSongsByGroup[groupKey].forEach(song => {
+                    // Check if the song belongs to the current album and has a calculated score
+                    if (song.album_id === currentAlbumId && typeof song.calculated_score === 'number') {
+                        totalScoreForAlbum += song.calculated_score;
+                        songsRankedFromThisAlbum++;
+                    }
+                });
+            }
+        }
+
+        const albumAverage = songsRankedFromThisAlbum > 0 ? (totalScoreForAlbum / songsRankedFromThisAlbum).toFixed(2) : 'N/A';
+
+        // Assuming you have HTML elements to display these, e.g.:
+        // <span id="albumAverageScore"></span>
+        // <span id="albumTimesRanked"></span>
+
+        const albumAverageElement = document.getElementById('albumAverageScore');
+        const albumTimesRankedElement = document.getElementById('albumTimesRanked');
+
+        if (albumAverageElement) {
+            albumAverageElement.textContent = albumAverage;
+        }
+        if (albumTimesRankedElement) {
+            albumTimesRankedElement.textContent = songsRankedFromThisAlbum;
+        }
+
+        console.log(`Album Average Score: ${albumAverage}, Songs Ranked: ${songsRankedFromThisAlbum}`);
+    }
 
     // --- Drag and drop functionality ---
     document.addEventListener('dragstart', function(e) {
@@ -832,6 +868,7 @@
         loadRankedSongsIntoDisplay(currentRankGroup);
         updateAllRankButtonIcons();
         updateSongCheckmarks();
+        updateAlbumMetrics();
 
         draggingSong = null;
     });
@@ -870,7 +907,6 @@
             if (originalIndex >= 0 && originalIndex < allRankedSongsByGroup[originalRankGroup].length) {
                 const songDataToMove = allRankedSongsByGroup[originalRankGroup].splice(originalIndex, 1)[0];
 
-                // Remove calculated_score and rank_group as it's now unranked
                 delete songDataToMove.calculated_score;
                 delete songDataToMove.rank_group;
 
@@ -880,8 +916,7 @@
                     delete songDataToMove.prelim_rank;
                 }
 
-                // --- FIX START: Recalculate scores for the ORIGINAL group AFTER removal ---
-                // If the song was removed from a group, that group's remaining songs need their scores updated.
+                // Recalculate scores for the ORIGINAL group AFTER removal
                 const originalGroupSongs = allRankedSongsByGroup[originalRankGroup];
                 const totalSongsInOriginalGroup = originalGroupSongs.length;
                 const originalRankGroupValue = parseFloat(originalRankGroup);
@@ -889,7 +924,6 @@
                 originalGroupSongs.forEach((song, idx) => {
                     song.calculated_score = calculateScoreValue(idx, totalSongsInOriginalGroup, originalRankGroupValue);
                 });
-                // --- FIX END ---
             }
 
             // Re-render the original group if it was the currently active one
@@ -898,6 +932,7 @@
             }
             updateAllRankButtonIcons();
             updateSongCheckmarks();
+            updateAlbumMetrics(); // <<< ADD THIS LINE HERE
         }
         draggingSong = null;
     });
@@ -1005,6 +1040,7 @@
             document.getElementById('emptyState').textContent = `Select a rank group above to start ranking songs.`;
             document.getElementById('rankedSongsList').style.display = 'none'; // Hide the ul
         }
+        updateAlbumMetrics();
     });
     </script>
 </body>
