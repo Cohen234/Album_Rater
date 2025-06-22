@@ -562,24 +562,30 @@ def load_albums_by_artist_route():
 
     # Prepare albums for template, adding average score and times ranked
     albums_for_template = []
-    for album_data in albums_from_spotify: # Iterate through the raw Spotify data
-        album_name_lower = album_data.get("name", "").strip().lower() # Use 'name' from Spotify
-        # artist_name_lower needs to be from the request as spotify returns it nested in a list
-        # For lookup against sheet, use the artist_name from the request/route
-        artist_name_for_lookup_lower = artist_name.strip().lower()
+    for album_data in albums_from_spotify:  # Iterate through the raw Spotify data
+        album_name_lower = album_data.get("name", "").strip().lower()  # Use 'name' from Spotify
+        artist_name_for_lookup_lower = artist_name.strip().lower()  # Use the artist_name from the request/route
 
         metadata = album_metadata.get((album_name_lower, artist_name_for_lookup_lower), {})
 
+        # --- START ADDITION: Determine if album has preliminary ranks ---
+        # Check if this album's (name, artist) tuple exists in our set of prelim-ranked albums
+        has_prelim_ranks = (album_name_lower, artist_name_for_lookup_lower) in prelim_ranked_albums_keys
+        # --- END ADDITION ---
+
         albums_for_template.append({
-            "album_name": album_data.get("name"),       # Mapped from 'name'
-            "artist_name": artist_name,                  # Use the artist_name passed to the route
-            "image": album_data.get("image"),            # Mapped from 'image'
-            "id": album_data.get("id"),                  # Mapped from 'id'
+            "album_name": album_data.get("name"),
+            "artist_name": artist_name,
+            "image": album_data.get("image"),
+            "id": album_data.get("id"),
             "average_score": metadata.get("average_score"),
             "times_ranked": metadata.get("times_ranked"),
-            "url": album_data.get("url")                 # Mapped from 'url'
+            "url": album_data.get("url"),
+            # --- START ADDITION: Include the flag for the template ---
+            "has_prelim_ranks": has_prelim_ranks  # This directly matches your Jinja2 `{% if album.has_prelim_ranks %}`
+            # --- END ADDITION ---
         })
-    print(f"DEBUG: Prepared {len(albums_for_template)} albums for select_album.html with metadata.")
+    print(f"DEBUG: Prepared {len(albums_for_template)} albums for select_album.html with metadata and prelim status.")
 
     # Pass the enriched list to the template
     return render_template("select_album.html", artist_name=artist_name, albums=albums_for_template)
