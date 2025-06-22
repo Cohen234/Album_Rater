@@ -412,7 +412,7 @@ def submit_rankings():
                 f"Calculated Album Average Score: {average_album_score} (Total: {total_score}, Count: {num_ranked_songs})")
 
             # Get the Album Averages DataFrame, ensuring it has correct columns
-            album_averages_df = get_album_averages_df(client, SPREADSHEET_ID, ALBUM_AVERAGES_SHEET_NAME)
+            album_averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
 
             # Find matching row by album_id
             matching_album_row_df = album_averages_df[album_averages_df['album_id'].astype(str) == str(album_id)]
