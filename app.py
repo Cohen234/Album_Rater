@@ -594,7 +594,7 @@ def load_albums_by_artist_route():
             "has_prelim_ranks": has_prelim_ranks
         })
     logging.debug(
-        f"DEBUG: Prepared {len(albums_for_template)} albums for albums.html with metadata, prelim status, and averages.")
+        f"DEBUG: Prepared {len(albums_for_template)} albums for album.html with metadata, prelim status, and averages.")
 
     # Pass the enriched list to the template
     return render_template("album.html", artist_name=artist_name, albums=albums_for_template)
