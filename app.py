@@ -504,6 +504,14 @@ def load_albums_by_artist_route():
     album_averages_sheet_name = "Album Averages"
     album_averages_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(album_averages_sheet_name)
     album_averages_df = get_as_dataframe(album_averages_sheet, evaluate_formulas=True).fillna("")
+    logging.debug(f"*** DEBUG: Album Averages DataFrame IMMEDIATELY after get_as_dataframe ***")
+    logging.debug(f"*** DEBUG: DataFrame Empty: {album_averages_df.empty}")
+    logging.debug(f"*** DEBUG: DataFrame Shape: {album_averages_df.shape}")
+    logging.debug(f"*** DEBUG: DataFrame Columns: {album_averages_df.columns.tolist()}")
+    logging.debug(f"*** DEBUG: DataFrame Head (first 10 rows): \n{album_averages_df.head(10).to_string()}")
+    logging.debug(f"*** DEBUG: DataFrame Tail (last 10 rows): \n{album_averages_df.tail(10).to_string()}")
+    logging.debug(
+        f"*** DEBUG: DataFrame Values (as list of lists, first 5 rows): {album_averages_df.values.tolist()[:5]}")
 
     # Create a dictionary for quick lookup of averages/times ranked
     album_metadata = {}
