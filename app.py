@@ -32,6 +32,7 @@ client = gspread.authorize(creds)
 SPREADSHEET_ID = '15E4b-DWSYP9AzbAzSviqkW-jEOktbimPlmhNIs_d5jc'
 SHEET_NAME = "Sheet1"
 album_averages_sheet_name = "Album Averages" # Renamed for clarity and consistency
+PRELIM_SHEET_NAME = "Preliminary Ranks"
 
 # --- Flask App Initialization ---
 app = Flask(__name__)
