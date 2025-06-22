@@ -732,7 +732,7 @@
 
 
     activeRankGroupDisplay.addEventListener('drop', function(e) {
-        e.preventDefault(); // Prevent default browser drop behavior
+        e.preventDefault();
 
         // Clear all drag-over indicators on successful drop
         this.classList.remove('drag-over');
@@ -741,23 +741,21 @@
         });
         document.getElementById('rankedSongsList').classList.remove('drag-over-empty');
 
-        // IMPORTANT FIX: Ensure the 'dragging' class is removed from the original song-item on the left
         if (draggingSong) {
             draggingSong.classList.remove('dragging');
         }
 
         if (!draggingSong || !currentRankGroup) {
-            return; // No song being dragged or no rank group selected
+            return;
         }
 
         const songId = e.dataTransfer.getData("text/plain");
         const originalRankGroup = e.dataTransfer.getData("text/original-rank-group");
         const originalRankPosition = e.dataTransfer.getData("text/original-rank-position");
-        const prelimRank = e.dataTransfer.getData("text/prelim-rank"); // Get prelim rank if available
-        const originalAlbumId = e.dataTransfer.getData("text/original-album-id"); // Get album info
+        const prelimRank = e.dataTransfer.getData("text/prelim-rank");
+        const originalAlbumId = e.dataTransfer.getData("text/original-album-id");
         const originalAlbumName = e.dataTransfer.getData("text/original-album-name");
         const originalArtistName = e.dataTransfer.getData("text/original-artist-name");
-
 
         let songDataToMove;
 
@@ -776,28 +774,25 @@
                 songDataToMove = {
                     song_id: songId,
                     song_name: songItemElement.dataset.song,
-                    prelim_rank: prelimRank ? parseFloat(prelimRank) : undefined, // *** FIXED: Removed trailing comma here ***
-                    album_id: albumData.album_id, // Get from global albumData for new songs
+                    prelim_rank: prelimRank ? parseFloat(prelimRank) : undefined,
+                    album_id: albumData.album_id,
                     album_name: albumData.album_name,
                     artist_name: albumData.artist_name
                 };
             }
         } else {
-            // If it was already ranked globally, ensure its album/artist info is carried forward
-            // (This should already be in songDataToMove from the splice, but good to ensure if logic changes)
             songDataToMove.album_id = songDataToMove.album_id || originalAlbumId;
             songDataToMove.album_name = songDataToMove.album_name || originalAlbumName;
             songDataToMove.artist_name = songDataToMove.artist_name || originalArtistName;
         }
-
 
         if (!songDataToMove) {
             console.error("Could not find song data to move for ID:", songId);
             return;
         }
 
-        const targetElementDrop = e.target.closest('.ranked-song'); // Using a new variable name for clarity
-        let newIndex = 0; // Default to top if no specific target or empty list
+        const targetElementDrop = e.target.closest('.ranked-song');
+        let newIndex = 0;
 
         if (targetElementDrop && targetElementDrop.classList.contains('ranked-song')) {
             const targetIndex = parseInt(targetElementDrop.dataset.rankPosition, 10);
@@ -805,12 +800,11 @@
             const midpoint = rect.y + rect.height / 2;
 
             if (e.clientY < midpoint) {
-                newIndex = targetIndex; // Insert before target
+                newIndex = targetIndex;
             } else {
-                newIndex = targetIndex + 1; // Insert after target
+                newIndex = targetIndex + 1;
             }
         } else {
-            // Dropped into an empty list or not on a specific song element
             newIndex = (allRankedSongsByGroup[currentRankGroup] || []).length;
         }
 
@@ -818,19 +812,28 @@
             allRankedSongsByGroup[currentRankGroup] = [];
         }
 
-        songDataToMove.calculated_score = calculateScoreValue(newIndex, allRankedSongsByGroup[currentRankGroup].length + 1, parseFloat(currentRankGroup));
-        songDataToMove.rank_group = currentRankGroup; // Ensure the song object itself knows its new group
-        console.log(`Calculated score for ${songDataToMove.song_name}: ${songDataToMove.calculated_score}`);
+        // Assign the new rank_group before splicing
+        songDataToMove.rank_group = currentRankGroup;
 
         // Add to new group at the calculated index
         allRankedSongsByGroup[currentRankGroup].splice(newIndex, 0, songDataToMove);
+
+        // --- FIX START: Recalculate scores for ALL songs in the current group AFTER the splice ---
+        const currentGroupSongs = allRankedSongsByGroup[currentRankGroup];
+        const totalSongsInCurrentGroup = currentGroupSongs.length;
+        const rankGroupValue = parseFloat(currentRankGroup);
+
+        currentGroupSongs.forEach((song, idx) => {
+            song.calculated_score = calculateScoreValue(idx, totalSongsInCurrentGroup, rankGroupValue);
+        });
+        // --- FIX END ---
 
         // Re-render the current rank group's songs
         loadRankedSongsIntoDisplay(currentRankGroup);
         updateAllRankButtonIcons();
         updateSongCheckmarks();
 
-        draggingSong = null; // Reset dragging state
+        draggingSong = null;
     });
 
     // Handle dropping songs back to the unranked list (left panel)
@@ -839,7 +842,7 @@
     songListContainer.addEventListener('dragover', function(e) {
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
-        this.classList.add('drag-over-unranked'); // Add a visual indicator
+        this.classList.add('drag-over-unranked');
     });
 
     songListContainer.addEventListener('dragleave', function(e) {
@@ -857,47 +860,46 @@
         const songId = e.dataTransfer.getData("text/plain");
         const originalRankGroup = e.dataTransfer.getData("text/original-rank-group");
         const originalRankPosition = e.dataTransfer.getData("text/original-rank-position");
-        const prelimRank = e.dataTransfer.getData("text/prelim-rank"); // Get prelim rank if available
-        const originalAlbumId = e.dataTransfer.getData("text/original-album-id"); // Crucial for moving back
+        const prelimRank = e.dataTransfer.getData("text/prelim-rank");
+        const originalAlbumId = e.dataTransfer.getData("text/original-album-id");
         const originalAlbumName = e.dataTransfer.getData("text/original-album-name");
         const originalArtistName = e.dataTransfer.getData("text/original-artist-name");
 
         if (originalRankGroup && allRankedSongsByGroup[originalRankGroup]) {
             const originalIndex = parseInt(originalRankPosition, 10);
             if (originalIndex >= 0 && originalIndex < allRankedSongsByGroup[originalRankGroup].length) {
-                // Get the song data before splicing it out
                 const songDataToMove = allRankedSongsByGroup[originalRankGroup].splice(originalIndex, 1)[0];
-
-                // Re-add to the current album's internal song list (conceptually for re-rendering left panel)
-                // This is primarily for `updateSongCheckmarks` to properly enable it on the left
-                // and for the backend `save_global_rankings` to know its prelim status.
-                // The actual DOM element on the left is managed by the Jinja2 loop on load and `updateSongCheckmarks`.
 
                 // Remove calculated_score and rank_group as it's now unranked
                 delete songDataToMove.calculated_score;
                 delete songDataToMove.rank_group;
 
-                // Preserve prelim_rank if it came with one or was set
                 if (prelimRank) {
                     songDataToMove.prelim_rank = parseFloat(prelimRank);
                 } else {
-                    delete songDataToMove.prelim_rank; // Clear prelim if none was there
+                    delete songDataToMove.prelim_rank;
                 }
 
-                // The song is now conceptually "unranked" and needs to appear on the left.
-                // `updateSongCheckmarks()` will handle re-enabling drag and input for it.
+                // --- FIX START: Recalculate scores for the ORIGINAL group AFTER removal ---
+                // If the song was removed from a group, that group's remaining songs need their scores updated.
+                const originalGroupSongs = allRankedSongsByGroup[originalRankGroup];
+                const totalSongsInOriginalGroup = originalGroupSongs.length;
+                const originalRankGroupValue = parseFloat(originalRankGroup);
+
+                originalGroupSongs.forEach((song, idx) => {
+                    song.calculated_score = calculateScoreValue(idx, totalSongsInOriginalGroup, originalRankGroupValue);
+                });
+                // --- FIX END ---
             }
 
             // Re-render the original group if it was the currently active one
             if (currentRankGroup === originalRankGroup) {
-                loadRankedSongsIntoDisplay(originalRankGroup); // This re-renders after removal
+                loadRankedSongsIntoDisplay(originalRankGroup);
             }
-            // Update all rank button icons (as a group might now be empty)
             updateAllRankButtonIcons();
-            // Update checkmarks on the left panel (this will re-enable drag for this song)
             updateSongCheckmarks();
         }
-        draggingSong = null; // Reset dragging state
+        draggingSong = null;
     });
 
     // --- Save/Submit functionality ---
