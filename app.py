@@ -479,8 +479,8 @@ def submit_rankings():
         print(f"--- SUBMIT RANKINGS END (Redirecting to album) ---\n")
 
         # Redirect to the view_album page after submission
-        return redirect(url_for('view_album', album_id=album_id, album_name=album_name,
-                                artist_name=artist_name, album_cover_url=album_cover_url))
+        # Redirect to the album selection page for the artist after submission
+        return redirect(url_for('load_albums_by_artist_route', artist_name=artist_name))
 
     except Exception as e:
         import traceback
