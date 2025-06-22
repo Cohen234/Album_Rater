@@ -673,46 +673,69 @@
 
     activeRankGroupDisplay.addEventListener('dragover', function(e) {
         e.preventDefault(); // Allow drop
-        e.dataTransfer.dropEffect = "move";
-        this.classList.add('drag-over');
+        e.dataTransfer.dropEffect = "move"; // Set drop effect for visual feedback
 
-        // Visual insertion point logic
         const targetElement = e.target.closest('.ranked-song');
         const rankedSongsList = document.getElementById('rankedSongsList');
-        const children = Array.from(rankedSongsList.children).filter(child => !child.classList.contains('dragging'));
+        const allRankedSongs = Array.from(rankedSongsList.querySelectorAll('.ranked-song')).filter(child => !child.classList.contains('dragging'));
 
-        // Remove all existing drag-over indicators
-        children.forEach(child => child.classList.remove('drag-over'));
+        // --- START NEW/MODIFIED CODE FOR DRAGOVER ---
+        // IMPORTANT: Clear all previous insertion point indicators from ALL songs
+        allRankedSongs.forEach(song => {
+            song.classList.remove('insert-above', 'insert-below'); // Remove new classes
+        });
+        // Also clear the empty list indicator
+        rankedSongsList.classList.remove('drag-over-empty');
+        // Clear container drag-over class if it's currently on this (it will be re-added if needed)
+        this.classList.remove('drag-over');
 
-        if (targetElement && targetElement.classList.contains('ranked-song') && !targetElement.classList.contains('dragging')) {
+        if (targetElement && !targetElement.classList.contains('dragging')) {
             const rect = targetElement.getBoundingClientRect();
             const midpoint = rect.y + rect.height / 2;
 
             if (e.clientY < midpoint) {
-                targetElement.classList.add('drag-over-top');
+                targetElement.classList.add('insert-above'); // Apply new class for insertion ABOVE
             } else {
-                targetElement.classList.add('drag-over-bottom');
+                targetElement.classList.add('insert-below'); // Apply new class for insertion AFTER
             }
-        } else if (children.length === 0 && e.target === rankedSongsList) {
-            // Special case for an empty list, just indicate the list itself is droppable
-            rankedSongsList.classList.add('drag-over');
+        } else if (allRankedSongs.length === 0 && (e.target === rankedSongsList || e.target.id === 'emptyState')) {
+            // Special case: dragging over an empty list or the empty state message
+            rankedSongsList.classList.add('drag-over-empty'); // Indicate empty list is droppable
+        } else {
+            // Default: if not hovering a specific song, just show main container is droppable
+            this.classList.add('drag-over'); // Apply to the activeRankGroupDisplay container itself
         }
+        // --- END NEW/MODIFIED CODE FOR DRAGOVER ---
     });
 
     activeRankGroupDisplay.addEventListener('dragleave', function(e) {
+        // --- START NEW/MODIFIED CODE FOR DRAGLEAVE ---
+        // Clear all drag-over indicators when leaving the main drop zone
         this.classList.remove('drag-over');
         document.querySelectorAll('.ranked-song').forEach(song => {
-            song.classList.remove('drag-over-top', 'drag-over-bottom');
+            song.classList.remove('insert-above', 'insert-below'); // Clear new classes
         });
+        document.getElementById('rankedSongsList').classList.remove('drag-over-empty'); // Clear for empty list
+        // --- END NEW/MODIFIED CODE FOR DRAGLEAVE ---
     });
 
 
     activeRankGroupDisplay.addEventListener('drop', function(e) {
-        e.preventDefault();
+        e.preventDefault(); // Prevent default browser drop behavior
+
+        // --- START NEW/MODIFIED CODE FOR DROP ---
+        // Clear all drag-over indicators on successful drop
         this.classList.remove('drag-over');
         document.querySelectorAll('.ranked-song').forEach(song => {
-            song.classList.remove('drag-over-top', 'drag-over-bottom');
+            song.classList.remove('insert-above', 'insert-below'); // Clear new classes
         });
+        document.getElementById('rankedSongsList').classList.remove('drag-over-empty'); // Clear for empty list
+
+        // IMPORTANT FIX: Ensure the 'dragging' class is removed from the original song-item on the left
+        if (draggingSong) {
+            draggingSong.classList.remove('dragging');
+        }
+        // --- END NEW/MODIFIED CODE FOR DROP ---
 
         if (!draggingSong || !currentRankGroup) {
             return; // No song being dragged or no rank group selected
@@ -741,7 +764,6 @@
                 songDataToMove = {
                     song_id: songId,
                     song_name: songItemElement.dataset.song,
-                    // Pass prelim_rank if it exists
                     prelim_rank: prelimRank ? parseFloat(prelimRank) : undefined
                 };
             }
@@ -752,15 +774,12 @@
             return;
         }
 
-        // Calculate score for the song *as it's being added* to the new group
-        // This score is temporary and will be recalculated on final submission
-        // (but good for showing immediate visual feedback)
-        const targetElement = e.target.closest('.ranked-song');
+        const targetElementDrop = e.target.closest('.ranked-song'); // Using a new variable name for clarity
         let newIndex = 0; // Default to top if no specific target or empty list
 
-        if (targetElement && targetElement.classList.contains('ranked-song')) {
-            const targetIndex = parseInt(targetElement.dataset.rankPosition, 10);
-            const rect = targetElement.getBoundingClientRect();
+        if (targetElementDrop && targetElementDrop.classList.contains('ranked-song')) {
+            const targetIndex = parseInt(targetElementDrop.dataset.rankPosition, 10);
+            const rect = targetElementDrop.getBoundingClientRect();
             const midpoint = rect.y + rect.height / 2;
 
             if (e.clientY < midpoint) {
@@ -773,25 +792,19 @@
             newIndex = (allRankedSongsByGroup[currentRankGroup] || []).length;
         }
 
-        // Ensure the array exists for the current group
         if (!allRankedSongsByGroup[currentRankGroup]) {
             allRankedSongsByGroup[currentRankGroup] = [];
         }
 
-        // Assign the calculated score *to the songDataToMove object*
-        // This is the point where 'calculated_score' should be set on the JS object
         songDataToMove.calculated_score = calculateScoreValue(newIndex, allRankedSongsByGroup[currentRankGroup].length + 1, parseFloat(currentRankGroup));
         console.log(`Calculated score for ${songDataToMove.song_name}: ${songDataToMove.calculated_score}`);
 
-
-        // 3. Add to new group at the calculated index
+        // Add to new group at the calculated index
         allRankedSongsByGroup[currentRankGroup].splice(newIndex, 0, songDataToMove);
 
         // Re-render the current rank group's songs
         loadRankedSongsIntoDisplay(currentRankGroup);
-        // Update all rank button icons (to show if groups now have songs)
         updateAllRankButtonIcons();
-        // Update checkmarks on the left panel
         updateSongCheckmarks();
 
         draggingSong = null; // Reset dragging state
