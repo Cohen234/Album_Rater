@@ -121,6 +121,13 @@
             flex: 1;
             font-weight: 500;
         }
+        .ranked-group-display {
+            margin-left: 8px; /* Space between checkmark and rank group */
+            font-size: 14px; /* Adjust size as needed */
+            font-weight: bold;
+            color: #FFD700; /* A gold-like color for visibility */
+            display: none; /* Hidden by default, JavaScript will make it 'inline-block' when needed */
+}
 
         .prelim-rank-input {
             width: 60px;
@@ -427,6 +434,7 @@
                                placeholder="0.5-10"
                                title="Preliminary rank (0.5-10)">
                         <span class="checkmark">✓</span>
+                        <span class="ranked-group-display"></span>
                     </li>
                     {% endfor %}
                 </ul>
@@ -496,14 +504,15 @@
     });
 
     // Helper to check if a song (by ID) is ranked in *any* group
-    function isSongRankedGlobally(songId) {
+    function getSongRankGroup(songId) {
         for (const group in allRankedSongsByGroup) {
-            // Updated to exclude '?' from global rank check if it's not a final rank destination
-            if (group !== '?' && allRankedSongsByGroup[group].some(s => s.song_id === songId)) {
-                return true;
+            // Exclude '?' from this check as it's not a final ranking destination
+            if (group !== '?' && Array.isArray(allRankedSongsByGroup[group]) &&
+                allRankedSongsByGroup[group].some(s => s.song_id === songId)) {
+                return group; // Returns the group string, e.g., "7.0"
             }
         }
-        return false;
+        return null; // Song not found in any ranked group
     }
 
     // Function to update the icon of a RANK BUTTON based on its group's content
@@ -603,22 +612,35 @@
     function updateSongCheckmarks() {
         document.querySelectorAll('.song-item').forEach(item => {
             const songId = item.dataset.songId;
-            if (isSongRankedGlobally(songId)) {
+            const rankGroupDisplay = item.querySelector('.ranked-group-display'); // Get the new span
+
+            const rankedGroup = getSongRankGroup(songId); // Check if song is ranked and get its group
+
+            if (rankedGroup) { // If the song is found in a ranked group
                 item.classList.add('ranked');
                 item.setAttribute('draggable', 'false');
                 const prelimInput = item.querySelector('.prelim-rank-input');
                 if (prelimInput) {
                     prelimInput.disabled = true;
-                    // If song is now truly ranked, clear any prelim input
-                    // (optional, but good for UX if you want to enforce this)
-                    // prelimInput.value = '';
                 }
-            } else {
+
+                // Display the rank group number
+                if (rankGroupDisplay) {
+                    rankGroupDisplay.textContent = rankedGroup; // Set the text (e.g., "7.0")
+                    rankGroupDisplay.style.display = 'inline-block'; // Make it visible
+                }
+
+            } else { // Song is NOT ranked (either unranked or dropped back to unranked list)
                 item.classList.remove('ranked');
                 item.setAttribute('draggable', 'true');
                 const prelimInput = item.querySelector('.prelim-rank-input');
                 if (prelimInput) {
                     prelimInput.disabled = false;
+                }
+                // Hide the rank group number if the song is unranked
+                if (rankGroupDisplay) {
+                    rankGroupDisplay.textContent = ''; // Clear text
+                    rankGroupDisplay.style.display = 'none'; // Hide it
                 }
             }
         });

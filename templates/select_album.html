@@ -217,12 +217,12 @@
           {# If you want the image to submit the form, wrap it in <button type="submit"> #}
           <img src="{{ album.image }}" alt="{{ album.album_name }}">
 
-          <h3 class="album-name" title="{{ album.album_name }}">
-            {{ album.album_name }}
-            {% if album.stats and album.stats.ranking_status == "paused" %}
-              <span class="paused-icon" title="Paused">⏸️</span>
-            {% endif %}
-          </h3>
+            <h3 class="album-name" title="{{ album.album_name }}">
+                {{ album.album_name }}
+                {% if album.has_prelim_ranks %} {# <--- UPDATED LINE #}
+                  <span class="paused-icon" title="Paused">⏸️</span>
+                {% endif %}
+            </h3>
 
           <div class="mastery-stars" aria-label="Ranking stars">
               {% set max_stars = 3 %}

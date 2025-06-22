@@ -534,6 +534,31 @@ def load_albums_by_artist_route():
                 "times_ranked": row.get("Times Ranked", 0)
             }
     print(f"DEBUG: Loaded {len(album_metadata)} album metadata entries from sheet.")
+    prelim_sheet_name = "Preliminary Ranks"
+    prelim_ranked_albums_keys = set()  # Store (album_name_lower, artist_name_lower)
+    try:
+        prelim_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(prelim_sheet_name)
+        prelim_sheet_data = get_as_dataframe(prelim_sheet, evaluate_formulas=False).fillna("")
+
+        if not prelim_sheet_data.empty:
+            # Filter for entries that actually have a prelim_rank for the current artist
+            current_artist_prelim_ranks = prelim_sheet_data[
+                prelim_sheet_data["artist_name"].astype(str).str.strip().str.lower() == artist_name.strip().lower()
+                ]
+
+            for _, row in current_artist_prelim_ranks.iterrows():
+                album_name_p = str(row.get('album_name', '')).strip().lower()
+                artist_name_p = str(row.get('artist_name', '')).strip().lower()
+                prelim_rank_value = row.get('prelim_rank')
+                # Check if prelim_rank_value is not empty/null/0 (adjust if 0 is a valid prelim rank)
+                if prelim_rank_value not in ["", None, 0, "0", "0.0"]:  # Ensures it's a meaningful preliminary rank
+                    prelim_ranked_albums_keys.add((album_name_p, artist_name_p))
+        print(f"DEBUG: Found {len(prelim_ranked_albums_keys)} albums with preliminary ranks for '{artist_name}'.")
+
+    except gspread.exceptions.WorksheetNotFound:
+        print(f"WARNING: Preliminary Ranks sheet '{prelim_sheet_name}' not found. No prelim rank check for pause icon.")
+    except Exception as e:
+        print(f"ERROR: Error loading preliminary ranks for pause icon: {e}")
 
     # Prepare albums for template, adding average score and times ranked
     albums_for_template = []
