@@ -550,7 +550,7 @@ def load_albums_by_artist_route():
                 album_name_p = str(row.get('album_name', '')).strip().lower()
                 artist_name_p = str(row.get('artist_name', '')).strip().lower()
                 prelim_rank_value = row.get('prelim_rank')
-                # Check if prelim_rank_value is not empty/null/0 (adjust if 0 is a valid prelim rank)
+                # Check if prelim_rank_value is not empty/null/0 (advjust if 0 is a valid prelim rank)
                 if prelim_rank_value not in ["", None, 0, "0", "0.0"]:  # Ensures it's a meaningful preliminary rank
                     prelim_ranked_albums_keys.add((album_name_p, artist_name_p))
         print(f"DEBUG: Found {len(prelim_ranked_albums_keys)} albums with preliminary ranks for '{artist_name}'.")
@@ -595,6 +595,116 @@ def ranking_page():
     group_bins = group_ranked_songs(sheet_rows)
     return render_template("album.html", group_bins=group_bins)
 
+@app.route("/save_global_rankings", methods=["POST"])
+def save_global_rankings():
+    try:
+        data = request.json
+        global_ranked_data = data.get('global_ranked_data', [])
+        prelim_rank_data = data.get('prelim_rank_data', [])
+        current_album_id = data.get('current_album_id') # Will be passed from JS
+
+        # --- Handle FINAL Ranks (Main Ranking Sheet) ---
+        main_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
+
+        if global_ranked_data:
+            # Create a DataFrame from the incoming global ranked data
+            global_ranked_df = pd.DataFrame(global_ranked_data)
+
+            # Ensure consistent column names matching your Google Sheet exactly
+            # These column names MUST match your Google Sheet headers
+            global_ranked_df = global_ranked_df.rename(columns={
+                'song_id': 'Spotify Song ID',
+                'song_name': 'Song Name',
+                'rank_group': 'Rank Group',
+                'ranking': 'Ranking',
+                'position_in_group': 'Position In Group',
+                'album_id': 'Spotify Album ID',
+                'album_name': 'Album Name',
+                'artist_name': 'Artist Name',
+                'ranking_status': 'Ranking Status'
+            })
+
+            # Define the exact order of columns for the Google Sheet
+            # Ensure these match your actual Google Sheet headers.
+            final_sheet_columns = [
+                'Spotify Album ID', 'Album Name', 'Artist Name',
+                'Spotify Song ID', 'Song Name', 'Rank Group',
+                'Ranking', 'Position In Group', 'Ranking Status'
+            ]
+            # Reorder DataFrame columns to match the sheet
+            global_ranked_df = global_ranked_df[final_sheet_columns]
+
+            # --- CRITICAL: Clear and Rewrite the entire final ranking sheet ---
+            # This is the simplest way to ensure data integrity for global ranks.
+            # It will clear all rows including headers, then write new ones.
+            # If your sheet has fixed headers you don't want to clear, use `main_sheet.delete_rows(2, main_sheet.row_count)`
+            # and then `main_sheet.append_rows(global_ranked_df.values.tolist())`.
+            # For simplicity, we'll clear everything and rewrite.
+            main_sheet.clear()
+            set_with_dataframe(main_sheet, global_ranked_df, include_index=False) # Writes headers and data
+            print(f"DEBUG: Successfully saved {len(global_ranked_df)} global final ranked songs to main sheet.")
+        else:
+            # If no global_ranked_data is sent, clear the sheet (e.g., if user emptied all groups)
+            main_sheet.clear()
+            # If you have fixed headers, re-add them here if clear() removes them
+            # main_sheet.append_row(final_sheet_columns)
+            print("DEBUG: No global final ranked songs to save. Main sheet cleared.")
+
+
+        # --- Handle PRELIMINARY Ranks (Preliminary Ranks Sheet) ---
+        prelim_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(PRELIM_SHEET_NAME)
+        existing_prelim_df = get_as_dataframe(prelim_sheet, evaluate_formulas=False).fillna("")
+
+        # Filter out old prelim ranks for the current album before adding new ones
+        updated_prelim_df_list = []
+        if not existing_prelim_df.empty and current_album_id:
+            # Keep prelim ranks that are NOT from the current album being ranked
+            updated_prelim_df_list = existing_prelim_df[
+                existing_prelim_df["album_id"].astype(str) != str(current_album_id)
+            ].to_dict('records')
+
+        # Add the new prelim_rank_data sent from the frontend
+        for prelim_entry in prelim_rank_data:
+            updated_prelim_df_list.append(prelim_entry)
+
+        if updated_prelim_df_list:
+            prelim_df = pd.DataFrame(updated_prelim_df_list)
+            # Ensure column order matches your prelim sheet exactly
+            prelim_sheet_columns = [
+                'song_id', 'album_id', 'album_name', 'artist_name', 'prelim_rank'
+            ]
+            prelim_df = prelim_df[prelim_sheet_columns]
+            prelim_sheet.clear()
+            set_with_dataframe(prelim_sheet, prelim_df, include_index=False)
+            print(f"DEBUG: Successfully saved {len(prelim_df)} preliminary ranked songs to prelim sheet.")
+        else:
+            # If no preliminary songs for this album, and no other prelims, clear sheet
+            # Or if current_album_id is present and no prelims are sent, means clearing for this album.
+            # This logic might need refinement depending on how you want to manage empty prelim sheets
+            if current_album_id and not prelim_rank_data: # If we are on an album and send no prelims for it
+                 # Then effectively clear its entries
+                if updated_prelim_df_list: # If there are still other albums' prelims
+                    prelim_df = pd.DataFrame(updated_prelim_df_list)
+                    prelim_sheet_columns = [
+                        'song_id', 'album_id', 'album_name', 'artist_name', 'prelim_rank'
+                    ]
+                    prelim_df = prelim_df[prelim_sheet_columns]
+                    prelim_sheet.clear()
+                    set_with_dataframe(prelim_sheet, prelim_df, include_index=False)
+                else: # No prelims left at all
+                    prelim_sheet.clear()
+            elif not prelim_rank_data: # No prelim data sent at all for any album
+                 prelim_sheet.clear() # Clear entire prelim sheet
+            print("DEBUG: No preliminary ranked songs to save for current album. Preliminary sheet updated.")
+
+
+        return jsonify({'status': 'success', 'message': 'Global and Preliminary Rankings saved successfully!'})
+
+    except Exception as e:
+        import traceback
+        print("\n🔥 ERROR in /save_global_rankings route:")
+        traceback.print_exc()
+        return jsonify({'status': 'error', 'message': f'An unexpected error occurred: {e}'}), 500
 
 @app.route("/view_album", methods=["POST", "GET"])
 def view_album():
@@ -654,144 +764,146 @@ def view_album():
         # --- Load existing Final Ranks from Main Ranking Sheet ---
         main_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
         print(f"DEBUG: Accessing main ranking sheet: '{SHEET_NAME}'.")
+        # Fetch all data; evaluation formulas=False as we're just reading raw data for display
         main_sheet_data = get_as_dataframe(main_sheet, evaluate_formulas=False).fillna("")
 
-        # Filter for current album's FINAL rankings
-        current_album_final_ranks = main_sheet_data[
-            (main_sheet_data["Spotify Album ID"].astype(str) == str(album_id)) &
-            (main_sheet_data["Ranking Status"].astype(str) == "final")
-        ]
-        print(f"DEBUG: Found {len(current_album_final_ranks)} existing FINAL entries in sheet for '{album_name}'.")
+        # Filter for ONLY FINAL rankings (across ALL albums)
+        # Ensure 'Ranking Status' column exists and is handled gracefully
+        if "Ranking Status" in main_sheet_data.columns:
+            all_final_ranks = main_sheet_data[
+                main_sheet_data["Ranking Status"].astype(str).str.lower() == "final"
+                ]
+        else:
+            print("WARNING: 'Ranking Status' column not found in main sheet. Assuming all entries are final.")
+            all_final_ranks = main_sheet_data  # Treat all as final if column missing
 
-        # --- Populate `rank_groups_for_js` (for the Right Panel: 0.5 to 10.0 groups) ---
-        rank_groups_for_js = {f"{i/2:.1f}": [] for i in range(1, 21)} # Initialize all empty groups
+        print(f"DEBUG: Found {len(all_final_ranks)} existing FINAL entries in sheet (from all albums).")
 
-        for _, row in current_album_final_ranks.iterrows():
+        # --- Populate `rank_groups_for_js` with ALL globally ranked songs ---
+        rank_groups_for_js = {f"{i / 2:.1f}": [] for i in range(1, 21)}  # Initialize all empty groups (0.5 to 10.0)
+
+        for _, row in all_final_ranks.iterrows():  # Iterate through ALL final ranks
             try:
-                # Ensure data types are correct for parsing and JS consistency
-                rank_group_key = f"{float(row.get('Rank Group')):.1f}"
-                song_score = float(row.get('Ranking'))
-                # rank_position is 1-based in sheet, store as 0-based for JS array index if needed later,
-                # but we'll sort explicitly below.
-                rank_position = int(row.get('Position In Group')) # Get position for sorting
-                song_id = str(row.get('Spotify Song ID'))
-                song_name = row.get('Song Name')
+                # Ensure data types are correct and handle potential missing columns with .get()
+                rank_group_key = f"{float(row.get('Rank Group', 0.0)):.1f}"  # Default to 0.0 if missing
+                song_score = float(row.get('Ranking', 0.0))
+                rank_position = int(row.get('Position In Group', 0))  # Default to 0 if missing
+                song_id = str(row.get('Spotify Song ID', ''))
+                song_name = str(row.get('Song Name', ''))
+
+                # --- IMPORTANT: Capture album/artist info for the globally ranked song ---
+                ranked_album_id = str(row.get('Spotify Album ID', ''))
+                ranked_album_name = str(row.get('Album Name', ''))
+                ranked_artist_name = str(row.get('Artist Name', ''))
 
                 song_data = {
                     'song_id': song_id,
                     'song_name': song_name,
-                    'rank_group': rank_group_key, # Stored as a string like "5.0"
+                    'rank_group': rank_group_key,
                     'calculated_score': song_score,
-                    'rank_position': rank_position # Store original position to sort
+                    'rank_position': rank_position,  # Store original position to sort
+                    'album_id': ranked_album_id,  # New: Album ID of the ranked song
+                    'album_name': ranked_album_name,  # New: Album Name of the ranked song
+                    'artist_name': ranked_artist_name  # New: Artist Name of the ranked song
                 }
 
                 if rank_group_key in rank_groups_for_js:
                     rank_groups_for_js[rank_group_key].append(song_data)
                 else:
-                    # Should not happen if `rank_groups_for_js` is initialized for all 0.5-10.0
-                    print(f"WARNING: Found unexpected rank group '{rank_group_key}' in sheet for song {song_name}.")
+                    print(
+                        f"WARNING: Found unexpected rank group '{rank_group_key}' in sheet for song {song_name}. Skipping.")
 
             except (ValueError, KeyError, TypeError) as e:
-                print(f"WARNING: Error parsing existing FINAL ranked song data for JS (Main Sheet): {row.to_dict()} - {e}")
+                print(
+                    f"WARNING: Error parsing existing FINAL ranked song data for JS (Main Sheet - Global): {row.to_dict()} - {e}")
 
         # Sort songs within each group by their `rank_position` for correct display order
         for group_key in rank_groups_for_js:
-            rank_groups_for_js[group_key].sort(key=lambda x: x.get('rank_position', 0))
+            rank_groups_for_js[group_key].sort(key=lambda x: x.get('rank_position', 0))  # Use .get for safety
 
         total_songs_in_groups = sum(len(v) for v in rank_groups_for_js.values())
-        print(f"DEBUG: Populated rank_groups_for_js with {total_songs_in_groups} FINAL ranked songs (for right panel).")
-
+        print(
+            f"DEBUG: Populated rank_groups_for_js with {total_songs_in_groups} FINAL ranked songs (from ALL albums for right panel).")
 
         # --- Load existing Preliminary Ranks from "Preliminary Ranks" Sheet ---
-        existing_prelim_ranks = {} # To store song_id: prelim_rank_value
-        prelim_sheet_name = "Preliminary Ranks"
+        # This part remains mostly the same, as preliminary ranks are still song-specific
+        # and only relevant for the current album's unranked songs on the left panel.
+        existing_prelim_ranks = {}  # To store song_id: prelim_rank_value for the current album
+        prelim_sheet_name = "Preliminary Ranks"  # Assuming this is defined
         try:
             prelim_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(prelim_sheet_name)
             print(f"DEBUG: Accessing preliminary ranks sheet: '{prelim_sheet_name}'.")
             prelim_sheet_data = get_as_dataframe(prelim_sheet, evaluate_formulas=False).fillna("")
 
             # Filter for current album's preliminary ranks
-            current_album_prelim_ranks = prelim_sheet_data[
-                (prelim_sheet_data["album_id"].astype(str) == str(album_id)) &
-                (prelim_sheet_data["prelim_rank"] != "") # Ensure prelim_rank is not empty/null
-            ]
+            # Ensure 'album_id' column exists
+            if "album_id" in prelim_sheet_data.columns:
+                current_album_prelim_ranks = prelim_sheet_data[
+                    (prelim_sheet_data["album_id"].astype(str) == str(album_id)) &
+                    (prelim_sheet_data["prelim_rank"] != "")  # Ensure prelim_rank is not empty/null
+                    ]
+            else:
+                print("WARNING: 'album_id' column not found in preliminary sheet. Cannot filter prelim ranks.")
+                current_album_prelim_ranks = pd.DataFrame()  # Empty DataFrame if column missing
 
             for _, row in current_album_prelim_ranks.iterrows():
                 song_id = str(row.get('song_id'))
                 prelim_rank_value = row.get('prelim_rank')
                 try:
-                    # Convert to float; handle potential errors
                     existing_prelim_ranks[song_id] = float(prelim_rank_value)
                 except (ValueError, TypeError):
-                    print(f"WARNING: Invalid prelim_rank value '{prelim_rank_value}' for song {song_id} in prelim sheet. Skipping.")
+                    print(
+                        f"WARNING: Invalid prelim_rank value '{prelim_rank_value}' for song {song_id} in prelim sheet. Skipping.")
             print(f"DEBUG: Loaded {len(existing_prelim_ranks)} preliminary rank entries for album {album_name}.")
         except gspread.exceptions.WorksheetNotFound:
-            print(f"WARNING: Preliminary Ranks sheet '{prelim_sheet_name}' not found. No prelim ranks loaded for {album_name}.")
+            print(
+                f"WARNING: Preliminary Ranks sheet '{prelim_sheet_name}' not found. No prelim ranks loaded for {album_name}.")
         except Exception as e:
             print(f"ERROR: Error loading preliminary ranks from sheet '{prelim_sheet_name}': {e}")
             flash(f"Error loading preliminary ranks: {e}", "error")
 
-
         # --- Prepare `songs` for Left Panel (`album.html`'s `album.songs` loop) ---
-        # This list will contain only songs that are NOT already finally ranked.
-        # It will also include their prelim_rank if one exists.
-        songs_for_left_panel = []
-        for song_from_spotify in album_data['songs']: # Iterate through ALL songs from Spotify API
+        # This list will contain ALL songs from the current Spotify album,
+        # but with flags indicating if they are already globally final-ranked.
+        all_spotify_songs_with_flags = []
+        for song_from_spotify in album_data['songs']:  # Iterate through ALL songs from Spotify API for current album
             song_id = str(song_from_spotify['song_id'])
             song_name = song_from_spotify['song_name']
-            is_final_ranked = False
+            is_final_ranked_globally = False
 
-            # Check if this song is present in any of the final rank groups (right panel)
+            # Check if this song is present in any of the GLOBAL final rank groups (right panel)
             for group_key in rank_groups_for_js:
+                # Use any() with a generator expression for efficiency
                 if any(s['song_id'] == song_id for s in rank_groups_for_js[group_key]):
-                    is_final_ranked = True
-                    break # Found it in a final group, no need to check other groups
+                    is_final_ranked_globally = True
+                    break
 
-            # Add song to the left panel's list ONLY if it's not final ranked
-            if not is_final_ranked:
-                song_entry = {
-                    'song_name': song_name,
-                    'song_id': song_id,
-                    'already_ranked': False, # This is for the left panel, so it's not final ranked
-                    'prelim_rank': existing_prelim_ranks.get(song_id, '') # Get prelim rank or empty string
-                }
-                songs_for_left_panel.append(song_entry)
-            else:
-                # If a song IS final ranked, we still need to tell the JS about it
-                # for its checkmark and draggable status.
-                # However, album.songs in the template loop should only show unranked ones.
-                # So we pass `already_ranked: True` to the template for the drag-and-drop JS
-                # which will filter based on this flag for the left panel.
-                # The Jinja2 loop for `album.songs` will use this data.
-                songs_for_left_panel.append({
-                    'song_name': song_name,
-                    'song_id': song_id,
-                    'already_ranked': True, # Mark as already ranked for JS logic
-                    'prelim_rank': '' # No prelim rank if final ranked
-                })
-
-
-        # The `album.songs` in the template should only contain the songs that are displayed on the left (unranked/prelim)
-        # So we update `album_data_for_template['songs']` with this filtered list.
-        # However, your `album.html` loops `{% for song in album.songs %}` for the left panel.
-        # And your `updateSongCheckmarks` function determines `ranked` class based on `isSongRankedGlobally`.
-        # So, it's better to pass *all* songs from Spotify and let the JS filter and mark `ranked`.
-
-        # Let's revert `album_data_for_template['songs']` back to ALL songs from Spotify initially
-        # and ensure your JS's `updateSongCheckmarks` correctly handles `already_ranked`.
-        # The `songs_for_left_panel` above is actually `album_data['songs']` from Spotify, but with added flags.
-        # So we pass the `songs_for_left_panel` to the template under `album['songs']`
-        album_data_for_template['songs'] = songs_for_left_panel
-        print(f"DEBUG: Prepared {len(album_data_for_template['songs'])} songs for left panel (all songs with prelim/ranked flags).")
-
+            all_spotify_songs_with_flags.append({
+                'song_name': song_name,
+                'song_id': song_id,
+                'already_ranked': is_final_ranked_globally,  # This flag tells JS to grey out/hide in left panel
+                'prelim_rank': existing_prelim_ranks.get(song_id, '') if not is_final_ranked_globally else ''
+            })
+        album_data_for_template = {
+            'album_name': album_data['album_name'],
+            'artist_name': album_data['artist_name'],
+            'album_cover_url': album_data['album_cover_url'],
+            'url': album_data.get('url', ''),
+            'album_id': album_id,
+            'songs': all_spotify_songs_with_flags,  # This now includes global ranked flags
+            'bg_color': album_data.get('bg_color', '#121212')
+        }
+        print(
+            f"DEBUG: Prepared {len(album_data_for_template['songs'])} songs for left panel (all Spotify songs with global ranked flags).")
 
         print(f"DEBUG: Final album_data_for_template keys: {album_data_for_template.keys()}")
-        print(f"DEBUG: Final rank_groups_for_js keys: {rank_groups_for_js.keys()} (Total songs: {total_songs_in_groups})")
+        print(
+            f"DEBUG: Final rank_groups_for_js keys: {rank_groups_for_js.keys()} (Total songs: {total_songs_in_groups})")
         print(f"--- VIEW ALBUM END ---\n")
 
         return render_template('album.html',
                                album=album_data_for_template,
-                               rank_groups=rank_groups_for_js # Pass the populated dictionary for right panel
+                               rank_groups=rank_groups_for_js  # Pass the globally populated dictionary for right panel
                                )
 
     except Exception as e:
@@ -799,7 +911,6 @@ def view_album():
         print("\n🔥 ERROR in /view_album route:")
         traceback.print_exc()
         flash(f"An unexpected error occurred: {e}", "error")
-        # Ensure redirect URL includes artist_name if needed for that page
         return redirect(url_for('index'))
 
 
