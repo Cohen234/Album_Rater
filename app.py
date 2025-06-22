@@ -17,6 +17,7 @@ import re # Added for extract_album_id if it's not exclusively in spotify_logic
 
 from dotenv import load_dotenv # Load dotenv as early as possible
 load_dotenv()
+import logging
 
 # Import functions from spotify_logic after all core imports
 from spotify_logic import get_albums_by_artist, extract_album_id
@@ -596,23 +597,34 @@ def ranking_page():
     group_bins = group_ranked_songs(sheet_rows)
     return render_template("album.html", group_bins=group_bins)
 
+
 @app.route("/save_global_rankings", methods=["POST"])
 def save_global_rankings():
     try:
         data = request.json
         global_ranked_data = data.get('global_ranked_data', [])
         prelim_rank_data = data.get('prelim_rank_data', [])
-        current_album_id = data.get('current_album_id') # Will be passed from JS
+        current_album_id = data.get('current_album_id')  # Will be passed from JS
+        # Added to get album/artist name directly from frontend if no songs ranked globally
+        album_name_from_frontend = data.get('album_name_from_frontend')
+        artist_name_from_frontend = data.get('artist_name_from_frontend') # Assuming get_gsheet_client() is defined
 
         # --- Handle FINAL Ranks (Main Ranking Sheet) ---
         main_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
 
+        # Always read all existing data to filter, then rewrite. This is safer than just appending.
+        # This approach ensures that if a song is unranked from anywhere, it's removed.
+        all_existing_main_df = get_as_dataframe(main_sheet, evaluate_formulas=False).fillna("")
+
+        # Filter out all existing rows that belong to the current album being saved
+        # This assumes 'Spotify Album ID' is the column name in your main sheet
+        updated_main_df = all_existing_main_df[
+            all_existing_main_df['Spotify Album ID'].astype(str) != str(current_album_id)
+            ]
+
         if global_ranked_data:
-            # Create a DataFrame from the incoming global ranked data
             global_ranked_df = pd.DataFrame(global_ranked_data)
 
-            # Ensure consistent column names matching your Google Sheet exactly
-            # These column names MUST match your Google Sheet headers
             global_ranked_df = global_ranked_df.rename(columns={
                 'song_id': 'Spotify Song ID',
                 'song_name': 'Song Name',
@@ -625,85 +637,124 @@ def save_global_rankings():
                 'ranking_status': 'Ranking Status'
             })
 
-            # Define the exact order of columns for the Google Sheet
-            # Ensure these match your actual Google Sheet headers.
             final_sheet_columns = [
                 'Spotify Album ID', 'Album Name', 'Artist Name',
                 'Spotify Song ID', 'Song Name', 'Rank Group',
                 'Ranking', 'Position In Group', 'Ranking Status'
             ]
-            # Reorder DataFrame columns to match the sheet
             global_ranked_df = global_ranked_df[final_sheet_columns]
 
-            # --- CRITICAL: Clear and Rewrite the entire final ranking sheet ---
-            # This is the simplest way to ensure data integrity for global ranks.
-            # It will clear all rows including headers, then write new ones.
-            # If your sheet has fixed headers you don't want to clear, use `main_sheet.delete_rows(2, main_sheet.row_count)`
-            # and then `main_sheet.append_rows(global_ranked_df.values.tolist())`.
-            # For simplicity, we'll clear everything and rewrite.
-            main_sheet.clear()
-            set_with_dataframe(main_sheet, global_ranked_df, include_index=False) # Writes headers and data
-            print(f"DEBUG: Successfully saved {len(global_ranked_df)} global final ranked songs to main sheet.")
-        else:
-            # If no global_ranked_data is sent, clear the sheet (e.g., if user emptied all groups)
-            main_sheet.clear()
-            # If you have fixed headers, re-add them here if clear() removes them
-            # main_sheet.append_row(final_sheet_columns)
-            print("DEBUG: No global final ranked songs to save. Main sheet cleared.")
+            # Append the new global_ranked_data for the current album
+            updated_main_df = pd.concat([updated_main_df, global_ranked_df], ignore_index=True)
 
+        # Write the combined (filtered existing + new current album data) back to the main sheet
+        main_sheet.clear()  # Clears headers too
+        set_with_dataframe(main_sheet, updated_main_df, include_index=False)
+        logging.debug(f"Successfully updated main sheet with {len(updated_main_df)} global final ranked songs.")
 
         # --- Handle PRELIMINARY Ranks (Preliminary Ranks Sheet) ---
         prelim_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(PRELIM_SHEET_NAME)
         existing_prelim_df = get_as_dataframe(prelim_sheet, evaluate_formulas=False).fillna("")
 
         # Filter out old prelim ranks for the current album before adding new ones
-        updated_prelim_df_list = []
+        updated_prelim_df_list_for_df = []
         if not existing_prelim_df.empty and current_album_id:
             # Keep prelim ranks that are NOT from the current album being ranked
-            updated_prelim_df_list = existing_prelim_df[
+            updated_prelim_df_list_for_df = existing_prelim_df[
                 existing_prelim_df["album_id"].astype(str) != str(current_album_id)
-            ].to_dict('records')
+                ]
 
-        # Add the new prelim_rank_data sent from the frontend
-        for prelim_entry in prelim_rank_data:
-            updated_prelim_df_list.append(prelim_entry)
-
-        if updated_prelim_df_list:
-            prelim_df = pd.DataFrame(updated_prelim_df_list)
+        # Convert new prelim_rank_data to DataFrame and concat
+        if prelim_rank_data:
+            new_prelim_df = pd.DataFrame(prelim_rank_data)
             # Ensure column order matches your prelim sheet exactly
             prelim_sheet_columns = [
                 'song_id', 'album_id', 'album_name', 'artist_name', 'prelim_rank'
             ]
-            prelim_df = prelim_df[prelim_sheet_columns]
-            prelim_sheet.clear()
-            set_with_dataframe(prelim_sheet, prelim_df, include_index=False)
-            print(f"DEBUG: Successfully saved {len(prelim_df)} preliminary ranked songs to prelim sheet.")
+            new_prelim_df = new_prelim_df[prelim_sheet_columns]
+
+            if not updated_prelim_df_list_for_df.empty:
+                final_prelim_df = pd.concat([updated_prelim_df_list_for_df, new_prelim_df], ignore_index=True)
+            else:
+                final_prelim_df = new_prelim_df  # No existing prelims to concat with
         else:
-            # If no preliminary songs for this album, and no other prelims, clear sheet
-            # Or if current_album_id is present and no prelims are sent, means clearing for this album.
-            # This logic might need refinement depending on how you want to manage empty prelim sheets
-            if current_album_id and not prelim_rank_data: # If we are on an album and send no prelims for it
-                 # Then effectively clear its entries
-                if updated_prelim_df_list: # If there are still other albums' prelims
-                    prelim_df = pd.DataFrame(updated_prelim_df_list)
-                    prelim_sheet_columns = [
-                        'song_id', 'album_id', 'album_name', 'artist_name', 'prelim_rank'
-                    ]
-                    prelim_df = prelim_df[prelim_sheet_columns]
-                    prelim_sheet.clear()
-                    set_with_dataframe(prelim_sheet, prelim_df, include_index=False)
-                else: # No prelims left at all
-                    prelim_sheet.clear()
-            elif not prelim_rank_data: # No prelim data sent at all for any album
-                 prelim_sheet.clear() # Clear entire prelim sheet
-            print("DEBUG: No preliminary ranked songs to save for current album. Preliminary sheet updated.")
+            final_prelim_df = updated_prelim_df_list_for_df  # Only existing prelims (not current album)
 
+        # Write the combined prelim data back to the prelim sheet
+        prelim_sheet.clear()
+        if not final_prelim_df.empty:  # Only write if there's data to write
+            set_with_dataframe(prelim_sheet, final_prelim_df, include_index=False)
+            logging.debug(f"Successfully updated prelim sheet with {len(final_prelim_df)} preliminary ranked songs.")
+        else:
+            logging.debug("No preliminary ranked songs to save. Preliminary sheet cleared.")
 
-        return jsonify({'status': 'success', 'message': 'Global and Preliminary Rankings saved successfully!'})
+        # --- NEW: Calculate and Save Album Averages (THIS BLOCK WAS INDENTED INCORRECTLY) ---
+        # This block now runs always, after song rankings are handled.
+        total_score_for_current_album = 0
+        songs_ranked_from_current_album = 0
+        current_album_name_derived = ""  # Will try to derive from global_ranked_data
+        current_artist_name_derived = ""  # Will try to derive from global_ranked_data
+
+        # Use global_ranked_data to derive current album's info
+        for song in global_ranked_data:
+            if song['album_id'] == current_album_id:
+                total_score_for_current_album += song['ranking']
+                songs_ranked_from_current_album += 1
+                if not current_album_name_derived:  # Get these once from any song in the current album's global data
+                    current_album_name_derived = song['album_name']
+                    current_artist_name_derived = song['artist_name']
+
+        # Determine the final album name and artist name for the album averages sheet
+        # Prefer derived if available, otherwise use frontend provided (which should always be there for the current album)
+        final_album_name = current_album_name_derived if current_album_name_derived else album_name_from_frontend
+        final_artist_name = current_artist_name_derived if current_artist_name_derived else artist_name_from_frontend
+
+        # If no songs from this album are globally ranked, ensure it's recorded as such
+        if songs_ranked_from_current_album == 0:
+            album_average = None  # Set to None, gspread_dataframe will write empty cell
+        else:
+            album_average = round(total_score_for_current_album / songs_ranked_from_current_album, 2)
+
+        # Now, update the 'Album Averages' sheet
+        # Correct variable name: ALBUM_AVERAGES_SHEET_NAME
+        album_averages_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(album_averages_sheet_name)
+
+        # Get all existing album average records as DataFrame
+        all_album_averages_df = get_as_dataframe(album_averages_sheet, evaluate_formulas=False).fillna("")
+
+        # Filter out the existing row for the current album
+        updated_album_averages_df = all_album_averages_df[
+            all_album_averages_df['album_id'].astype(str) != str(current_album_id)
+            ]
+
+        # Prepare the new/updated record for the current album
+        new_or_updated_album_record = pd.DataFrame([{
+            'album_id': current_album_id,
+            'album_name': final_album_name,
+            'artist_name': final_artist_name,
+            'average_score': album_average,
+            'times_ranked': songs_ranked_from_current_album
+        }])
+
+        # Define the exact order of columns for the Album Averages Google Sheet
+        album_averages_sheet_columns = [
+            'album_id', 'album_name', 'artist_name', 'average_score', 'times_ranked'
+        ]
+        new_or_updated_album_record = new_or_updated_album_record[album_averages_sheet_columns]
+
+        # Concat the filtered existing albums with the new/updated record for the current album
+        final_album_averages_df = pd.concat([updated_album_averages_df, new_or_updated_album_record], ignore_index=True)
+
+        # Write the combined data back to the Album Averages sheet
+        album_averages_sheet.clear()
+        set_with_dataframe(album_averages_sheet, final_album_averages_df, include_index=False)
+        logging.debug(f"Updated Album Averages sheet for album {current_album_id}.")
+
+        return jsonify({'status': 'success', 'message': 'Global, Preliminary, and Album Averages saved successfully!'})
 
     except Exception as e:
         import traceback
-        print("\n🔥 ERROR in /save_global_rankings route:")
+        logging.error("\n🔥 ERROR in /save_global_rankings route:")  # Use logging instead of print
         traceback.print_exc()
         return jsonify({'status': 'error', 'message': f'An unexpected error occurred: {e}'}), 500
 
