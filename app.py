@@ -670,40 +670,55 @@ def save_global_rankings():
         logging.debug(f"Successfully updated main sheet with {len(updated_main_df)} global final ranked songs.")
 
         # --- Handle PRELIMINARY Ranks (Preliminary Ranks Sheet) ---
-        prelim_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(PRELIM_SHEET_NAME)
-        existing_prelim_df = get_as_dataframe(prelim_sheet, evaluate_formulas=False).fillna("")
+        # --- Handle PRELIMINARY Ranks (Corrected and Robust) ---
+        try:
+            prelim_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(PRELIM_SHEET_NAME)
+            existing_prelim_df = get_as_dataframe(prelim_sheet, evaluate_formulas=False).fillna("")
+        except gspread.exceptions.WorksheetNotFound:
+            # If the sheet doesn't exist, start with an empty DataFrame
+            existing_prelim_df = pd.DataFrame()
+            prelim_sheet = None  # Will be created if needed
+            logging.warning(f"Preliminary sheet '{PRELIM_SHEET_NAME}' not found. Will create if needed.")
 
-        # Filter out old prelim ranks for the current album before adding new ones
-        updated_prelim_df_list_for_df = []
-        if not existing_prelim_df.empty and current_album_id:
-            # Keep prelim ranks that are NOT from the current album being ranked
-            updated_prelim_df_list_for_df = existing_prelim_df[
-                existing_prelim_df["album_id"].astype(str) != str(current_album_id)
-                ]
+        # Keep prelim ranks that are NOT for the current album
+        if not existing_prelim_df.empty and 'album_id' in existing_prelim_df.columns:
+            other_prelims_df = existing_prelim_df[existing_prelim_df["album_id"].astype(str) != str(current_album_id)]
+        else:
+            other_prelims_df = pd.DataFrame()
 
-        # Convert new prelim_rank_data to DataFrame and concat
+        # Create a DataFrame for the new prelim data, if any
         if prelim_rank_data:
             new_prelim_df = pd.DataFrame(prelim_rank_data)
-            # Ensure column order matches your prelim sheet exactly
-            prelim_sheet_columns = [
-                'song_id', 'album_id', 'album_name', 'artist_name', 'prelim_rank'
-            ]
-            new_prelim_df = new_prelim_df[prelim_sheet_columns]
+        else:
+            new_prelim_df = pd.DataFrame()
 
-            if not updated_prelim_df_list_for_df.empty:
-                final_prelim_df = pd.concat([updated_prelim_df_list_for_df, new_prelim_df], ignore_index=True)
+        # Combine the other prelims with the new prelims
+        final_prelim_df = pd.concat([other_prelims_df, new_prelim_df], ignore_index=True)
+
+        # Ensure column order
+        prelim_sheet_columns = ['album_id', 'album_name', 'artist_name', 'album_cover_url', 'song_id', 'song_name',
+                                'prelim_rank', 'timestamp']
+        for col in prelim_sheet_columns:
+            if col not in final_prelim_df.columns:
+                final_prelim_df[col] = None  # Add missing columns if they don't exist
+        final_prelim_df = final_prelim_df[prelim_sheet_columns]
+
+        # Write the final DataFrame back to the sheet
+        if prelim_sheet is None and not final_prelim_df.empty:
+            # Create the sheet if it didn't exist but now we have data for it
+            prelim_sheet = client.open_by_key(SPREADSHEET_ID).add_worksheet(title=PRELIM_SHEET_NAME, rows=1,
+                                                                            cols=len(prelim_sheet_columns))
+
+        if prelim_sheet:
+            prelim_sheet.clear()
+            # Only write if there's data to prevent writing an empty sheet with just a header
+            if not final_prelim_df.empty:
+                set_with_dataframe(prelim_sheet, final_prelim_df, include_index=False)
+                logging.debug(f"Successfully updated prelim sheet with {len(final_prelim_df)} songs.")
             else:
-                final_prelim_df = new_prelim_df  # No existing prelims to concat with
-        else:
-            final_prelim_df = updated_prelim_df_list_for_df  # Only existing prelims (not current album)
-
-        # Write the combined prelim data back to the prelim sheet
-        prelim_sheet.clear()
-        if not final_prelim_df.empty:  # Only write if there's data to write
-            set_with_dataframe(prelim_sheet, final_prelim_df, include_index=False)
-            logging.debug(f"Successfully updated prelim sheet with {len(final_prelim_df)} preliminary ranked songs.")
-        else:
-            logging.debug("No preliminary ranked songs to save. Preliminary sheet cleared.")
+                # If the sheet exists but is now empty, we ensure it's cleared but might add back the header
+                prelim_sheet.append_row(prelim_sheet_columns)  # Re-add header to cleared sheet
+                logging.debug("Preliminary sheet is now empty. Cleared and added header.")
 
         # --- NEW: Calculate and Save Album Averages (THIS BLOCK WAS INDENTED INCORRECTLY) ---
         # This block now runs always, after song rankings are handled.
