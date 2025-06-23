@@ -785,27 +785,23 @@ def view_album():
 
         print(f"\n--- VIEW ALBUM START (Album ID: {album_id}) ---")
 
-        # Fetch album data from Spotify
         album_data = load_album_data(sp, album_id)
         print(f"DEBUG: Loaded Spotify data for '{album_data['album_name']}'")
 
-        # --- Load existing Final Ranks from Main Ranking Sheet ---
         main_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
         main_sheet_data = get_as_dataframe(main_sheet, evaluate_formulas=False).fillna("")
 
-        all_final_ranks = pd.DataFrame()  # Ensure it's a DataFrame even if no 'final' rows
+        all_final_ranks = pd.DataFrame()
         if "Ranking Status" in main_sheet_data.columns and not main_sheet_data.empty:
             all_final_ranks = main_sheet_data[main_sheet_data["Ranking Status"].astype(str).str.lower() == "final"]
 
         print(f"DEBUG: Found {len(all_final_ranks)} existing FINAL entries in sheet.")
 
-        # --- Populate `rank_groups_for_js` with ALL globally ranked songs ---
         rank_groups_for_js = {f"{i / 2:.1f}": [] for i in range(1, 21)}
         rank_groups_for_js['I'] = {'excellent': [], 'average': [], 'bad': []}
 
         for _, row in all_final_ranks.iterrows():
             try:
-                # CORRECTED: Read 'Rank Group' as a string first to handle 'I'
                 rank_group_key = str(row.get('Rank Group', '')).strip()
                 song_score = float(row.get('Ranking', 0.0))
 
@@ -833,12 +829,10 @@ def view_album():
             except (ValueError, KeyError, TypeError) as e:
                 print(f"WARNING: Error parsing existing FINAL ranked song row: {row.to_dict()} - {e}")
 
-        # CORRECTED: Sort songs within each group, skipping the 'I' object
         for group_key, group_content in rank_groups_for_js.items():
             if group_key != 'I':
                 group_content.sort(key=lambda x: x.get('rank_position', 0))
 
-        # CORRECTED: Calculate total songs, properly handling the 'I' object
         total_songs_in_groups = 0
         for group_key, group_content in rank_groups_for_js.items():
             if group_key == 'I':
@@ -847,7 +841,6 @@ def view_album():
                 total_songs_in_groups += len(group_content)
         print(f"DEBUG: Populated {total_songs_in_groups} FINAL ranked songs into JS structure.")
 
-        # --- Load existing Preliminary Ranks from "Preliminary Ranks" Sheet ---
         existing_prelim_ranks = {}
         try:
             prelim_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(PRELIM_SHEET_NAME)
@@ -866,11 +859,15 @@ def view_album():
         all_spotify_songs_with_flags = []
         for song in album_data['songs']:
             song_id = str(song['song_id'])
+
+            # FINAL FIX: Corrected the generator expression to properly check the nested lists.
             is_ranked = any(
-                (group_key == 'I' and any(s['song_id'] == song_id for cat_list in group_content.values())) or
+                (group_key == 'I' and any(
+                    any(s['song_id'] == song_id for s in cat_list) for cat_list in group_content.values())) or
                 (group_key != 'I' and any(s['song_id'] == song_id for s in group_content))
                 for group_key, group_content in rank_groups_for_js.items()
             )
+
             all_spotify_songs_with_flags.append({
                 'song_name': song['song_name'],
                 'song_id': song_id,
@@ -893,7 +890,7 @@ def view_album():
     except Exception as e:
         import traceback
         print("\n🔥 CRITICAL ERROR in /view_album route:")
-        traceback.print_exc()  # This will print the full error to your logs
+        traceback.print_exc()
         flash(f"An unexpected error occurred while loading the album: {e}", "error")
         return redirect(url_for('index'))
 
