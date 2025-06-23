@@ -642,6 +642,7 @@ def save_global_rankings():
                 'song_id': 'Spotify Song ID',
                 'song_name': 'Song Name',
                 'rank_group': 'Rank Group',
+                'calculated_score': 'Ranking',
                 'ranking': 'Ranking',
                 'position_in_group': 'Position In Group',
                 'album_id': 'Spotify Album ID',
@@ -655,6 +656,9 @@ def save_global_rankings():
                 'Spotify Song ID', 'Song Name', 'Rank Group',
                 'Ranking', 'Position In Group', 'Ranking Status'
             ]
+            for col in final_sheet_columns:
+                if col not in global_ranked_df.columns:
+                    global_ranked_df[col] = ''
             global_ranked_df = global_ranked_df[final_sheet_columns]
 
             # Append the new global_ranked_data for the current album
