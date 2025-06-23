@@ -92,38 +92,40 @@ def load_album_data(sp_param, album_id):
 def get_album_averages_df(client_gspread, spreadsheet_id, sheet_name):
     try:
         sheet = client_gspread.open_by_key(spreadsheet_id).worksheet(sheet_name)
+        logging.debug(f"Successfully opened sheet '{sheet_name}' for Album Averages.")
     except Exception as e:
         logging.error(f"Failed to open sheet '{sheet_name}': {e}", exc_info=True)
-        # Attempt to create if not found (only for Album Averages if it's new)
         if isinstance(e, gspread.exceptions.WorksheetNotFound):
             logging.info(f"Worksheet '{sheet_name}' not found, attempting to create.")
             try:
-                sheet = client_gspread.open_by_key(spreadsheet_id).add_worksheet(sheet_name, rows=1, cols=6) # 6 for the 6 columns
-                sheet.append_row(['album_id', 'album_name', 'artist_name', 'average_score', 'times_ranked', 'last_ranked_date'])
-                logging.info(f"Successfully created sheet '{sheet_name}' with header.")
+                # Ensure 'last_ranked_date' is in the initial header
+                header_cols = ['album_id', 'album_name', 'artist_name', 'average_score', 'times_ranked',
+                               'last_ranked_date']
+                sheet = client_gspread.open_by_key(spreadsheet_id).add_worksheet(sheet_name, rows=1,
+                                                                                 cols=len(header_cols))
+                sheet.append_row(header_cols)  # Write the header row
+                logging.info(f"Successfully created sheet '{sheet_name}' with header: {header_cols}")
             except Exception as create_e:
                 logging.critical(f"CRITICAL ERROR: Could not create sheet '{sheet_name}': {create_e}", exc_info=True)
-                raise create_e # Re-raise to stop execution
+                raise create_e  # Re-raise to stop execution if sheet creation fails
+        raise e  # Re-raise the original error if it's not WorksheetNotFound or creation fails
 
-        raise e # Re-raise if it's another error
-
-    df = get_as_dataframe(sheet, evaluate_formulas=True)
+    df = get_as_dataframe(sheet, evaluate_formulas=True)  # Use your existing get_as_dataframe helper
 
     expected_cols = ['album_id', 'album_name', 'artist_name', 'average_score', 'times_ranked', 'last_ranked_date']
     if df.empty:
         logging.debug(f"Album Averages DataFrame is empty. Initializing with expected columns: {expected_cols}")
         df = pd.DataFrame(columns=expected_cols)
     else:
-        # Ensure all expected columns exist, add if missing
         for col in expected_cols:
             if col not in df.columns:
-                df[col] = None # Add missing column with None values
+                df[col] = None  # Add missing columns
                 logging.warning(f"Added missing column '{col}' to Album Averages DataFrame.")
-        # --- NEW: Force 'times_ranked' to numeric, replace errors with 0 ---
-    df['times_ranked'] = pd.to_numeric(df['times_ranked'], errors='coerce').fillna(0).astype(int)
-    # --- END NEW ---
 
-    # --- NEW: Also ensure 'average_score' is numeric ---
+    # --- CRITICAL: Force 'times_ranked' and 'average_score' to numeric types ---
+    # Convert 'times_ranked' to numeric, errors become NaN, fill NaN with 0, then convert to int
+    df['times_ranked'] = pd.to_numeric(df['times_ranked'], errors='coerce').fillna(0).astype(int)
+    # Convert 'average_score' to numeric, errors become NaN
     df['average_score'] = pd.to_numeric(df['average_score'], errors='coerce')
 
     return df.fillna("")
@@ -417,23 +419,24 @@ def submit_rankings():
             logging.info(
                 f"Calculated Album Average Score: {average_album_score} (Total: {total_score}, Count: {num_ranked_songs})")
 
-            album_averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
+            # This call will now return a DataFrame with 'times_ranked' as int and 'last_ranked_date' column ensured
+            album_averages_df = get_album_averages_df(client, SPREADSHEET_ID,
+                                                      album_averages_sheet_name)  # Ensure album_averages_sheet_name is defined (e.g., "Album Averages")
 
             matching_album_row_df = album_averages_df[album_averages_df['album_id'].astype(str) == str(album_id)]
 
             if not matching_album_row_df.empty:
                 row_index_in_df = matching_album_row_df.index[0]
-                # After get_album_averages_df, times_ranked_current should already be an int or 0
                 times_ranked_current = album_averages_df.loc[row_index_in_df, 'times_ranked']
                 logging.debug(
-                    f"DEBUG: Current 'times_ranked' read from DF (should be int): '{times_ranked_current}' for album ID {album_id}")
+                    f"DEBUG: Current 'times_ranked' read from DF (should be int/0): '{times_ranked_current}' for album ID {album_id}")
 
-                # No try-except needed here if get_album_averages_df handles type conversion
+                # --- THIS IS THE CHANGE: Remove try-except, direct addition ---
                 times_ranked_new = times_ranked_current + 1
+                # --- END CHANGE ---
 
                 album_averages_df.loc[row_index_in_df, 'average_score'] = average_album_score
-                album_averages_df.loc[
-                    row_index_in_df, 'times_ranked'] = times_ranked_new  # This should be `1` if first time, `2` if second, etc.
+                album_averages_df.loc[row_index_in_df, 'times_ranked'] = times_ranked_new
                 album_averages_df.loc[row_index_in_df, 'last_ranked_date'] = datetime.now().strftime(
                     '%Y-%m-%d %H:%M:%S')
 
@@ -445,12 +448,16 @@ def submit_rankings():
                     'album_name': album_name,
                     'artist_name': artist_name,
                     'average_score': average_album_score,
-                    'times_ranked': 1,  # This must be 1 for a brand new entry!
+                    'times_ranked': 1,  # Always 1 for a truly new entry
                     'last_ranked_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 }
                 new_row_df = pd.DataFrame([new_row_data], columns=album_averages_df.columns)
                 album_averages_df = pd.concat([album_averages_df, new_row_df], ignore_index=True)
                 logging.info(f"Added new entry for album '{album_name}' (ID: {album_id}) to Album Averages sheet.")
+
+            album_averages_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(album_averages_sheet_name)
+            set_with_dataframe(album_averages_sheet, album_averages_df, include_index=False, include_column_header=True)
+            logging.info(f"Successfully wrote updated Album Averages DataFrame to sheet.")
         else:
             logging.info(
                 "Skipping Album Averages update: Submission status is not 'final' OR no ranked songs submitted.")
