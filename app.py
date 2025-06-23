@@ -714,11 +714,12 @@ def save_global_rankings():
         artist_name_for_update = artist_name_from_frontend
 
         for song in global_ranked_data:
-            if str(song.get('album_id')) == str(current_album_id):
-                total_score += song.get('ranking', 0)
-                song_count += 1
-                album_name_for_update = song.get('album_name', album_name_for_update)
-                artist_name_for_update = song.get('artist_name', artist_name_for_update)
+            if str(song.get('rank_group')) != 'I':
+                if str(song.get('album_id')) == str(current_album_id):
+                    total_score += song.get('ranking', 0)
+                    song_count += 1
+                    album_name_for_update = song.get('album_name', album_name_for_update)
+                    artist_name_for_update = song.get('artist_name', artist_name_for_update)
 
         current_average_score = round(total_score / song_count, 2) if song_count > 0 else 0
 
@@ -842,7 +843,9 @@ def view_album():
         print(f"DEBUG: Found {len(all_final_ranks)} existing FINAL entries in sheet (from all albums).")
 
         # --- Populate `rank_groups_for_js` with ALL globally ranked songs ---
-        rank_groups_for_js = {f"{i / 2:.1f}": [] for i in range(1, 21)}  # Initialize all empty groups (0.5 to 10.0)
+        rank_groups_for_js = {f"{i / 2:.1f}": [] for i in range(1, 21)}
+        # Add the structure for Interlude songs
+        rank_groups_for_js['I'] = {'excellent': [], 'average': [], 'bad': []}  # Initialize all empty groups (0.5 to 10.0)
 
         for _, row in all_final_ranks.iterrows():  # Iterate through ALL final ranks
             try:
@@ -869,7 +872,14 @@ def view_album():
                     'artist_name': ranked_artist_name  # New: Artist Name of the ranked song
                 }
 
-                if rank_group_key in rank_groups_for_js:
+                if rank_group_key == 'I':
+                    if song_score == 3.0:
+                        rank_groups_for_js['I']['excellent'].append(song_data)
+                    elif song_score == 2.0:
+                        rank_groups_for_js['I']['average'].append(song_data)
+                    elif song_score == 1.0:
+                        rank_groups_for_js['I']['bad'].append(song_data)
+                elif rank_group_key in rank_groups_for_js:
                     rank_groups_for_js[rank_group_key].append(song_data)
                 else:
                     print(
