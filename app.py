@@ -944,11 +944,21 @@ def view_album():
             is_final_ranked_globally = False
 
             # Check if this song is present in any of the GLOBAL final rank groups (right panel)
-            for group_key in rank_groups_for_js:
-                # Use any() with a generator expression for efficiency
-                if any(s['song_id'] == song_id for s in rank_groups_for_js[group_key]):
-                    is_final_ranked_globally = True
-                    break
+            for group_key, group_content in rank_groups_for_js.items():
+                if is_final_ranked_globally:
+                    break  # Already found, no need to check further
+
+                if group_key == 'I':
+                    # Handle the special nested structure for Interludes
+                    for category_list in group_content.values():
+                        if any(s['song_id'] == song_id for s in category_list):
+                            is_final_ranked_globally = True
+                            break
+                else:
+                    # Handle regular numeric groups
+                    if any(s['song_id'] == song_id for s in group_content):
+                        is_final_ranked_globally = True
+                        break
 
             all_spotify_songs_with_flags.append({
                 'song_name': song_name,
