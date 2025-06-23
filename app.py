@@ -411,17 +411,15 @@ def submit_rankings():
             logging.info(
                 f"Calculated Album Average Score: {average_album_score} (Total: {total_score}, Count: {num_ranked_songs})")
 
-            # Get the Album Averages DataFrame, ensuring it has correct columns
             album_averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
 
-            # Find matching row by album_id
             matching_album_row_df = album_averages_df[album_averages_df['album_id'].astype(str) == str(album_id)]
 
             if not matching_album_row_df.empty:
-                # Update existing row
-                row_index_in_df = matching_album_row_df.index[0]  # Index within the DataFrame
+                row_index_in_df = matching_album_row_df.index[0]
                 times_ranked_current = album_averages_df.loc[row_index_in_df, 'times_ranked']
                 try:
+                    # This is the key: increment times_ranked by 1 for this album submission
                     times_ranked_new = int(times_ranked_current) + 1
                 except (ValueError, TypeError):
                     logging.warning(
@@ -429,32 +427,29 @@ def submit_rankings():
                     times_ranked_new = 1
 
                 album_averages_df.loc[row_index_in_df, 'average_score'] = average_album_score
-                album_averages_df.loc[row_index_in_df, 'times_ranked'] = times_ranked_new
+                album_averages_df.loc[
+                    row_index_in_df, 'times_ranked'] = times_ranked_new  # This should be `1` if first time, `2` if second, etc.
                 album_averages_df.loc[row_index_in_df, 'last_ranked_date'] = datetime.now().strftime(
                     '%Y-%m-%d %H:%M:%S')
 
                 logging.info(
                     f"Updated existing row for album '{album_name}' (ID: {album_id}). New Times Ranked: {times_ranked_new}")
             else:
-                # Add new row
                 new_row_data = {
                     'album_id': album_id,
                     'album_name': album_name,
                     'artist_name': artist_name,
                     'average_score': average_album_score,
-                    'times_ranked': 1,
+                    'times_ranked': 1,  # First time ranking this album
                     'last_ranked_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 }
-                # Create a new DataFrame for the single row to ensure correct columns
                 new_row_df = pd.DataFrame([new_row_data], columns=album_averages_df.columns)
                 album_averages_df = pd.concat([album_averages_df, new_row_df], ignore_index=True)
                 logging.info(f"Added new entry for album '{album_name}' (ID: {album_id}) to Album Averages sheet.")
 
-            # Write the entire updated DataFrame back to the sheet
             album_averages_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(album_averages_sheet_name)
             set_with_dataframe(album_averages_sheet, album_averages_df, include_index=False, include_column_header=True)
             logging.info(f"Successfully wrote updated Album Averages DataFrame to sheet.")
-
         else:
             logging.info(
                 "Skipping Album Averages update: Submission status is not 'final' OR no ranked songs submitted.")
@@ -526,6 +521,7 @@ def load_albums_by_artist_route():
             album_id_from_sheet = str(row.get("album_id", "")).strip()  # Use 'album_id'
             average_score_from_sheet = row.get("average_score", None)  # Use 'average_score'
             times_ranked_from_sheet = row.get("times_ranked", 0)
+            last_ranked_date_from_sheet = row.get("last_ranked_date", "")
             logging.debug(f"DEBUG: Raw row from Album Averages sheet (loop): {row.to_dict()}")
             logging.debug(
                 f"DEBUG: Processing sheet row in loop: ID='{album_id_from_sheet}', Avg='{average_score_from_sheet}', Times='{times_ranked_from_sheet}'")
@@ -533,7 +529,8 @@ def load_albums_by_artist_route():
             if album_id_from_sheet:  # Only add if album_id is not empty
                 album_metadata[album_id_from_sheet] = {
                     "average_score": average_score_from_sheet,
-                    "times_ranked": times_ranked_from_sheet
+                    "times_ranked": times_ranked_from_sheet,
+                    "last_ranked_date": last_ranked_date_from_sheet
                 }
                 logging.debug(
                     f"DEBUG: Stored in album_metadata[{album_id_from_sheet}]: Avg={album_metadata[album_id_from_sheet]['average_score']}, Times={album_metadata[album_id_from_sheet]['times_ranked']}")
@@ -590,6 +587,7 @@ def load_albums_by_artist_route():
             "id": album_id_spotify,
             "average_score": metadata.get("average_score"),
             "times_ranked": metadata.get("times_ranked"),
+            "last_ranked_date": metadata.get("last_ranked_date"),
             "url": album_data.get("url"),
             "has_prelim_ranks": has_prelim_ranks
         })
