@@ -734,15 +734,7 @@ def save_global_rankings():
                 prelim_sheet.append_row(prelim_sheet_columns)  # Re-add header to cleared sheet
                 logging.debug("Preliminary sheet is now empty. Cleared and added header.")
 
-        # --- NEW: Calculate and Save Album Averages (THIS BLOCK WAS INDENTED INCORRECTLY) ---
-        # This block now runs always, after song rankings are handled.
-            # --- CORRECTED: Calculate and Save Album Averages ---
-        album_averages_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(album_averages_sheet_name)
-        album_averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
 
-        # Calculate the average score from the CURRENT submission
-        album_averages_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(album_averages_sheet_name)
-        album_averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
 
         print("--- Updating 'Album Averages' sheet with direct-write method ---")
 
@@ -753,28 +745,37 @@ def save_global_rankings():
                 song_count += 1
         current_average_score = round(total_score / song_count, 2) if song_count > 0 else 0
 
+        # 2. Open the 'Album Averages' sheet
         album_averages_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(album_averages_sheet_name)
 
-        try:
-            cell = album_averages_sheet.find(str(current_album_id), in_column=1)
-        except exceptions.CellNotFound:  # Using the imported module here
-            cell = None
+        # 3. Find all cells matching the album_id. This returns a list.
+        found_cells = album_averages_sheet.findall(str(current_album_id), in_column=1)
 
-        if cell:
+        print(f"DEBUG: Searching for album ID '{current_album_id}'. Found {len(found_cells)} matching cells.")
+
+        # 4. If the list is not empty, a cell was found. Update it. Otherwise, append.
+        if found_cells:
+            # Album exists, so we UPDATE the first one we find
+            cell = found_cells[0]
             row_index = cell.row
             old_times_ranked_str = album_averages_sheet.cell(row_index, 5).value
             new_times_ranked = int(old_times_ranked_str or 0) + 1
+
             row_values = [
                 current_album_id, album_name_from_frontend, artist_name_from_frontend,
                 current_average_score, new_times_ranked, datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             ]
             album_averages_sheet.update(f'A{row_index}:F{row_index}', [row_values])
+            print(f"DEBUG: Updated row {row_index} for album '{album_name_from_frontend}'")
         else:
+            # Album is NEW, so we APPEND the row
             new_row_values = [
                 current_album_id, album_name_from_frontend, artist_name_from_frontend,
-                current_average_score, 1, datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                current_average_score, 1,  # First time ranked is 1
+                datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             ]
             album_averages_sheet.append_row(new_row_values, value_input_option='USER_ENTERED')
+            print(f"DEBUG: Appended new row for album '{album_name_from_frontend}'")
 
         return jsonify({'status': 'success', 'message': 'Global, Preliminary, and Album Averages saved successfully!'})
 
