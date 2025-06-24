@@ -492,6 +492,7 @@ def load_albums_by_artist_route():
         # Handle cases where artist_name isn't found (e.g., direct GET without param)
         flash("Artist name not provided. Please search for an artist.")
         return redirect(url_for('index')) # Redirect to your home/search page
+    print("\n--- LOADING ALBUM LIST FOR ARTIST:", artist_name, "---")
 
     albums_from_spotify = get_albums_by_artist(artist_name) # Renamed variable for clarity
 
@@ -506,6 +507,9 @@ def load_albums_by_artist_route():
 
     try:
         album_averages_df = get_album_averages_df(client, SPREADSHEET_ID, "Album Averages")
+        print("--- 1. Data as read from 'Album Averages' sheet: ---")
+        print(album_averages_df.to_string())
+        print("------------------------------------------------------")
     except Exception as e:
         logging.error(f"Error loading Album Averages DataFrame: {e}", exc_info=True)
         flash(f"Error loading album averages data: {e}", "error")
@@ -526,7 +530,9 @@ def load_albums_by_artist_route():
         for _, row in album_averages_df.iterrows():
             processed_rows_count += 1
             # --- FIX: Use 'album_id' as key and correct column names from the sheet ---
-            album_id_from_sheet = str(row.get("album_id", "")).strip()  # Use 'album_id'
+            album_id_from_sheet = str(row.get("album_id", "")).strip()
+            print(f"  - Found row with album_id: '{album_id_from_sheet}'")
+            # Use 'album_id'
             average_score_from_sheet = row.get("average_score", None)  # Use 'average_score'
             times_ranked_from_sheet = row.get("times_ranked", 0)
             last_ranked_date_from_sheet = row.get("last_ranked_date", "")
@@ -543,6 +549,10 @@ def load_albums_by_artist_route():
                 logging.debug(
                     f"DEBUG: Stored in album_metadata[{album_id_from_sheet}]: Avg={album_metadata[album_id_from_sheet]['average_score']}, Times={album_metadata[album_id_from_sheet]['times_ranked']}")
     logging.debug(f"DEBUG: Completed processing {processed_rows_count} rows from Album Averages DataFrame (loop).")
+    print("\n--- 3. Final 'album_metadata' dictionary created: ---")
+    print(album_metadata)
+    print("--------------------------------------------------")
+
     logging.debug(f"DEBUG: Loaded {len(album_metadata)} album metadata entries from sheet into dict.")
     prelim_sheet_name = "Preliminary Ranks"
     prelim_ranked_albums_ids = set()
@@ -614,6 +624,11 @@ def ranking_page():
 def save_global_rankings():
     try:
         data = request.json
+        print("\n--- SAVING RANKINGS ---")
+        print("--- 1. Data received from browser: ---")
+        print(data)
+        print("--------------------------------------")
+
         global_ranked_data = data.get('global_ranked_data', [])
         prelim_rank_data = data.get('prelim_rank_data', [])
         current_album_id = data.get('current_album_id')  # Will be passed from JS
@@ -750,6 +765,9 @@ def save_global_rankings():
         else:
             # THIS IS THE CRITICAL FIX
             # We will create the new row DataFrame with explicit columns to prevent any errors.
+            print("\n--- 2. Creating NEW row for 'Album Averages': ---")
+            print(f"  - Using current_album_id: '{current_album_id}'")
+            print(f"  - Using album_name: '{album_name_from_frontend}'")
             new_row_data = {
                 'album_id': current_album_id,
                 'album_name': album_name_from_frontend,
@@ -764,6 +782,9 @@ def save_global_rankings():
 
             # Combine it with the existing data
             album_averages_df = pd.concat([album_averages_df, new_row_df], ignore_index=True)
+        print("\n--- 3. Final DataFrame being saved to sheet: ---")
+        print(album_averages_df.to_string())
+        print("-------------------------------------------------")
 
         # Ensure the final DataFrame has all the correct columns before saving
         final_cols = ['album_id', 'album_name', 'artist_name', 'average_score', 'times_ranked', 'last_ranked_date']
