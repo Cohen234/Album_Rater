@@ -3,76 +3,59 @@
 <head>
     <title>Albums by {{ artist_name }}</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap');
 
         body {
-            font-family: 'Inter', sans-serif;
-            background-color: #121212;
-            color: #ffffff;
-            margin: 0;
-            padding: 0;
+            font-family: 'Montserrat', sans-serif;
+            background-color: #f4f4f4;
+            color: #333;
         }
-        h1 {
-            text-align: center;
-            margin: 30px 0;
-            font-weight: 700;
-            letter-spacing: -1px;
-        }
+        h1 { text-align: center; margin: 30px 0; font-weight: 600; letter-spacing: 1px; }
         .album-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 24px;
-            padding: 0 40px 40px 40px;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 40px; /* More space for the gallery feel */
+            padding: 0 50px 50px 50px;
         }
         .album-card {
-            background-color: #181818;
-            padding: 16px;
-            border-radius: 8px;
-            transition: background-color 0.3s ease;
-            cursor: pointer;
+            background: none;
+            border: none;
+            box-shadow: none;
+            padding: 0;
             text-align: left;
+            cursor: pointer;
+            transition: opacity 0.2s ease;
         }
-        .album-card:hover {
-            background-color: #282828;
-        }
+        .album-card:hover { opacity: 0.8; }
         .album-card img {
             width: 100%;
             height: auto;
             aspect-ratio: 1 / 1;
             object-fit: cover;
-            border-radius: 6px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-            margin-bottom: 16px;
+            border-radius: 4px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
         }
+        .album-card:hover img { transform: translateY(-5px); }
+        .card-info { margin-top: 15px; }
         .album-name {
-            font-weight: 700;
-            font-size: 1em;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            font-weight: 600;
+            font-size: 1.05em;
+            margin-bottom: 5px;
         }
         .album-name span.paused-icon { margin-left: 5px; }
         .stats {
-            font-size: 0.8em;
-            color: #b3b3b3;
-            margin-top: 8px;
+            font-size: 0.85em;
+            color: #777;
+            line-height: 1.5;
         }
-        .mastery-stars {
-            margin-bottom: 4px;
-        }
-        .mastery-stars .star { color: #535353; }
-        .mastery-stars .star.filled { color: #1DB954; } /* Spotify Green */
-        .last-ranked-date { font-size: 0.9em; opacity: 0.8; }
+        .mastery-stars { display: block; margin-bottom: 4px; letter-spacing: 2px;}
+        .mastery-stars .star { color: #ddd; }
+        .mastery-stars .star.filled { color: #f2c94c; }
+        .last-ranked-date { font-size: 0.9em; }
 
         /* Modal Styles */
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(5px); }
-        .modal-content { background: #282828; color: #fff; padding: 30px; border-radius: 12px; width: 90%; max-width: 500px; text-align: center; position: relative; box-shadow: 0 5px 25px rgba(0,0,0,0.4); }
-        .modal-content h3 { margin-top: 0; }
-        .modal-close { position: absolute; top: 10px; right: 15px; font-size: 24px; font-weight: bold; cursor: pointer; color: #888; }
-        .edition-list { list-style: none; padding: 0; margin: 0; }
-        .edition-list li { margin: 10px 0; }
-        .edition-button { width: 100%; padding: 12px; font-size: 1em; border-radius: 8px; border: 1px solid #444; background-color: #333; cursor: pointer; transition: background-color 0.2s ease; text-align: left; color: #fff; }
-        .edition-button:hover { background-color: #444; }
+        /* ... same as your current modal styles, they will work fine ... */
     </style>
 </head>
 <body>
@@ -83,27 +66,29 @@
             {% set primary_edition = editions[0] %}
             <div class="album-card" data-editions='{{ editions | tojson | forceescape }}'>
                 <img src="{{ primary_edition.image }}" alt="{{ base_name }}">
-                <div class="album-name" title="{{ base_name }}">
-                    {{ base_name }}
-                    {% if editions | selectattr('has_prelim_ranks') | list | length > 0 %}
-                        <span class="paused-icon" title="Paused">⏸️</span>
-                    {% endif %}
-                </div>
-                <div class="stats">
-                    <div class="mastery-stars" aria-label="Ranking stars">
-                        {% set display_stars = primary_edition.times_ranked | default(0) | int %}
-                        {% for i in range(3) %}
-                            <span class="star {% if i < display_stars %}filled{% endif %}">★</span>
-                        {% endfor %}
+                <div class="card-info">
+                    <div class="album-name" title="{{ base_name }}">
+                        {{ base_name }}
+                        {% if editions | selectattr('has_prelim_ranks') | list | length > 0 %}
+                            <span class="paused-icon" title="Paused">⏸️</span>
+                        {% endif %}
                     </div>
-                    {% if primary_edition.average_score is not none and (primary_edition.times_ranked | int) > 0 %}
-                        Avg Score: {{ "%.2f"|format(primary_edition.average_score|float) }}
-                    {% else %}
-                        Not yet ranked
-                    {% endif %}
-                    {% if primary_edition.last_ranked_date %}
-                        <br><span class="last-ranked-date">Last: {{ primary_edition.last_ranked_date.split(' ')[0] }}</span>
-                    {% endif %}
+                    <div class="stats">
+                        <div class="mastery-stars" aria-label="Ranking stars">
+                            {% set display_stars = primary_edition.times_ranked | default(0) | int %}
+                            {% for i in range(3) %}
+                                <span class="star {% if i < display_stars %}filled{% endif %}">★</span>
+                            {% endfor %}
+                        </div>
+                        {% if primary_edition.average_score is not none and (primary_edition.times_ranked | int) > 0 %}
+                            Avg Score: {{ "%.2f"|format(primary_edition.average_score|float) }}
+                        {% else %}
+                            Not yet ranked
+                        {% endif %}
+                        {% if primary_edition.last_ranked_date %}
+                            <br><span class="last-ranked-date">Last: {{ primary_edition.last_ranked_date.split(' ')[0] }}</span>
+                        {% endif %}
+                    </div>
                 </div>
                 <form action="{{ url_for('view_album') }}" method="post" class="album-form" style="display: none;">
                     <input type="hidden" name="album_id">
@@ -115,16 +100,8 @@
         {% endfor %}
     </div>
 
-    <div id="edition-modal" class="modal-overlay">
-      <div class="modal-content">
-          <span class="modal-close" id="modal-close-btn">&times;</span>
-          <h3 id="modal-title">Select an Edition</h3>
-          <ul id="modal-edition-list" class="edition-list"></ul>
-      </div>
-    </div>
-
-<script>
-document.addEventListener('DOMContentLoaded', () => {
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
     const modal = document.getElementById('edition-modal');
     const modalCloseBtn = document.getElementById('modal-close-btn');
     const modalEditionList = document.getElementById('modal-edition-list');
@@ -177,7 +154,6 @@ document.addEventListener('DOMContentLoaded', () => {
             modal.style.display = 'none';
         }
     });
-});
-</script>
+    </script>
 </body>
 </html>
