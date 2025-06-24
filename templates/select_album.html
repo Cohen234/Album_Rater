@@ -227,13 +227,16 @@
                   <span class="star {% if i < display_stars %}filled{% endif %}">★</span>
               {% endfor %}
           </div>
-           <div class="stats">
-            {% if album.times_ranked is not none and (album.times_ranked | int) > 0 %}
-              Avg Score: {{ "%.2f"|format(album.average_score|float) }}<br>
-              Last Ranked: {{ album.last_ranked_date.split(' ')[0] }}
-            {% else %}
-              Not yet ranked
-            {% endif %}
+            <div class="stats">
+              {% if album.average_score is not none and (album.times_ranked | int) > 0 %}
+                  Avg Score: {{ "%.2f"|format(album.average_score|float) }}
+              {% else %}
+                  Not yet ranked
+              {% endif %}
+              <br>
+              {% if album.last_ranked_date %}
+                 <span style="font-size: 0.8em;">Last: {{ album.last_ranked_date.split(' ')[0] }}</span>
+              {% endif %}
           </div>
 
           <button type="submit" style="margin-top: 12px;">Select Album</button>

@@ -733,8 +733,11 @@ def save_global_rankings():
 
         for song in global_ranked_data:
             if str(song.get('rank_group')) != 'I':
+                # This check is implicitly handled by the JS sending a unified list,
+                # but we can keep it for safety.
                 if str(song.get('album_id')) == str(current_album_id):
-                    total_score += song.get('ranking', 0)
+                    # CORRECTED: Use 'calculated_score' to match what the browser sends
+                    total_score += song.get('calculated_score', 0)
                     song_count += 1
                     album_name_for_update = song.get('album_name', album_name_for_update)
                     artist_name_for_update = song.get('artist_name', artist_name_for_update)
