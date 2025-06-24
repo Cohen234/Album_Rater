@@ -624,10 +624,6 @@ def ranking_page():
 def save_global_rankings():
     try:
         data = request.json
-        print("\n--- SAVING RANKINGS ---")
-        print("--- 1. Data received from browser: ---")
-        print(data)
-        print("--------------------------------------")
 
         global_ranked_data = data.get('global_ranked_data', [])
         prelim_rank_data = data.get('prelim_rank_data', [])
@@ -744,6 +740,8 @@ def save_global_rankings():
         album_averages_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(album_averages_sheet_name)
         album_averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
 
+        print("\n--- FINAL SAVE LOGIC FOR ALBUM AVERAGES ---")
+
         total_score, song_count = 0, 0
         for song in global_ranked_data:
             if str(song.get('rank_group')) != 'I' and str(song.get('album_id')) == str(current_album_id):
@@ -751,48 +749,35 @@ def save_global_rankings():
                 song_count += 1
         current_average_score = round(total_score / song_count, 2) if song_count > 0 else 0
 
-        # 2. Open the sheet and define the header order
         album_averages_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(album_averages_sheet_name)
-        headers = ['album_id', 'album_name', 'artist_name', 'average_score', 'times_ranked', 'last_ranked_date']
 
-        # 3. Try to find an existing row for this album
         try:
-            cell = album_averages_sheet.find(current_album_id, in_column=1)  # Find the album_id in the first column
-        except gspread.exceptions.CellNotFound:
+            # The .find() method requires a string.
+            cell = album_averages_sheet.find(str(current_album_id), in_column=1)
+        # CORRECTED: This is the right way to catch the "not found" error.
+        except gspread.CellNotFound:
             cell = None
 
         print(f"DEBUG: Searching for album ID '{current_album_id}'. Found cell: {cell}")
 
-        # 4. Update the row if it exists, otherwise append a new one
         if cell:
             # Album exists, UPDATE the existing row
             row_index = cell.row
-            sheet_data = album_averages_sheet.get_all_records()  # Get data to find current times_ranked
-            current_times_ranked = int(
-                sheet_data[row_index - 2].get('times_ranked', 0))  # -2 because list is 0-indexed and header is row 1
-            new_times_ranked = current_times_ranked + 1
+            # A more direct way to get the old 'times_ranked' value
+            old_times_ranked_str = album_averages_sheet.cell(row_index, 5).value  # Column E is the 5th column
+            new_times_ranked = int(old_times_ranked_str or 0) + 1
 
-            # Prepare the full row data in the correct order
             row_values = [
-                current_album_id,
-                album_name_from_frontend,
-                artist_name_from_frontend,
-                current_average_score,
-                new_times_ranked,
-                datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                current_album_id, album_name_from_frontend, artist_name_from_frontend,
+                current_average_score, new_times_ranked, datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             ]
-            # Update the entire row at once
             album_averages_sheet.update(f'A{row_index}:F{row_index}', [row_values])
             print(f"DEBUG: Updated row {row_index} for album '{album_name_from_frontend}'")
         else:
             # Album is new, APPEND a new row
             new_row_values = [
-                current_album_id,
-                album_name_from_frontend,
-                artist_name_from_frontend,
-                current_average_score,
-                1,  # First time ranked
-                datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                current_album_id, album_name_from_frontend, artist_name_from_frontend,
+                current_average_score, 1, datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             ]
             album_averages_sheet.append_row(new_row_values, value_input_option='USER_ENTERED')
             print(f"DEBUG: Appended new row for album '{album_name_from_frontend}'")
