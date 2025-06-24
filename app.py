@@ -619,16 +619,20 @@ def ranking_page():
     group_bins = group_ranked_songs(sheet_rows)
     return render_template("album.html", group_bins=group_bins)
 
-
 @app.route("/save_global_rankings", methods=["POST"])
 def save_global_rankings():
     try:
         data = request.json
+        current_album_id = data.get('current_album_id')
+
+        if not current_album_id:
+            print("CRITICAL ERROR: current_album_id was not received from the browser.")
+            return jsonify({'status': 'error', 'message': 'Missing current_album_id in request.'}), 400
+
+        print(f"\n--- Saving Ranks for Album ID: {current_album_id} ---")
 
         global_ranked_data = data.get('global_ranked_data', [])
         prelim_rank_data = data.get('prelim_rank_data', [])
-        current_album_id = data.get('current_album_id')  # Will be passed from JS
-        # Added to get album/artist name directly from frontend if no songs ranked globally
         album_name_from_frontend = data.get('album_name_from_frontend')
         artist_name_from_frontend = data.get('artist_name_from_frontend') # Assuming get_gsheet_client() is defined
 
@@ -740,7 +744,7 @@ def save_global_rankings():
         album_averages_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(album_averages_sheet_name)
         album_averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
 
-        print("\n--- FINAL SAVE LOGIC FOR ALBUM AVERAGES ---")
+        print("--- Updating 'Album Averages' sheet with direct-write method ---")
 
         total_score, song_count = 0, 0
         for song in global_ranked_data:
@@ -752,35 +756,25 @@ def save_global_rankings():
         album_averages_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(album_averages_sheet_name)
 
         try:
-            # The .find() method requires a string.
             cell = album_averages_sheet.find(str(current_album_id), in_column=1)
-        # CORRECTED: This is the right way to catch the "not found" error.
-        except gspread.CellNotFound:
+        except exceptions.CellNotFound:  # Using the imported module here
             cell = None
 
-        print(f"DEBUG: Searching for album ID '{current_album_id}'. Found cell: {cell}")
-
         if cell:
-            # Album exists, UPDATE the existing row
             row_index = cell.row
-            # A more direct way to get the old 'times_ranked' value
-            old_times_ranked_str = album_averages_sheet.cell(row_index, 5).value  # Column E is the 5th column
+            old_times_ranked_str = album_averages_sheet.cell(row_index, 5).value
             new_times_ranked = int(old_times_ranked_str or 0) + 1
-
             row_values = [
                 current_album_id, album_name_from_frontend, artist_name_from_frontend,
                 current_average_score, new_times_ranked, datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             ]
             album_averages_sheet.update(f'A{row_index}:F{row_index}', [row_values])
-            print(f"DEBUG: Updated row {row_index} for album '{album_name_from_frontend}'")
         else:
-            # Album is new, APPEND a new row
             new_row_values = [
                 current_album_id, album_name_from_frontend, artist_name_from_frontend,
                 current_average_score, 1, datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             ]
             album_averages_sheet.append_row(new_row_values, value_input_option='USER_ENTERED')
-            print(f"DEBUG: Appended new row for album '{album_name_from_frontend}'")
 
         return jsonify({'status': 'success', 'message': 'Global, Preliminary, and Album Averages saved successfully!'})
 
@@ -789,6 +783,7 @@ def save_global_rankings():
         logging.error("\n🔥 ERROR in /save_global_rankings route:")
         traceback.print_exc()
         return jsonify({'status': 'error', 'message': f'An unexpected error occurred: {e}'}), 500
+
 
 
 @app.route("/view_album", methods=["POST", "GET"])
