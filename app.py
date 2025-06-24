@@ -894,6 +894,7 @@ def view_album():
 
         album_data_for_template = {
             **album_data,
+            'album_id': album_id,
             'songs': all_spotify_songs_with_flags
         }
 
