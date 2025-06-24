@@ -507,21 +507,12 @@ def load_albums_by_artist_route():
 
     try:
         album_averages_df = get_album_averages_df(client, SPREADSHEET_ID, "Album Averages")
-        print("--- 1. Data as read from 'Album Averages' sheet: ---")
-        print(album_averages_df.to_string())
-        print("------------------------------------------------------")
+
     except Exception as e:
         logging.error(f"Error loading Album Averages DataFrame: {e}", exc_info=True)
         flash(f"Error loading album averages data: {e}", "error")
         return redirect(url_for('index'))
-    logging.debug(f"*** DEBUG: Album Averages DataFrame IMMEDIATELY after get_as_dataframe ***")
-    logging.debug(f"*** DEBUG: DataFrame Empty: {album_averages_df.empty}")
-    logging.debug(f"*** DEBUG: DataFrame Shape: {album_averages_df.shape}")
-    logging.debug(f"*** DEBUG: DataFrame Columns: {album_averages_df.columns.tolist()}")
-    logging.debug(f"*** DEBUG: DataFrame Head (first 10 rows): \n{album_averages_df.head(10).to_string()}")
-    logging.debug(f"*** DEBUG: DataFrame Tail (last 10 rows): \n{album_averages_df.tail(10).to_string()}")
-    logging.debug(
-        f"*** DEBUG: DataFrame Values (as list of lists, first 5 rows): {album_averages_df.values.tolist()[:5]}")
+
 
     # Create a dictionary for quick lookup of averages/times ranked
     album_metadata = {}
