@@ -814,6 +814,21 @@ def view_album():
 
         print(f"DEBUG: Found {len(all_final_ranks)} existing FINAL entries in sheet.")
 
+        album_covers_cache = {}
+        if not all_final_ranks.empty and 'Spotify Album ID' in all_final_ranks.columns:
+            unique_album_ids = [aid for aid in all_final_ranks['Spotify Album ID'].unique() if aid]
+
+            # Spotify API has a limit of 20 albums per request, so we chunk it
+            for i in range(0, len(unique_album_ids), 20):
+                chunk_ids = unique_album_ids[i:i + 20]
+                try:
+                    albums_info = sp.albums(chunk_ids)
+                    for album_info in albums_info['albums']:
+                        if album_info and album_info['images']:
+                            album_covers_cache[album_info['id']] = album_info['images'][-1]['url']  # Use smallest image
+                except Exception as e:
+                    print(f"WARNING: Could not fetch album chunk: {e}")
+
         rank_groups_for_js = {f"{i / 2:.1f}": [] for i in range(1, 21)}
         rank_groups_for_js['I'] = {'excellent': [], 'average': [], 'bad': []}
 
@@ -821,6 +836,7 @@ def view_album():
             try:
                 rank_group_key = str(row.get('Rank Group', '')).strip()
                 song_score = float(row.get('Ranking', 0.0))
+                song_album_id = str(row.get('Spotify Album ID', ''))
 
                 song_data = {
                     'song_id': str(row.get('Spotify Song ID', '')),
@@ -830,7 +846,8 @@ def view_album():
                     'rank_position': int(row.get('Position In Group', 0)),
                     'album_id': str(row.get('Spotify Album ID', '')),
                     'album_name': str(row.get('Album Name', '')),
-                    'artist_name': str(row.get('Artist Name', ''))
+                    'artist_name': str(row.get('Artist Name', '')),
+                    'album_cover_url': album_covers_cache.get(song_album_id)
                 }
 
                 if rank_group_key == 'I':
@@ -876,15 +893,12 @@ def view_album():
         all_spotify_songs_with_flags = []
         for song in album_data['songs']:
             song_id = str(song['song_id'])
-
-            # FINAL FIX: Corrected the generator expression to properly check the nested lists.
             is_ranked = any(
                 (group_key == 'I' and any(
                     any(s['song_id'] == song_id for s in cat_list) for cat_list in group_content.values())) or
                 (group_key != 'I' and any(s['song_id'] == song_id for s in group_content))
                 for group_key, group_content in rank_groups_for_js.items()
             )
-
             all_spotify_songs_with_flags.append({
                 'song_name': song['song_name'],
                 'song_id': song_id,

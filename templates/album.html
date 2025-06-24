@@ -356,6 +356,30 @@
         .ranked-song.drag-over:first-child {
             border-top: 2px solid #FFD700;
         }
+        /* This is the visual "budge" or indicator */
+        .drop-indicator {
+            border-top: 3px solid #FFD700 !important; /* A bright gold color */
+            margin-top: 8px !important;
+            padding-top: 8px !important;
+        }
+        .ranked-song {
+            /* This makes the song item a flex container for the album art */
+            display: flex;
+            align-items: center;
+        }
+
+        .ranked-song-cover {
+            width: 35px;
+            height: 35px;
+            border-radius: 4px;
+            margin-right: 12px;
+            object-fit: cover;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+        }
+
+        .ranked-song-name {
+            flex-grow: 1; /* Allows the name to take up available space */
+        }
 
         .position-indicator {
             position: absolute;
@@ -613,11 +637,23 @@
         li.dataset.albumName = songData.album_name || '';
         li.dataset.artistName = songData.artist_name || '';
 
+        if (songData.album_cover_url) {
+            const coverImg = document.createElement('img');
+            coverImg.className = 'ranked-song-cover';
+            coverImg.src = songData.album_cover_url;
+            li.appendChild(coverImg);
+        }
+
         const positionIndicator = document.createElement('span');
         positionIndicator.className = 'position-indicator';
         positionIndicator.textContent = index + 1;
         li.appendChild(positionIndicator);
         li.appendChild(document.createTextNode(songData.song_name));
+
+        const songNameSpan = document.createElement('span');
+        songNameSpan.className = 'ranked-song-name';
+        songNameSpan.textContent = songData.song_name;
+        li.appendChild(songNameSpan);
 
         const scorePreview = document.createElement('span');
         scorePreview.className = 'score-preview';
@@ -625,6 +661,21 @@
         li.appendChild(scorePreview);
 
         if (currentRankGroupKey === 'I') li.classList.add('interlude');
+
+        // --- NEW: Event listeners for drop indicator ---
+        li.addEventListener('dragover', e => {
+            e.preventDefault();
+            // Add indicator only if dragging over a different item
+            if (draggingSong !== li) {
+                li.classList.add('drop-indicator');
+            }
+        });
+        li.addEventListener('dragleave', e => {
+            li.classList.remove('drop-indicator');
+        });
+        li.addEventListener('drop', e => {
+            li.classList.remove('drop-indicator');
+        });
 
         return li;
     }
