@@ -549,9 +549,33 @@ def load_albums_by_artist_route():
                 logging.debug(
                     f"DEBUG: Stored in album_metadata[{album_id_from_sheet}]: Avg={album_metadata[album_id_from_sheet]['average_score']}, Times={album_metadata[album_id_from_sheet]['times_ranked']}")
     logging.debug(f"DEBUG: Completed processing {processed_rows_count} rows from Album Averages DataFrame (loop).")
-    print("\n--- 3. Final 'album_metadata' dictionary created: ---")
-    print(album_metadata)
-    print("--------------------------------------------------")
+
+    grouped_albums = {}
+    for album_data in albums_from_spotify:
+        full_name = album_data.get("name")
+        album_id_spotify = album_data.get("id")
+
+        # Create a "base name" by removing phrases in parentheses like (Deluxe), (Remastered), etc.
+        base_name = re.sub(r'\s*\([^)]*\)$', '', full_name).strip()
+
+        # Get stats for this specific edition
+        metadata = album_metadata.get(album_id_spotify, {})
+
+        edition_data = {
+            "id": album_id_spotify,
+            "full_name": full_name,
+            "image": album_data.get("image"),
+            "average_score": metadata.get("average_score"),
+            "times_ranked": metadata.get("times_ranked"),
+            "last_ranked_date": metadata.get("last_ranked_date"),
+        }
+
+        # If we haven't seen this base name before, create a new list for it
+        if base_name not in grouped_albums:
+            grouped_albums[base_name] = []
+
+        # Add the current edition to the list for its base name
+        grouped_albums[base_name].append(edition_data)
 
     logging.debug(f"DEBUG: Loaded {len(album_metadata)} album metadata entries from sheet into dict.")
     prelim_sheet_name = "Preliminary Ranks"
@@ -612,7 +636,7 @@ def load_albums_by_artist_route():
         f"DEBUG: Prepared {len(albums_for_template)} albums for album.html with metadata, prelim status, and averages.")
 
     # Pass the enriched list to the template
-    return render_template("select_album.html", artist_name=artist_name, albums=albums_for_template)
+    return render_template("select_album.html", artist_name=artist_name, albums=albums_for_template,  grouped_albums=grouped_albums)
 @app.route("/ranking_page")
 def ranking_page():
     sheet_rows = load_google_sheet_data()
