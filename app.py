@@ -545,28 +545,27 @@ def load_albums_by_artist_route():
     logging.debug(f"DEBUG: Completed processing {processed_rows_count} rows from Album Averages DataFrame (loop).")
     logging.debug(f"DEBUG: Loaded {len(album_metadata)} album metadata entries from sheet into dict.")
     prelim_sheet_name = "Preliminary Ranks"
-    prelim_ranked_albums_ids = set()  # Store album_ids for consistency
+    prelim_ranked_albums_ids = set()
     try:
         prelim_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(prelim_sheet_name)
         prelim_sheet_data = get_as_dataframe(prelim_sheet, evaluate_formulas=False).fillna("")
 
-        if not prelim_sheet_data.empty:
+        # CORRECTED: Check for column existence before using it
+        if not prelim_sheet_data.empty and 'artist_name' in prelim_sheet_data.columns:
             current_artist_prelim_ranks = prelim_sheet_data[
                 prelim_sheet_data["artist_name"].astype(str).str.strip().str.lower() == artist_name.strip().lower()
                 ]
             for _, row in current_artist_prelim_ranks.iterrows():
-                # --- FIX: Use 'album_id' for prelim ranks lookup as well ---
                 album_id_p = str(row.get('album_id', '')).strip()
                 prelim_rank_value = row.get('prelim_rank')
-                if album_id_p and prelim_rank_value not in ["", None, 0, "0", "0.0"]:
+                if album_id_p and str(prelim_rank_value).strip() not in ["", "0", "0.0", "None"]:
                     prelim_ranked_albums_ids.add(album_id_p)
-                # --- END FIX ---
-        logging.debug(
-            f"DEBUG: Found {len(prelim_ranked_albums_ids)} albums with preliminary ranks for '{artist_name}'.")
+
+        logging.debug(f"Found {len(prelim_ranked_albums_ids)} albums with preliminary ranks for '{artist_name}'.")
 
     except gspread.exceptions.WorksheetNotFound:
         logging.warning(
-            f"WARNING: Preliminary Ranks sheet '{prelim_sheet_name}' not found. No prelim rank check for pause icon.")
+            f"Preliminary Ranks sheet '{prelim_sheet_name}' not found. No prelim rank check for pause icon.")
     except Exception as e:
         logging.error(f"ERROR: Error loading preliminary ranks for pause icon: {e}", exc_info=True)
 
