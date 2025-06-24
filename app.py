@@ -726,59 +726,52 @@ def save_global_rankings():
         album_averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
 
         # Calculate the average score from the CURRENT submission
-        total_score = 0
-        song_count = 0
-        album_name_for_update = album_name_from_frontend
-        artist_name_for_update = artist_name_from_frontend
+        album_averages_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(album_averages_sheet_name)
+        album_averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
 
+        total_score, song_count = 0, 0
         for song in global_ranked_data:
-            if str(song.get('rank_group')) != 'I':
-                # This check is implicitly handled by the JS sending a unified list,
-                # but we can keep it for safety.
-                if str(song.get('album_id')) == str(current_album_id):
-                    # CORRECTED: Use 'calculated_score' to match what the browser sends
-                    total_score += song.get('calculated_score', 0)
-                    song_count += 1
-                    album_name_for_update = song.get('album_name', album_name_for_update)
-                    artist_name_for_update = song.get('artist_name', artist_name_for_update)
+            if str(song.get('rank_group')) != 'I' and str(song.get('album_id')) == str(current_album_id):
+                total_score += song.get('calculated_score', 0)
+                song_count += 1
 
         current_average_score = round(total_score / song_count, 2) if song_count > 0 else 0
 
-        # Find if this album already has an entry
         matching_album_row = album_averages_df[album_averages_df['album_id'].astype(str) == str(current_album_id)]
 
         if not matching_album_row.empty:
-            # Album exists, UPDATE its row
             row_index = matching_album_row.index[0]
-
-            # Safely get current times_ranked, default to 0 if not a number
             current_times_ranked = pd.to_numeric(album_averages_df.loc[row_index, 'times_ranked'],
                                                  errors='coerce').fillna(0).astype(int)
-
-            # Increment the rank count by 1
             new_times_ranked = current_times_ranked + 1
-
-            # Update the DataFrame
             album_averages_df.loc[row_index, 'average_score'] = current_average_score
             album_averages_df.loc[row_index, 'times_ranked'] = new_times_ranked
             album_averages_df.loc[row_index, 'last_ranked_date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            logging.info(f"Updated album '{album_name_for_update}'. New Times Ranked: {new_times_ranked}")
-
         else:
-            # Album is new, ADD a new row
+            # THIS IS THE CRITICAL FIX
+            # We will create the new row DataFrame with explicit columns to prevent any errors.
             new_row_data = {
                 'album_id': current_album_id,
-                'album_name': album_name_for_update,
-                'artist_name': artist_name_for_update,
+                'album_name': album_name_from_frontend,
+                'artist_name': artist_name_from_frontend,
                 'average_score': current_average_score,
-                'times_ranked': 1,  # It's the first time, so it's 1
+                'times_ranked': 1,
                 'last_ranked_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             }
-            new_row_df = pd.DataFrame([new_row_data])
-            album_averages_df = pd.concat([album_averages_df, new_row_df], ignore_index=True)
-            logging.info(f"Added new album '{album_name_for_update}' to averages. Times Ranked: 1")
+            # Define the columns explicitly to match the sheet
+            df_cols = ['album_id', 'album_name', 'artist_name', 'average_score', 'times_ranked', 'last_ranked_date']
+            new_row_df = pd.DataFrame([new_row_data], columns=df_cols)
 
-        # Write the entire updated DataFrame back to the sheet
+            # Combine it with the existing data
+            album_averages_df = pd.concat([album_averages_df, new_row_df], ignore_index=True)
+
+        # Ensure the final DataFrame has all the correct columns before saving
+        final_cols = ['album_id', 'album_name', 'artist_name', 'average_score', 'times_ranked', 'last_ranked_date']
+        for col in final_cols:
+            if col not in album_averages_df.columns:
+                album_averages_df[col] = None
+        album_averages_df = album_averages_df[final_cols]
+
         set_with_dataframe(album_averages_sheet, album_averages_df, include_index=False)
         logging.debug(f"Successfully wrote updated Album Averages to sheet for album {current_album_id}.")
 
@@ -786,7 +779,7 @@ def save_global_rankings():
 
     except Exception as e:
         import traceback
-        logging.error("\n🔥 ERROR in /save_global_rankings route:")  # Use logging instead of print
+        logging.error("\n🔥 ERROR in /save_global_rankings route:")
         traceback.print_exc()
         return jsonify({'status': 'error', 'message': f'An unexpected error occurred: {e}'}), 500
 
