@@ -749,52 +749,53 @@ def save_global_rankings():
             if str(song.get('rank_group')) != 'I' and str(song.get('album_id')) == str(current_album_id):
                 total_score += song.get('calculated_score', 0)
                 song_count += 1
-
         current_average_score = round(total_score / song_count, 2) if song_count > 0 else 0
 
-        matching_album_row = album_averages_df[album_averages_df['album_id'].astype(str) == str(current_album_id)]
+        # 2. Open the sheet and define the header order
+        album_averages_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(album_averages_sheet_name)
+        headers = ['album_id', 'album_name', 'artist_name', 'average_score', 'times_ranked', 'last_ranked_date']
 
-        if not matching_album_row.empty:
-            row_index = matching_album_row.index[0]
-            current_times_ranked = pd.to_numeric(album_averages_df.loc[row_index, 'times_ranked'],
-                                                 errors='coerce').fillna(0).astype(int)
+        # 3. Try to find an existing row for this album
+        try:
+            cell = album_averages_sheet.find(current_album_id, in_column=1)  # Find the album_id in the first column
+        except gspread.exceptions.CellNotFound:
+            cell = None
+
+        print(f"DEBUG: Searching for album ID '{current_album_id}'. Found cell: {cell}")
+
+        # 4. Update the row if it exists, otherwise append a new one
+        if cell:
+            # Album exists, UPDATE the existing row
+            row_index = cell.row
+            sheet_data = album_averages_sheet.get_all_records()  # Get data to find current times_ranked
+            current_times_ranked = int(
+                sheet_data[row_index - 2].get('times_ranked', 0))  # -2 because list is 0-indexed and header is row 1
             new_times_ranked = current_times_ranked + 1
-            album_averages_df.loc[row_index, 'average_score'] = current_average_score
-            album_averages_df.loc[row_index, 'times_ranked'] = new_times_ranked
-            album_averages_df.loc[row_index, 'last_ranked_date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+            # Prepare the full row data in the correct order
+            row_values = [
+                current_album_id,
+                album_name_from_frontend,
+                artist_name_from_frontend,
+                current_average_score,
+                new_times_ranked,
+                datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            ]
+            # Update the entire row at once
+            album_averages_sheet.update(f'A{row_index}:F{row_index}', [row_values])
+            print(f"DEBUG: Updated row {row_index} for album '{album_name_from_frontend}'")
         else:
-            # THIS IS THE CRITICAL FIX
-            # We will create the new row DataFrame with explicit columns to prevent any errors.
-            print("\n--- 2. Creating NEW row for 'Album Averages': ---")
-            print(f"  - Using current_album_id: '{current_album_id}'")
-            print(f"  - Using album_name: '{album_name_from_frontend}'")
-            new_row_data = {
-                'album_id': current_album_id,
-                'album_name': album_name_from_frontend,
-                'artist_name': artist_name_from_frontend,
-                'average_score': current_average_score,
-                'times_ranked': 1,
-                'last_ranked_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            }
-            # Define the columns explicitly to match the sheet
-            df_cols = ['album_id', 'album_name', 'artist_name', 'average_score', 'times_ranked', 'last_ranked_date']
-            new_row_df = pd.DataFrame([new_row_data], columns=df_cols)
-
-            # Combine it with the existing data
-            album_averages_df = pd.concat([album_averages_df, new_row_df], ignore_index=True)
-        print("\n--- 3. Final DataFrame being saved to sheet: ---")
-        print(album_averages_df.to_string())
-        print("-------------------------------------------------")
-
-        # Ensure the final DataFrame has all the correct columns before saving
-        final_cols = ['album_id', 'album_name', 'artist_name', 'average_score', 'times_ranked', 'last_ranked_date']
-        for col in final_cols:
-            if col not in album_averages_df.columns:
-                album_averages_df[col] = None
-        album_averages_df = album_averages_df[final_cols]
-
-        set_with_dataframe(album_averages_sheet, album_averages_df, include_index=False)
-        logging.debug(f"Successfully wrote updated Album Averages to sheet for album {current_album_id}.")
+            # Album is new, APPEND a new row
+            new_row_values = [
+                current_album_id,
+                album_name_from_frontend,
+                artist_name_from_frontend,
+                current_average_score,
+                1,  # First time ranked
+                datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            ]
+            album_averages_sheet.append_row(new_row_values, value_input_option='USER_ENTERED')
+            print(f"DEBUG: Appended new row for album '{album_name_from_frontend}'")
 
         return jsonify({'status': 'success', 'message': 'Global, Preliminary, and Album Averages saved successfully!'})
 
