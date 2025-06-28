@@ -801,144 +801,125 @@ def save_global_rankings():
         return jsonify({'status': 'error', 'message': f'An unexpected error occurred: {e}'}), 500
 
 
-
 @app.route("/view_album", methods=["POST", "GET"])
 def view_album():
     global sp
     try:
-        if request.method == 'POST':
-            album_id = request.form.get("album_id")
-        else:  # GET request
-            album_id = request.args.get("album_id")
-
+        album_id = request.form.get("album_id") or request.args.get("album_id")
         if not album_id:
-            flash("Missing album ID. Please select an album again.", "warning")
+            flash("Missing album ID.", "warning")
             return redirect(url_for('index'))
 
         print(f"\n--- VIEW ALBUM START (Album ID: {album_id}) ---")
 
+        # 1. Fetch all necessary data upfront
         album_data = load_album_data(sp, album_id)
-        print(f"DEBUG: Loaded Spotify data for '{album_data['album_name']}'")
+        main_sheet_data = get_as_dataframe(client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME),
+                                           evaluate_formulas=False).fillna("")
+        album_averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
 
-        main_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
-        main_sheet_data = get_as_dataframe(main_sheet, evaluate_formulas=False).fillna("")
+        # 2. Determine if we are in "re-rank" mode using safe pandas filtering
+        is_rerank_mode = False
+        if not album_averages_df.empty and 'album_id' in album_averages_df.columns:
+            album_stats = album_averages_df[album_averages_df['album_id'] == album_id]
+            if not album_stats.empty and album_stats.iloc[0]['times_ranked'] > 0:
+                is_rerank_mode = True
 
-        all_final_ranks = pd.DataFrame()
-        if "Ranking Status" in main_sheet_data.columns and not main_sheet_data.empty:
-            all_final_ranks = main_sheet_data[main_sheet_data["Ranking Status"].astype(str).str.lower() == "final"]
+        print(f"DEBUG: Re-rank mode for '{album_data['album_name']}': {is_rerank_mode}")
 
-        print(f"DEBUG: Found {len(all_final_ranks)} existing FINAL entries in sheet.")
+        # 3. Prepare the right panel's song list
+        all_final_ranks_df = main_sheet_data[main_sheet_data["Ranking Status"].astype(
+            str).str.lower() == "final"] if "Ranking Status" in main_sheet_data.columns and not main_sheet_data.empty else pd.DataFrame()
 
+        songs_to_show_in_right_panel = all_final_ranks_df
+        if is_rerank_mode and not all_final_ranks_df.empty:
+            songs_to_show_in_right_panel = all_final_ranks_df[all_final_ranks_df['Spotify Album ID'] != album_id]
+
+        # 4. Prepare the right panel's JS data structure, including album covers
         album_covers_cache = {}
-        if not all_final_ranks.empty and 'Spotify Album ID' in all_final_ranks.columns:
-            unique_album_ids = [aid for aid in all_final_ranks['Spotify Album ID'].unique() if aid]
-
-            # Spotify API has a limit of 20 albums per request, so we chunk it
-            for i in range(0, len(unique_album_ids), 20):
-                chunk_ids = unique_album_ids[i:i + 20]
-                try:
-                    albums_info = sp.albums(chunk_ids)
-                    for album_info in albums_info['albums']:
-                        if album_info and album_info['images']:
-                            album_covers_cache[album_info['id']] = album_info['images'][-1]['url']  # Use smallest image
-                except Exception as e:
-                    print(f"WARNING: Could not fetch album chunk: {e}")
+        if not songs_to_show_in_right_panel.empty and 'Spotify Album ID' in songs_to_show_in_right_panel.columns:
+            unique_album_ids = [aid for aid in songs_to_show_in_right_panel['Spotify Album ID'].unique() if aid]
+            if unique_album_ids:
+                for i in range(0, len(unique_album_ids), 20):
+                    try:
+                        albums_info = sp.albums(unique_album_ids[i:i + 20])
+                        for info in albums_info['albums']:
+                            if info and info['images']:
+                                album_covers_cache[info['id']] = info['images'][-1]['url']
+                    except Exception as e:
+                        print(f"WARNING: Could not fetch album covers: {e}")
 
         rank_groups_for_js = {f"{i / 2:.1f}": [] for i in range(1, 21)}
         rank_groups_for_js['I'] = {'excellent': [], 'average': [], 'bad': []}
-
-        for _, row in all_final_ranks.iterrows():
+        for _, row in songs_to_show_in_right_panel.iterrows():
             try:
                 rank_group_key = str(row.get('Rank Group', '')).strip()
                 song_score = float(row.get('Ranking', 0.0))
                 song_album_id = str(row.get('Spotify Album ID', ''))
-
                 song_data = {
-                    'song_id': str(row.get('Spotify Song ID', '')),
-                    'song_name': str(row.get('Song Name', '')),
-                    'rank_group': rank_group_key,
-                    'calculated_score': song_score,
-                    'rank_position': int(row.get('Position In Group', 0)),
-                    'album_id': str(row.get('Spotify Album ID', '')),
-                    'album_name': str(row.get('Album Name', '')),
-                    'artist_name': str(row.get('Artist Name', '')),
+                    'song_id': str(row.get('Spotify Song ID')), 'song_name': str(row.get('Song Name')),
+                    'rank_group': rank_group_key, 'calculated_score': song_score,
+                    'rank_position': int(row.get('Position In Group', 0)), 'album_id': song_album_id,
+                    'album_name': str(row.get('Album Name')), 'artist_name': str(row.get('Artist Name')),
                     'album_cover_url': album_covers_cache.get(song_album_id)
                 }
-
                 if rank_group_key == 'I':
                     if song_score == 3.0:
                         rank_groups_for_js['I']['excellent'].append(song_data)
                     elif song_score == 2.0:
                         rank_groups_for_js['I']['average'].append(song_data)
-                    elif song_score == 1.0:
+                    else:
                         rank_groups_for_js['I']['bad'].append(song_data)
                 elif rank_group_key in rank_groups_for_js:
                     rank_groups_for_js[rank_group_key].append(song_data)
+            except Exception as e:
+                print(f"WARNING: Error parsing row for JS: {row.to_dict()} - {e}")
 
-            except (ValueError, KeyError, TypeError) as e:
-                print(f"WARNING: Error parsing existing FINAL ranked song row: {row.to_dict()} - {e}")
+        # 5. Prepare the left panel (songs from the current album)
+        songs_for_left_panel = []
+        if is_rerank_mode:
+            current_album_previous_ranks = all_final_ranks_df[all_final_ranks_df['Spotify Album ID'] == album_id]
+            for song in album_data['songs']:
+                song_id = str(song['song_id'])
+                previous_rank_series = \
+                current_album_previous_ranks[current_album_previous_ranks['Spotify Song ID'] == song_id]['Ranking']
+                previous_rank = f"{float(previous_rank_series.iloc[0]):.2f}" if not previous_rank_series.empty else ""
+                songs_for_left_panel.append({**song, 'previous_rank': previous_rank})
+        else:  # This is for initial ranking
+            existing_prelim_ranks = {}
+            try:
+                prelim_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(PRELIM_SHEET_NAME)
+                prelim_sheet_data = get_as_dataframe(prelim_sheet, evaluate_formulas=False).fillna("")
+                if "album_id" in prelim_sheet_data.columns and not prelim_sheet_data.empty:
+                    current_album_prelims = prelim_sheet_data[
+                        prelim_sheet_data["album_id"].astype(str) == str(album_id)]
+                    for _, row in current_album_prelims.iterrows():
+                        if row.get('prelim_rank'):
+                            existing_prelim_ranks[str(row.get('song_id'))] = float(row.get('prelim_rank'))
+            except gspread.exceptions.WorksheetNotFound:
+                print(f"WARNING: Prelim sheet not found, cannot load prelim ranks.")
 
-        for group_key, group_content in rank_groups_for_js.items():
-            if group_key != 'I':
-                group_content.sort(key=lambda x: x.get('rank_position', 0))
+            # Check which songs are already globally ranked
+            globally_ranked_ids = {s['song_id'] for group in rank_groups_for_js.values() if isinstance(group, list) for
+                                   s in group}
+            for song in album_data['songs']:
+                song_id = str(song['song_id'])
+                songs_for_left_panel.append({
+                    **song,
+                    'already_ranked': song_id in globally_ranked_ids,
+                    'prelim_rank': existing_prelim_ranks.get(song_id, '')
+                })
 
-        total_songs_in_groups = 0
-        for group_key, group_content in rank_groups_for_js.items():
-            if group_key == 'I':
-                total_songs_in_groups += sum(len(v) for v in group_content.values())
-            else:
-                total_songs_in_groups += len(group_content)
-        print(f"DEBUG: Populated {total_songs_in_groups} FINAL ranked songs into JS structure.")
-
-        existing_prelim_ranks = {}
-        try:
-            prelim_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(PRELIM_SHEET_NAME)
-            prelim_sheet_data = get_as_dataframe(prelim_sheet, evaluate_formulas=False).fillna("")
-            if "album_id" in prelim_sheet_data.columns and not prelim_sheet_data.empty:
-                current_album_prelims = prelim_sheet_data[prelim_sheet_data["album_id"].astype(str) == str(album_id)]
-                for _, row in current_album_prelims.iterrows():
-                    if row.get('prelim_rank'):
-                        existing_prelim_ranks[str(row.get('song_id'))] = float(row.get('prelim_rank'))
-        except gspread.exceptions.WorksheetNotFound:
-            print(f"WARNING: Preliminary Ranks sheet '{PRELIM_SHEET_NAME}' not found.")
-        except Exception as e:
-            print(f"ERROR: Could not load preliminary ranks: {e}")
-
-        # --- Prepare songs for Left Panel ---
-        all_spotify_songs_with_flags = []
-        for song in album_data['songs']:
-            song_id = str(song['song_id'])
-            is_ranked = any(
-                (group_key == 'I' and any(
-                    any(s['song_id'] == song_id for s in cat_list) for cat_list in group_content.values())) or
-                (group_key != 'I' and any(s['song_id'] == song_id for s in group_content))
-                for group_key, group_content in rank_groups_for_js.items()
-            )
-            all_spotify_songs_with_flags.append({
-                'song_name': song['song_name'],
-                'song_id': song_id,
-                'already_ranked': is_ranked,
-                'prelim_rank': existing_prelim_ranks.get(song_id, '') if not is_ranked else ''
-            })
-
+        # 6. Finalize data and render template
         album_data_for_template = {
-            **album_data,
-            'album_id': album_id,
-            'songs': all_spotify_songs_with_flags
+            **album_data, 'album_id': album_id,
+            'songs': songs_for_left_panel, 'is_rerank_mode': is_rerank_mode
         }
-
-        print(f"--- VIEW ALBUM END (Successfully prepared template) ---\n")
-        return render_template(
-            'album.html',
-            album=album_data_for_template,
-            rank_groups=rank_groups_for_js
-        )
+        return render_template('album.html', album=album_data_for_template, rank_groups=rank_groups_for_js)
 
     except Exception as e:
-        import traceback
-        print("\n🔥 CRITICAL ERROR in /view_album route:")
         traceback.print_exc()
-        flash(f"An unexpected error occurred while loading the album: {e}", "error")
+        flash(f"An unexpected error occurred: {e}", "error")
         return redirect(url_for('index'))
 
 
