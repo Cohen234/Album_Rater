@@ -465,6 +465,32 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #555;
         }
+         .track-number {
+            color: #888;
+            font-size: 0.9em;
+            width: 25px;
+            text-align: right;
+            margin-right: 15px;
+        }
+
+        .previous-rank-display {
+            width: 60px;
+            margin: 0 10px;
+            padding: 4px 8px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #FFD700;
+            border: 1px solid #555;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .score-preview.interlude-label {
+            color: #fff;
+            font-style: italic;
+            opacity: 0.8;
+        }
     </style>
 </head>
 <body>
@@ -494,6 +520,7 @@
                         {% for song in album.songs %}
                             <li class="song-item" draggable="true" data-song-id="{{ song.song_id }}" data-song-name="{{ song.song_name }}">
                                 <span class="song-name">{{ song.song_name }}</span>
+                                <span class="track-number">{{ loop.index }}</span>
                                 <div class="previous-rank-display" title="Previous Rank">{{ song.previous_rank }}</div>
                             </li>
                         {% endfor %}
@@ -670,7 +697,14 @@
 
         const scorePreview = document.createElement('span');
         scorePreview.className = 'score-preview';
-        scorePreview.textContent = `(${(songData.calculated_score || 0).toFixed(2)})`;
+        if (songData.rank_group === 'I') {
+            scorePreview.classList.add('interlude-label');
+            if (songData.calculated_score === 3.0) scorePreview.textContent = 'Excellent';
+            else if (songData.calculated_score === 2.0) scorePreview.textContent = 'Average';
+            else scorePreview.textContent = 'Bad';
+        } else {
+            scorePreview.textContent = `(${(songData.calculated_score || 0).toFixed(2)})`;
+        }
         li.appendChild(scorePreview);
 
         if (currentRankGroupKey === 'I') li.classList.add('interlude');
