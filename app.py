@@ -881,9 +881,25 @@ def view_album():
             current_album_previous_ranks = all_final_ranks_df[all_final_ranks_df['Spotify Album ID'] == album_id]
             for song in album_data['songs']:
                 song_id = str(song['song_id'])
-                previous_rank_series = \
-                current_album_previous_ranks[current_album_previous_ranks['Spotify Song ID'] == song_id]['Ranking']
-                previous_rank = f"{float(previous_rank_series.iloc[0]):.2f}" if not previous_rank_series.empty else ""
+                previous_rank = "N/A"
+                song_rank_info = current_album_previous_ranks[
+                    current_album_previous_ranks['Spotify Song ID'] == song_id]
+
+                if not song_rank_info.empty:
+                    rank_group = song_rank_info.iloc[0].get('Rank Group')
+                    rank_value = float(song_rank_info.iloc[0].get('Ranking'))
+
+                    # THIS IS THE FIX for showing "Excellent" instead of 3.0
+                    if rank_group == 'I':
+                        if rank_value == 3.0:
+                            previous_rank = 'Excellent'
+                        elif rank_value == 2.0:
+                            previous_rank = 'Average'
+                        else:
+                            previous_rank = 'Bad'
+                    else:
+                        previous_rank = f"{rank_value:.2f}"
+
                 songs_for_left_panel.append({**song, 'previous_rank': previous_rank})
         else:  # This is for initial ranking
             existing_prelim_ranks = {}

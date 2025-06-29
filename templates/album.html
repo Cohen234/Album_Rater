@@ -687,15 +687,12 @@
         scorePreview.className = 'score-preview';
 
         // FIX #3: Display text for Interludes instead of numbers
-         if (songData.rank_group === 'I') {
-            scorePreview.classList.add('interlude-label');
-            if (songData.calculated_score === 3.0) scorePreview.textContent = 'Excellent';
-            else if (songData.calculated_score === 2.0) scorePreview.textContent = 'Average';
-            else scorePreview.textContent = 'Bad';
-        } else {
+         if (songData.rank_group !== 'I') {
+            const scorePreview = document.createElement('span');
+            scorePreview.className = 'score-preview';
             scorePreview.textContent = `(${(songData.calculated_score || 0).toFixed(2)})`;
+            li.appendChild(scorePreview);
         }
-        li.appendChild(scorePreview);
 
         li.addEventListener('dragover', e => { e.preventDefault(); if (draggingSong !== li) li.classList.add('drop-indicator'); });
         li.addEventListener('dragleave', () => li.classList.remove('drop-indicator'));
