@@ -814,11 +814,10 @@ def view_album():
 
         # 1. Fetch all necessary data upfront
         album_data = load_album_data(sp, album_id)
-        main_sheet_data = get_as_dataframe(client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME),
-                                           evaluate_formulas=False).fillna("")
+        main_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
+        all_final_ranks_df = get_as_dataframe(main_sheet, evaluate_formulas=False).fillna("")
         album_averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
 
-        # 2. Determine if we are in "re-rank" mode using safe pandas filtering
         is_rerank_mode = False
         if not album_averages_df.empty and 'album_id' in album_averages_df.columns:
             album_stats = album_averages_df[album_averages_df['album_id'] == album_id]
@@ -828,14 +827,11 @@ def view_album():
         print(f"DEBUG: Re-rank mode for '{album_data['album_name']}': {is_rerank_mode}")
 
         # 3. Prepare the right panel's song list
-        all_final_ranks_df = main_sheet_data[main_sheet_data["Ranking Status"].astype(
-            str).str.lower() == "final"] if "Ranking Status" in main_sheet_data.columns and not main_sheet_data.empty else pd.DataFrame()
-
         songs_to_show_in_right_panel = all_final_ranks_df
-        if is_rerank_mode and not all_final_ranks_df.empty:
+        if is_rerank_mode and not all_final_ranks_df.empty and 'Spotify Album ID' in all_final_ranks_df.columns:
             songs_to_show_in_right_panel = all_final_ranks_df[all_final_ranks_df['Spotify Album ID'] != album_id]
 
-        # 4. Prepare the right panel's JS data structure, including album covers
+        # 4. Prepare the right panel's JS data structure
         album_covers_cache = {}
         if not songs_to_show_in_right_panel.empty and 'Spotify Album ID' in songs_to_show_in_right_panel.columns:
             unique_album_ids = [aid for aid in songs_to_show_in_right_panel['Spotify Album ID'].unique() if aid]
@@ -851,31 +847,37 @@ def view_album():
 
         rank_groups_for_js = {f"{i / 2:.1f}": [] for i in range(1, 21)}
         rank_groups_for_js['I'] = {'excellent': [], 'average': [], 'bad': []}
+
+        # --- THIS IS THE CORRECTED LOGIC BLOCK ---
         for _, row in songs_to_show_in_right_panel.iterrows():
             try:
-                rank_group_key = str(row.get('Rank Group', '')).strip()
+                rank_group = str(row.get('Rank Group', '')).strip()
                 song_score = float(row.get('Ranking', 0.0))
                 song_album_id = str(row.get('Spotify Album ID', ''))
+
                 song_data = {
                     'song_id': str(row.get('Spotify Song ID')), 'song_name': str(row.get('Song Name')),
-                    'rank_group': rank_group_key, 'calculated_score': song_score,
+                    'rank_group': rank_group, 'calculated_score': song_score,
                     'rank_position': int(row.get('Position In Group', 0)), 'album_id': song_album_id,
                     'album_name': str(row.get('Album Name')), 'artist_name': str(row.get('Artist Name')),
                     'album_cover_url': album_covers_cache.get(song_album_id)
                 }
-                if rank_group_key == 'I':
+
+                if rank_group == 'I':
                     if song_score == 3.0:
                         rank_groups_for_js['I']['excellent'].append(song_data)
                     elif song_score == 2.0:
                         rank_groups_for_js['I']['average'].append(song_data)
-                    else:
+                    elif song_score == 1.0:
                         rank_groups_for_js['I']['bad'].append(song_data)
-                elif rank_group_key in rank_groups_for_js:
-                    rank_groups_for_js[rank_group_key].append(song_data)
+                elif rank_group in rank_groups_for_js:
+                    rank_groups_for_js[rank_group].append(song_data)
+
             except Exception as e:
                 print(f"WARNING: Error parsing row for JS: {row.to_dict()} - {e}")
+        # --- END OF CORRECTION ---
 
-        # 5. Prepare the left panel (songs from the current album)
+        # 5. Prepare the left panel (songs for the current album)
         songs_for_left_panel = []
         if is_rerank_mode:
             current_album_previous_ranks = all_final_ranks_df[all_final_ranks_df['Spotify Album ID'] == album_id]
@@ -884,12 +886,9 @@ def view_album():
                 previous_rank = "N/A"
                 song_rank_info = current_album_previous_ranks[
                     current_album_previous_ranks['Spotify Song ID'] == song_id]
-
                 if not song_rank_info.empty:
                     rank_group = song_rank_info.iloc[0].get('Rank Group')
                     rank_value = float(song_rank_info.iloc[0].get('Ranking'))
-
-                    # THIS IS THE FIX for showing "Excellent" instead of 3.0
                     if rank_group == 'I':
                         if rank_value == 3.0:
                             previous_rank = 'Excellent'
@@ -899,9 +898,9 @@ def view_album():
                             previous_rank = 'Bad'
                     else:
                         previous_rank = f"{rank_value:.2f}"
-
                 songs_for_left_panel.append({**song, 'previous_rank': previous_rank})
-        else:  # This is for initial ranking
+        else:
+            # For initial ranking, load prelims and check for globally ranked songs
             existing_prelim_ranks = {}
             try:
                 prelim_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(PRELIM_SHEET_NAME)
@@ -918,6 +917,11 @@ def view_album():
             # Check which songs are already globally ranked
             globally_ranked_ids = {s['song_id'] for group in rank_groups_for_js.values() if isinstance(group, list) for
                                    s in group}
+            # Also include interludes
+            for cat_list in rank_groups_for_js['I'].values():
+                for s in cat_list:
+                    globally_ranked_ids.add(s['song_id'])
+
             for song in album_data['songs']:
                 song_id = str(song['song_id'])
                 songs_for_left_panel.append({
@@ -926,11 +930,9 @@ def view_album():
                     'prelim_rank': existing_prelim_ranks.get(song_id, '')
                 })
 
-        # 6. Finalize data and render template
-        album_data_for_template = {
-            **album_data, 'album_id': album_id,
-            'songs': songs_for_left_panel, 'is_rerank_mode': is_rerank_mode
-        }
+            # 6. Finalize and render
+        album_data_for_template = {**album_data, 'album_id': album_id, 'songs': songs_for_left_panel,
+                                   'is_rerank_mode': is_rerank_mode}
         return render_template('album.html', album=album_data_for_template, rank_groups=rank_groups_for_js)
 
     except Exception as e:
