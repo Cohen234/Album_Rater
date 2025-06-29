@@ -758,6 +758,26 @@
         const highestScore = parseFloat(rankGroup) + range;
         return parseFloat((highestScore - (step * position)).toFixed(2));
     }
+     function getSongDataFromDraggedElement(songId) {
+        // First, try to find and remove the song from any existing rank group.
+        // This handles moving already-ranked songs.
+        let songData = findAndRemoveSong(songId);
+
+        // If the song wasn't found, it must be a new song from the left list.
+        if (!songData) {
+            const songItem = document.querySelector(`.song-item[data-song-id="${songId}"]`);
+            // Create a fresh data object for it.
+            songData = {
+                song_id: songId,
+                song_name: songItem.dataset.songName, // Use the correct data attribute
+                album_id: albumData.album_id,
+                album_name: albumData.album_name,
+                artist_name: albumData.artist_name,
+                album_cover_url: albumData.album_cover_url
+            };
+        }
+        return songData;
+    }
 
     // --- UI UPDATE FUNCTIONS ---
     function updateAllRankButtonIcons() {
@@ -839,27 +859,26 @@
     activeRankGroupDisplay.addEventListener('drop', function(e) {
         e.preventDefault();
         if (!draggingSong || currentRankGroup === 'I') return;
+
         const songId = e.dataTransfer.getData("text/plain");
-        let songDataToMove = findAndRemoveSong(songId);
-        if (!songDataToMove) {
-            const songItem = document.querySelector(`.song-item[data-song-id="${songId}"]`);
-            songDataToMove = { song_id: songId, song_name: songItem.dataset.songName, album_id: albumData.album_id, album_name: albumData.album_name, artist_name: albumData.artist_name };
-        }
+        // Use our new reliable helper function
+        let songDataToMove = getSongDataFromDraggedElement(songId);
+
+        // This logic for adding/re-calculating remains the same
         const targetGroup = allRankedSongsByGroup[currentRankGroup];
         const targetLi = e.target.closest('.ranked-song');
         let newIndex = targetLi ? parseInt(targetLi.dataset.rankPosition) : targetGroup.length;
         if (targetLi && e.clientY > targetLi.getBoundingClientRect().top + targetLi.offsetHeight / 2) newIndex++;
+
         songDataToMove.rank_group = currentRankGroup;
         targetGroup.splice(newIndex, 0, songDataToMove);
+
         const rankGroupValue = parseFloat(currentRankGroup);
         targetGroup.forEach((song, idx) => {
             song.calculated_score = calculateScoreValue(idx, targetGroup.length, rankGroupValue);
         });
+
         loadRankedSongsIntoDisplay(currentRankGroup);
-        const originalGroup = e.dataTransfer.getData("text/original-rank-group");
-        if (originalGroup && originalGroup !== currentRankGroup && originalGroup !== 'I') {
-            loadRankedSongsIntoDisplay(originalGroup);
-        }
         updateAllRankButtonIcons();
         draggingSong = null;
     });
@@ -878,14 +897,15 @@
             if (!draggingSong) return;
             const interludeCategory = this.dataset.interludeRank;
             const songId = e.dataTransfer.getData("text/plain");
-            let songDataToMove = findAndRemoveSong(songId);
-            if (!songDataToMove) {
-                const songItem = document.querySelector(`.song-item[data-song-id="${songId}"]`);
-                songDataToMove = { song_id: songId, song_name: songItem.dataset.songName, album_id: albumData.album_id, album_name: albumData.album_name, artist_name: albumData.artist_name };
-            }
+
+            // Use our new reliable helper function here as well
+            let songDataToMove = getSongDataFromDraggedElement(songId);
+
+            // This logic for assigning interlude data remains the same
             songDataToMove.rank_group = 'I';
             songDataToMove.calculated_score = INTERLUDE_SCORES[interludeCategory];
             allRankedSongsByGroup['I'][interludeCategory].push(songDataToMove);
+
             loadInterludeSongsIntoDisplay();
             updateAllRankButtonIcons();
             draggingSong = null;
