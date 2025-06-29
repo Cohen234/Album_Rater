@@ -465,13 +465,7 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #555;
         }
-         .track-number {
-            color: #888;
-            font-size: 0.9em;
-            width: 25px;
-            text-align: right;
-            margin-right: 15px;
-        }
+        .track-number { color: #888; font-size: 0.9em; width: 25px; text-align: right; margin-right: 15px; }
 
         .previous-rank-display {
             width: 60px;
@@ -513,39 +507,32 @@
         <input type="hidden" name="status" id="status_input"> <div id="container">
             <div id="songListContainer">
                 <h3>Songs</h3>
-                <ul id="songList">
-                     {# THIS IS THE NEW LOGIC BLOCK #}
+                 <ul id="songList">
                     {% if album.is_rerank_mode %}
-
                         {% for song in album.songs %}
                             <li class="song-item" draggable="true" data-song-id="{{ song.song_id }}" data-song-name="{{ song.song_name }}">
-                                <span class="song-name">{{ song.song_name }}</span>
                                 <span class="track-number">{{ loop.index }}</span>
+                                <span class="song-name">{{ song.song_name }}</span>
                                 <div class="previous-rank-display" title="Previous Rank">{{ song.previous_rank }}</div>
                             </li>
                         {% endfor %}
                     {% else %}
                         {% for song in album.songs %}
-                            {# ADD THIS CONDITION: Only render the song item if it's NOT already globally ranked #}
                             {% if not song.get('already_ranked') %}
-                            <li class="song-item" {# The 'ranked' class is no longer needed here, as these songs won't be ranked #}
+                            <li class="song-item"
                                 draggable="true"
-                                data-song="{{ song.song_name }}"
-                                data-song-id="{{ song.song_id }}">
+                                data-song-id="{{ song.song_id }}"
+                                data-song-name="{{ song.song_name }}">
                                 <span class="song-name">{{ song.song_name }}</span>
                                 <input type="number"
                                        class="prelim-rank-input"
-                                       min="0.5"
-                                       max="10"
-                                       step="0.5"
-                                       name="prelim_rank_{{ song.song_id }}"
                                        value="{{ song.get('prelim_rank', '') }}"
                                        placeholder="0.5-10"
                                        title="Preliminary rank (0.5-10)">
                                 <span class="checkmark">✓</span>
                                 <span class="ranked-group-display"></span>
                             </li>
-                            {% endif %} {# <-- END OF THE IF CONDITION #}
+                            {% endif %}
                         {% endfor %}
                     {% endif %}
                 </ul>
@@ -689,7 +676,7 @@
         positionIndicator.textContent = index + 1;
         li.appendChild(positionIndicator);
 
-
+        // This was the source of the duplicated name bug. It's now fixed.
         const songNameSpan = document.createElement('span');
         songNameSpan.className = 'ranked-song-name';
         songNameSpan.textContent = songData.song_name;
@@ -697,6 +684,8 @@
 
         const scorePreview = document.createElement('span');
         scorePreview.className = 'score-preview';
+
+        // FIX #3: Display text for Interludes instead of numbers
         if (songData.rank_group === 'I') {
             scorePreview.classList.add('interlude-label');
             if (songData.calculated_score === 3.0) scorePreview.textContent = 'Excellent';
@@ -709,10 +698,9 @@
 
         if (currentRankGroupKey === 'I') li.classList.add('interlude');
 
-        // --- NEW: Event listeners for drop indicator ---
+        // Event listeners for drop indicator
         li.addEventListener('dragover', e => {
             e.preventDefault();
-            // Add indicator only if dragging over a different item
             if (draggingSong !== li) {
                 li.classList.add('drop-indicator');
             }
