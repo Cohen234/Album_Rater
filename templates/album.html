@@ -653,6 +653,7 @@
     }
 
     function createRankedSongElement(songData, index, totalSongsInGroup, currentRankGroupKey) {
+        console.log("Creating ranked element with this data:", songData);
         const li = document.createElement('li');
         li.className = 'ranked-song';
         li.setAttribute('draggable', 'true');
@@ -686,7 +687,7 @@
         scorePreview.className = 'score-preview';
 
         // FIX #3: Display text for Interludes instead of numbers
-        if (songData.rank_group === 'I') {
+         if (songData.rank_group === 'I') {
             scorePreview.classList.add('interlude-label');
             if (songData.calculated_score === 3.0) scorePreview.textContent = 'Excellent';
             else if (songData.calculated_score === 2.0) scorePreview.textContent = 'Average';
@@ -696,24 +697,13 @@
         }
         li.appendChild(scorePreview);
 
-        if (currentRankGroupKey === 'I') li.classList.add('interlude');
-
-        // Event listeners for drop indicator
-        li.addEventListener('dragover', e => {
-            e.preventDefault();
-            if (draggingSong !== li) {
-                li.classList.add('drop-indicator');
-            }
-        });
-        li.addEventListener('dragleave', e => {
-            li.classList.remove('drop-indicator');
-        });
-        li.addEventListener('drop', e => {
-            li.classList.remove('drop-indicator');
-        });
+        li.addEventListener('dragover', e => { e.preventDefault(); if (draggingSong !== li) li.classList.add('drop-indicator'); });
+        li.addEventListener('dragleave', () => li.classList.remove('drop-indicator'));
+        li.addEventListener('drop', () => li.classList.remove('drop-indicator'));
 
         return li;
     }
+
 
     // --- HELPER FUNCTIONS ---
     function findAndRemoveSong(songId) {
