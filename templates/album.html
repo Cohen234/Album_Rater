@@ -759,16 +759,12 @@
         return parseFloat((highestScore - (step * position)).toFixed(2));
     }
      function getSongDataFromDraggedElement(songId) {
-        // Try to find and remove the song from any existing rank group first.
         let songData = findAndRemoveSong(songId);
-
-        // If it wasn't ranked, it's a new drag from the left list.
         if (!songData) {
             const songItem = document.querySelector(`.song-item[data-song-id="${songId}"]`);
-            // Create a fresh data object for it.
             songData = {
                 song_id: songId,
-                song_name: songItem.dataset.songName, // Use the correct attribute
+                song_name: songItem.dataset.songName,
                 album_id: albumData.album_id,
                 album_name: albumData.album_name,
                 artist_name: albumData.artist_name,
@@ -799,22 +795,23 @@
     }
 
     function updateSongCheckmarks() {
-        document.querySelectorAll('.song-item').forEach(item => {
-            const songId = item.dataset.songId;
-            const rankGroupDisplay = item.querySelector('.ranked-group-display');
-            const rankedGroup = getSongRankGroup(songId);
-            if (rankedGroup) {
-                item.classList.add('ranked');
-                item.setAttribute('draggable', 'false');
-                item.querySelector('.prelim-rank-input').disabled = true;
-                rankGroupDisplay.textContent = rankedGroup;
-                rankGroupDisplay.style.display = 'inline-block';
-            } else {
-                item.classList.remove('ranked');
-                item.setAttribute('draggable', 'true');
-                item.querySelector('.prelim-rank-input').disabled = false;
-                rankGroupDisplay.textContent = '';
-                rankGroupDisplay.style.display = 'none';
+        const rankedSongIds = new Set();
+        Object.values(allRankedSongsByGroup).forEach(group => {
+            if (Array.isArray(group)) {
+                group.forEach(song => rankedSongIds.add(song.song_id));
+            } else { // Handle 'I' group
+                Object.values(group).forEach(subGroup => subGroup.forEach(song => rankedSongIds.add(song.song_id)));
+            }
+        });
+
+        document.querySelectorAll('#songList .song-item').forEach(item => {
+            const isRanked = rankedSongIds.has(item.dataset.songId);
+            item.style.opacity = isRanked ? '0.5' : '1';
+            item.setAttribute('draggable', !isRanked);
+
+            const prelimInput = item.querySelector('.prelim-rank-input');
+            if (prelimInput) {
+                prelimInput.disabled = isRanked;
             }
         });
     }
@@ -855,26 +852,35 @@
 
     const activeRankGroupDisplay = document.getElementById('activeRankGroupDisplay');
     activeRankGroupDisplay.addEventListener('dragover', e => e.preventDefault());
+    // REPLACE this entire event listener
     activeRankGroupDisplay.addEventListener('drop', function(e) {
         e.preventDefault();
         if (!draggingSong || currentRankGroup === 'I') return;
-        const songId = e.dataTransfer.getData("text/plain");
 
+        const songId = e.dataTransfer.getData("text/plain");
+        // Use our reliable helper function
         let songDataToMove = getSongDataFromDraggedElement(songId);
 
         const targetGroup = allRankedSongsByGroup[currentRankGroup];
         const targetLi = e.target.closest('.ranked-song');
-        let newIndex = targetLi ? parseInt(targetLi.dataset.rankPosition) : targetGroup.length;
-        if (targetLi && e.clientY > targetLi.getBoundingClientRect().top + targetLi.offsetHeight / 2) newIndex++;
+        // Correctly get the new index to insert at
+        let newIndex = targetLi ? [...targetLi.parentElement.children].indexOf(targetLi) : targetGroup.length;
+        if (targetLi && e.clientY > targetLi.getBoundingClientRect().top + targetLi.offsetHeight / 2) {
+            newIndex++;
+        }
 
         songDataToMove.rank_group = currentRankGroup;
         targetGroup.splice(newIndex, 0, songDataToMove);
+
+        // Recalculate scores for the updated group
         const rankGroupValue = parseFloat(currentRankGroup);
         targetGroup.forEach((song, idx) => {
             song.calculated_score = calculateScoreValue(idx, targetGroup.length, rankGroupValue);
         });
 
         loadRankedSongsIntoDisplay(currentRankGroup);
+        updateAllRankButtonIcons();
+        updateSongCheckmarks();
         draggingSong = null;
     });
 
@@ -894,6 +900,7 @@
             const interludeCategory = this.dataset.interludeRank;
             const songId = e.dataTransfer.getData("text/plain");
 
+            // Use our reliable helper function here too
             let songDataToMove = getSongDataFromDraggedElement(songId);
 
             songDataToMove.rank_group = 'I';
@@ -901,6 +908,8 @@
             allRankedSongsByGroup['I'][interludeCategory].push(songDataToMove);
 
             loadInterludeSongsIntoDisplay();
+            updateAllRankButtonIcons();
+            updateSongCheckmarks();
             draggingSong = null;
         });
     });
