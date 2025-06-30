@@ -595,7 +595,7 @@
     const INTERLUDE_SCORES = { excellent: 3.0, average: 2.0, bad: 1.0 };
 
     // Read-only data for songs from OTHER albums, passed from the server
-    const globallyRankedSongs = {{ rank_groups | tojson }};
+    const allRankedSongsByGroup = {{ rank_groups | tojson }};
 
     // Data for the songs being ranked in THIS session. Starts empty.
     let sessionRanks = {
@@ -628,7 +628,7 @@
         let globalCount = 0;
         const seenSongIds = new Set();
         // Render songs from other albums first (non-draggable)
-        (globallyRankedSongs[rank] || []).forEach((song, index) => {
+        (allRankedSongsByGroup[rank] || []).forEach((song, index) => {
             if (!seenSongIds.has(song.song_id)) {
                 list.appendChild(createRankedSongElement(song, index, true));
                 seenSongIds.add(song.song_id);
@@ -717,7 +717,7 @@
             let globalCount = 0;
             const seenSongIds = new Set();
             // Render global interludes
-            (globallyRankedSongs.I[category] || []).forEach((song, index) => {
+            (allRankedSongsByGroup.I[category] || []).forEach((song, index) => {
                 if (!seenSongIds.has(song.song_id)) {
                     list.appendChild(createRankedSongElement(song, index, true));
                     seenSongIds.add(song.song_id);
