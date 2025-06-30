@@ -844,9 +844,10 @@ def view_album():
                                 album_covers_cache[info['id']] = info['images'][-1]['url']
                     except Exception as e:
                         print(f"WARNING: Could not fetch album covers: {e}")
-
         rank_groups_for_js = {f"{i / 2:.1f}": [] for i in range(1, 21)}
         rank_groups_for_js['I'] = {'excellent': [], 'average': [], 'bad': []}
+        seen_rank_ids = {f"{i / 2:.1f}": set() for i in range(1, 21)}
+        seen_interlude_ids = {'excellent': set(), 'average': set(), 'bad': set()}
 
         # --- THIS IS THE CORRECTED LOGIC BLOCK ---
         for _, row in songs_to_show_in_right_panel.iterrows():
@@ -863,19 +864,23 @@ def view_album():
                     'album_cover_url': album_covers_cache.get(song_album_id)
                 }
 
-                if rank_group == 'I':
-                    if song_score == 3.0:
-                        rank_groups_for_js['I']['excellent'].append(song_data)
-                    elif song_score == 2.0:
-                        rank_groups_for_js['I']['average'].append(song_data)
-                    elif song_score == 1.0:
-                        rank_groups_for_js['I']['bad'].append(song_data)
-                elif rank_group in rank_groups_for_js:
-                    rank_groups_for_js[rank_group].append(song_data)
+                # --- DEDUPLICATION CHECK GOES HERE ---
+                # for each group, keep a set of song ids already added
 
+                if rank_group == 'I':
+                    # Interlude groups
+                    for cat, score_val in zip(['excellent', 'average', 'bad'], [3.0, 2.0, 1.0]):
+                        if song_score == score_val:
+                            # Check if we've already added this song_id
+                            if song_data['song_id'] not in seen_interlude_ids[cat]:
+                                rank_groups_for_js['I'][cat].append(song_data)
+                                seen_interlude_ids[cat].add(song_data['song_id'])
+                elif rank_group in rank_groups_for_js:
+                    if song_data['song_id'] not in seen_rank_ids[rank_group]:
+                        rank_groups_for_js[rank_group].append(song_data)
+                        seen_rank_ids[rank_group].add(song_data['song_id'])
             except Exception as e:
                 print(f"WARNING: Error parsing row for JS: {row.to_dict()} - {e}")
-        # --- END OF CORRECTION ---
 
         # 5. Prepare the left panel (songs for the current album)
         songs_for_left_panel = []
