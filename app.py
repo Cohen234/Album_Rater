@@ -423,10 +423,14 @@ def submit_rankings():
                 "Skipping Album Averages update: Submission status is not 'final' OR no ranked songs submitted.")
         # --- END: Album Averages Sheet Logic ---
 
-        flash('Rankings submitted successfully!', "success")
-        logging.info(f"--- SUBMIT RANKINGS END (Redirecting to album) ---\n")
+        # --- NEW SUCCESS RESPONSE (JSON) ---
+        logging.info(f"--- SUBMIT RANKINGS END (Success) ---\n")
 
-        return redirect(url_for('load_albums_by_artist_route', artist_name=artist_name))
+        return jsonify({
+            'status': 'success',
+            'message': 'Rankings submitted successfully!',
+            'artist_name': artist_name  # Send the artist_name back to the browser
+        })
 
     except Exception as e:
         logging.critical(f"\n🔥 CRITICAL ERROR in /submit_rankings route: {e}", exc_info=True)
