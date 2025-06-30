@@ -699,6 +699,15 @@ def view_album():
                         seen_rank_ids[rank_group].add(song_data['song_id'])
             except Exception as e:
                 print(f"WARNING: Error parsing row for JS: {row.to_dict()} - {e}")
+        logging.debug("Sorting songs within each rank group by their saved position.")
+        for group_key in rank_groups_for_js:
+            # We only sort the numeric groups, not the 'I' (Interlude) group
+            if group_key != 'I' and isinstance(rank_groups_for_js[group_key], list):
+                song_list = rank_groups_for_js[group_key]
+
+                # Sort the list of song dictionaries IN-PLACE
+                # based on the 'position_in_group' that we saved earlier.
+                song_list.sort(key=lambda song: song.get('position_in_group', 0))
 
         # 5. Prepare the left panel (songs for the current album)
         songs_for_left_panel = []
