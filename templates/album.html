@@ -663,7 +663,7 @@
             album_cover_url: albumData.album_cover_url
         };
 
-        // 3. Add it to the correct new group in the session
+        // 3. Add it to the correct new group in the session AND update allRankedSongsByGroup
         const dropZone = e.currentTarget;
         const targetRankGroup = dropZone.closest('.interlude-column') ? 'I' : currentRankGroup;
 
@@ -672,14 +672,20 @@
             songData.rank_group = 'I';
             songData.calculated_score = INTERLUDE_SCORES[category];
             sessionRanks.I[category].push(songData);
+            allRankedSongsByGroup.I[category].push(songData); // PATCH: also update global group
         } else {
             songData.rank_group = targetRankGroup;
             const targetGroup = sessionRanks[targetRankGroup];
-            targetGroup.push(songData); // Just add to the end for now
+            targetGroup.push(songData);
             // Recalculate scores for the group
             targetGroup.forEach((song, idx) => {
                 song.calculated_score = calculateScoreValue(idx, targetGroup.length, parseFloat(targetRankGroup));
             });
+            // PATCH: also update global group
+            allRankedSongsByGroup[targetRankGroup] = [
+                ...(allRankedSongsByGroup[targetRankGroup] || []),
+                songData
+            ];
         }
 
         // 4. Refresh the entire UI
