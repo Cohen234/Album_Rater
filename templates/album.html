@@ -947,14 +947,21 @@
             const songId = e.dataTransfer.getData("text/plain");
             let songDataToMove = getSongDataFromDraggedElement(songId);
 
-            const targetGroup = allRankedSongsByGroup[currentRankGroup];
+            // Remove from all groups first
+            findAndRemoveSong(songId);
+
+            // Find drop index
             const targetLi = e.target.closest('.ranked-song');
-            let newIndex = targetLi ? [...targetLi.parentElement.children].indexOf(targetLi) : targetGroup.length;
-            if (targetLi && e.clientY > targetLi.getBoundingClientRect().top + targetLi.offsetHeight / 2) {
-                newIndex++;
+            let targetGroup = allRankedSongsByGroup[currentRankGroup];
+            let newIndex = targetGroup.length;
+            if (targetLi) {
+                newIndex = [...targetLi.parentElement.children].indexOf(targetLi);
+                if (e.clientY > targetLi.getBoundingClientRect().top + targetLi.offsetHeight / 2) {
+                    newIndex++;
+                }
             }
 
-            songDataToMove.rank_group = currentRankGroup;
+            // Insert at the new index
             targetGroup.splice(newIndex, 0, songDataToMove);
 
             // Recalculate scores for the updated group
@@ -963,9 +970,7 @@
                 song.calculated_score = calculateScoreValue(idx, targetGroup.length, rankGroupValue);
             });
 
-            loadRankedSongsIntoDisplay(currentRankGroup);
-            updateAllRankButtonIcons();
-            updateSongCheckmarks();
+            renderAll();
             draggingSong = null;
         });
 
@@ -1014,6 +1019,10 @@
             updateSongCheckmarks();
             draggingSong = null;
         });
+
+        // --- INITIAL PAGE LOAD ---
+        // (your initial page load code here)
+    });
 
         // --- INITIAL PAGE LOAD ---
         updateAllRankButtonIcons();
