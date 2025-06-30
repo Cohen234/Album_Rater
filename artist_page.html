@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>{{ artist_name }} - Artist Stats</title>
+</head>
+<body>
+    <div class="stat-card">
+        <h3>{{ artist_stats.avg_song_score }}</h3>
+        <p>Average Song Score</p>
+    </div>
+    <div class="stat-card">
+        <h3>{{ artist_stats.avg_album_score }}</h3>
+        <p>Average Album Score</p>
+    </div>
+    <div class="chart-container">
+        <canvas id="rankGroupPieChart"></canvas>
+    </div>
+    <h3>Album Leaderboard</h3>
+<ul>
+    {% for album in album_leaderboard %}
+        <li>
+            <a href="{{ url_for('view_album', album_id=album.album_id) }}">
+                {{ album.album_name }} - (Score: {{ "%.2f"|format(album.average_score) }})
+            </a>
+        </li>
+    {% endfor %}
+</ul>
+
+<a href="{{ url_for('load_albums_by_artist_route', artist_name=artist_name) }}" class="button">
+    Rank an Album
+</a>
+<a href="#" class="button"> Rank Singles / Other Songs
+</a>
+
+<h3>Song Leaderboard (Universal Top 100)</h3>
+<table>
+    <thead>
+        <tr><th>Rank</th><th>Song</th><th>Artist</th><th>Score</th></tr>
+    </thead>
+    <tbody>
+        {% for song in universal_song_leaderboard %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ song['Song Name'] }}</td>
+                <td>{{ song['Artist Name'] }}</td>
+                <td>{{ "%.2f"|format(song.Ranking) }}</td>
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>
+<script>
+    const ctx = document.getElementById('rankGroupPieChart');
+    const pieChartData = {{ pie_chart_data | tojson }};
+
+    new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: pieChartData.labels,
+            datasets: [{
+                label: '# of Songs',
+                data: pieChartData.data,
+                 backgroundColor: [
+                    'rgba(255, 99, 132, 0.8)',
+                    'rgba(54, 162, 235, 0.8)',
+                    'rgba(255, 206, 86, 0.8)',
+                    'rgba(75, 192, 192, 0.8)',
+                    'rgba(153, 102, 255, 0.8)',
+                    'rgba(255, 159, 64, 0.8)',
+                    'rgba(99, 255, 132, 0.8)',
+                    'rgba(235, 54, 162, 0.8)'
+                ],
+                borderColor: '#2d2d2d',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'top',
+                }
+            }
+        }
+    });
+</script>
+</body>
+</html>

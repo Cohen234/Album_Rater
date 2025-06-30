@@ -229,6 +229,67 @@ def load_google_sheet_data():
     return sheet.get_all_records()
 
 
+@app.route("/artist/<string:artist_name>")
+def artist_page(artist_name):
+    try:
+        logging.info(f"--- Loading Artist Page for: {artist_name} ---")
+
+        main_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
+        all_songs_df = get_as_dataframe(main_sheet, evaluate_formulas=False).fillna("")
+        all_albums_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
+
+        # 2. Filter data for the CURRENT artist
+        # Ensure 'Ranking' is numeric for calculations
+        all_songs_df['Ranking'] = pd.to_numeric(all_songs_df['Ranking'], errors='coerce')
+        # Filter both dataframes
+        artist_songs_df = all_songs_df[all_songs_df['Artist Name'].str.lower() == artist_name.lower()]
+        artist_albums_df = all_albums_df[all_albums_df['artist_name'].str.lower() == artist_name.lower()]
+
+        # 3. Calculate Overall Stats
+        avg_song_score = artist_songs_df['Ranking'].mean()
+        avg_album_score = artist_albums_df['average_score'].mean()
+        artist_stats = {
+            'avg_song_score': f"{avg_song_score:.2f}" if pd.notna(avg_song_score) else "N/A",
+            'avg_album_score': f"{avg_album_score:.2f}" if pd.notna(avg_album_score) else "N/A",
+            'total_songs_ranked': len(artist_songs_df)
+        }
+
+        # 4. Prepare Pie Chart Data
+        # Group by the 'Rank Group' column and count songs in each
+        pie_data = artist_songs_df['Rank Group'].value_counts().reset_index()
+        pie_data.columns = ['rank_group', 'count']
+        pie_chart_data = {
+            'labels': pie_data['rank_group'].tolist(),
+            'data': pie_data['count'].tolist()
+        }
+
+        # 5. Prepare Song Leaderboards
+        # Artist-Specific Leaderboard
+        artist_song_leaderboard = artist_songs_df.sort_values(by='Ranking', ascending=False).to_dict('records')
+
+        # Universal Leaderboard
+        all_songs_df_sorted = all_songs_df.sort_values(by='Ranking', ascending=False).reset_index(drop=True)
+        universal_song_leaderboard = all_songs_df_sorted.head(100).to_dict('records')  # Show top 100 universal
+
+        # 6. Prepare Album Leaderboard
+        album_leaderboard = artist_albums_df.sort_values(by='average_score', ascending=False).to_dict('records')
+
+        # 7. Pass all the data to the template
+        return render_template(
+            "artist_page.html",
+            artist_name=artist_name,
+            artist_stats=artist_stats,
+            pie_chart_data=pie_chart_data,
+            artist_song_leaderboard=artist_song_leaderboard,
+            universal_song_leaderboard=universal_song_leaderboard,
+            album_leaderboard=album_leaderboard
+        )
+
+    except Exception as e:
+        logging.critical(f"🔥 CRITICAL ERROR loading artist page for {artist_name}: {e}", exc_info=True)
+        flash("Could not load the page for that artist.", "error")
+        return redirect(url_for('index'))
+
 @app.route("/submit_rankings", methods=["POST"])
 def submit_rankings():
     global sp, client  # Ensure access to global Spotify and GSheets client
@@ -475,8 +536,9 @@ def load_albums_by_artist_route():
     artist_name = None # Initialize artist_name
 
     if request.method == "POST":
-        # For initial search (from a form)
         artist_name = request.form["artist_name"]
+        # Instead of rendering a page here, redirect to the new artist page
+        return redirect(url_for('artist_page', artist_name=artist_name))
     elif request.method == "GET":
         # For redirect after ranking (from url_for passing it as a query param)
         artist_name = request.args.get("artist_name")
