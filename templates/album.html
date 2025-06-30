@@ -588,16 +588,21 @@
     </form> {# closes #rankingForm #}
 
     <script>
-    let draggingSong = null;
-    let currentRankGroup = null; // Stores the currently selected rank (e.g., "4.5", "5.0", "I")
-    const INTERLUDE_SCORES = {
-        excellent: 3.0,
-        average: 2.0,
-        bad: 1.0
+   // --- NEW, ROBUST STATE MANAGEMENT ---
+    let draggingSongElement = null; // Store the element being dragged
+    let activeRankGroupKey = null;  // The currently selected rank group (e.g., "4.5")
+
+    const INTERLUDE_SCORES = { excellent: 3.0, average: 2.0, bad: 1.0 };
+
+    // Read-only data for songs from OTHER albums, passed from the server
+    const globallyRankedSongs = {{ rank_groups | tojson }};
+
+    // Data for the songs being ranked in THIS session. Starts empty.
+    let sessionRanks = {
+        ...Object.fromEntries(Array.from({length: 20}, (_, i) => [(i * 0.5 + 0.5).toFixed(1), []])),
+        'I': { excellent: [], average: [], bad: [] }
     };
 
-    // Global data structure to hold all ranked songs, organized by group
-    let allRankedSongsByGroup = {{ rank_groups | tojson }};
     const albumData = {{ album | tojson }};
 
     // --- INITIALIZATION ---
@@ -617,46 +622,108 @@
     console.log("Initialized allRankedSongsByGroup:", allRankedSongsByGroup);
 
     // --- UI DISPLAY FUNCTIONS ---
-    function loadRankedSongsIntoDisplay(rank) {
-        const rankedSongsListDisplay = document.getElementById('rankedSongsList');
-        const emptyState = document.getElementById('emptyState');
-        rankedSongsListDisplay.innerHTML = '';
-        const songsToDisplay = allRankedSongsByGroup[rank] || [];
-        if (songsToDisplay.length === 0) {
-            emptyState.style.display = 'block';
-            emptyState.textContent = `Drag songs here to rank them in the ${rank} group.`;
-            rankedSongsListDisplay.style.display = 'none';
-        } else {
-            emptyState.style.display = 'none';
-            rankedSongsListDisplay.style.display = 'block';
-        }
-        songsToDisplay.forEach((song, index) => {
-            const li = createRankedSongElement(song, index, songsToDisplay.length, rank);
-            rankedSongsListDisplay.appendChild(li);
+     function loadRankedSongsIntoDisplay(rank) {
+        const list = document.getElementById('rankedSongsList');
+        list.innerHTML = '';
+        // Render songs from other albums first (non-draggable)
+        (globallyRankedSongs[rank] || []).forEach((song, index) => {
+            list.appendChild(createRankedSongElement(song, index, true));
         });
-        updateSongCheckmarks();
+        // Render songs ranked in this session (draggable)
+        (sessionRanks[rank] || []).forEach((song, index) => {
+            // Adjust index to account for global songs
+            list.appendChild(createRankedSongElement(song, globalCount + index));
+        });
+    }
+     const onDropInRankGroup = (e) => {
+        e.preventDefault();
+        e.currentTarget.classList.remove('drag-over');
+        if (!draggingSongElement) return;
+
+        const songId = draggingSongElement.dataset.songId;
+
+        // 1. Remove the song from anywhere it might be in the current session
+        removeSongFromSession(songId);
+
+        // 2. Create the data object for the song
+        const songData = {
+            song_id: songId,
+            song_name: draggingSongElement.dataset.songName,
+            album_id: albumData.album_id,
+            album_name: albumData.album_name,
+            artist_name: albumData.artist_name,
+            album_cover_url: albumData.album_cover_url
+        };
+
+        // 3. Add it to the correct new group in the session
+        const dropZone = e.currentTarget;
+        const targetRankGroup = dropZone.closest('.interlude-column') ? 'I' : activeRankGroupKey;
+
+        if (targetRankGroup === 'I') {
+            const category = dropZone.dataset.interludeRank;
+            songData.rank_group = 'I';
+            songData.calculated_score = INTERLUDE_SCORES[category];
+            sessionRanks.I[category].push(songData);
+        } else {
+            songData.rank_group = targetRankGroup;
+            const targetGroup = sessionRanks[targetRankGroup];
+            targetGroup.push(songData); // Just add to the end for now
+            // Recalculate scores for the group
+            targetGroup.forEach((song, idx) => {
+                song.calculated_score = calculateScoreValue(idx, targetGroup.length, parseFloat(targetRankGroup));
+            });
+        }
+
+        // 4. Refresh the entire UI
+        renderAll();
+        draggingSongElement = null;
+    };
+
+    // Helper to remove a song from the session data before placing it again
+    function removeSongFromSession(songId) {
+        Object.keys(sessionRanks).forEach(key => {
+            if (key === 'I') {
+                Object.keys(sessionRanks.I).forEach(cat => {
+                    sessionRanks.I[cat] = sessionRanks.I[cat].filter(s => s.song_id !== songId);
+                });
+            } else {
+                sessionRanks[key] = sessionRanks[key].filter(s => s.song_id !== songId);
+            }
+        });
     }
 
+    function setupDropZone(element) {
+        element.addEventListener('dragover', e => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); });
+        element.addEventListener('dragleave', e => { e.currentTarget.classList.remove('drag-over'); });
+        element.addEventListener('drop', onDropInRankGroup);
+    }
+
+    // Apply the new drop logic to all zones
+    setupDropZone(document.getElementById('activeRankGroupDisplay'));
+    document.querySelectorAll('.interlude-column').forEach(setupDropZone);
+
     function loadInterludeSongsIntoDisplay() {
-        document.getElementById('excellent-list').innerHTML = '';
-        document.getElementById('average-list').innerHTML = '';
-        document.getElementById('bad-list').innerHTML = '';
-        const interludeGroups = allRankedSongsByGroup['I'];
-        Object.keys(interludeGroups).forEach(category => {
-            const listElement = document.getElementById(`${category}-list`);
-            interludeGroups[category].forEach((song, index) => {
-                const li = createRankedSongElement(song, index, interludeGroups[category].length, 'I');
-                listElement.appendChild(li);
+        ['excellent', 'average', 'bad'].forEach(category => {
+            const list = document.getElementById(`${category}-list`);
+            list.innerHTML = '';
+            // Render global interludes
+            (globallyRankedSongs.I[category] || []).forEach((song, index) => {
+                list.appendChild(createRankedSongElement(song, index, true));
+            });
+            // Render session interludes
+            (sessionRanks.I[category] || []).forEach((song, index) => {
+                list.appendChild(createRankedSongElement(song, globalCount + index));
             });
         });
-        updateSongCheckmarks();
     }
 
     function createRankedSongElement(songData, index, totalSongsInGroup, currentRankGroupKey) {
-        console.log("Creating ranked element with this data:", songData);
         const li = document.createElement('li');
         li.className = 'ranked-song';
-        li.setAttribute('draggable', 'true');
+        li.setAttribute('draggable', !isGlobal); // Songs from other albums cannot be moved
+        if (isGlobal) {
+            li.style.opacity = '0.6'; // Make global songs look "locked"
+        }
         li.dataset.song = songData.song_name;
         li.dataset.songId = songData.song_id;
         li.dataset.rankGroup = currentRankGroupKey;
