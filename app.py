@@ -89,6 +89,28 @@ def load_album_data(sp_param, album_id):
         'url': album_url,
         'songs': songs
     }
+def calculate_score_value(position, total_songs, rank_group_val):
+    """
+    Calculates a precise score for a song based on its position in a ranked group.
+    This is the Python equivalent of the JavaScript function.
+    """
+    # Ensure rank_group_val is a float for calculations
+    try:
+        rank_group_val = float(rank_group_val)
+    except (ValueError, TypeError):
+        return 0.0 # Return a default score if rank_group is invalid
+
+    if total_songs <= 1:
+        return rank_group_val
+
+    # The range of scores within a group, e.g., 8.5 group scores can range from ~8.0 to ~9.0
+    # A smaller range like 0.49 prevents scores from touching the next rank group (e.g., 8.99, not 9.0)
+    score_range = 0.49
+    step = score_range / (total_songs - 1)
+    highest_score = rank_group_val + (score_range / 2)
+
+    return round(highest_score - (step * position), 2)
+
 def get_album_averages_df(client_gspread, spreadsheet_id, sheet_name):
     try:
         sheet = client_gspread.open_by_key(spreadsheet_id).worksheet(sheet_name)
@@ -708,6 +730,16 @@ def view_album():
                 # Sort the list of song dictionaries IN-PLACE
                 # based on the 'position_in_group' that we saved earlier.
                 song_list.sort(key=lambda song: song.get('position_in_group', 0))
+        logging.debug("Recalculating unified scores for each rank group.")
+        for group_key in rank_groups_for_js:
+            if group_key != 'I' and isinstance(rank_groups_for_js[group_key], list):
+                song_list = rank_groups_for_js[group_key]
+                total_songs_in_group = len(song_list)
+
+                # Now loop through the correctly sorted list and update the score
+                for i, song in enumerate(song_list):
+                    new_score = calculate_score_value(i, total_songs_in_group, group_key)
+                    song['calculated_score'] = new_score
 
         # 5. Prepare the left panel (songs for the current album)
         songs_for_left_panel = []
