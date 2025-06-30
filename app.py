@@ -91,25 +91,32 @@ def load_album_data(sp_param, album_id):
     }
 def calculate_score_value(position, total_songs, rank_group_val):
     """
-    Calculates a precise score for a song based on its position in a ranked group.
-    This is the Python equivalent of the JavaScript function.
+    Calculates a precise score for a song where the rank group is the floor.
+    e.g., all songs in group 5.0 will be scored >= 5.0.
     """
-    # Ensure rank_group_val is a float for calculations
     try:
         rank_group_val = float(rank_group_val)
     except (ValueError, TypeError):
-        return 0.0 # Return a default score if rank_group is invalid
+        return 0.0
 
+    # If there's only one song, its score is the rank group value.
     if total_songs <= 1:
         return rank_group_val
 
-    # The range of scores within a group, e.g., 8.5 group scores can range from ~8.0 to ~9.0
-    # A smaller range like 0.49 prevents scores from touching the next rank group (e.g., 8.99, not 9.0)
-    score_range = 0.49
-    step = score_range / (total_songs - 1)
-    highest_score = rank_group_val + (score_range / 2)
+    # --- NEW SCORING LOGIC ---
+    # The score range is now fixed from .00 to .49 within the rank group.
+    score_spread = 0.49
 
-    return round(highest_score - (step * position), 2)
+    # The highest possible score is at the top of the range.
+    highest_score = rank_group_val + score_spread
+
+    # The step is the total spread divided by the number of "gaps" between songs.
+    step = score_spread / (total_songs - 1)
+
+    # The final score is calculated by starting high and subtracting based on position.
+    new_score = highest_score - (step * position)
+
+    return round(new_score, 2)
 
 def get_album_averages_df(client_gspread, spreadsheet_id, sheet_name):
     try:
