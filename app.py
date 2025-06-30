@@ -852,6 +852,8 @@ def view_album():
         # --- THIS IS THE CORRECTED LOGIC BLOCK ---
         for _, row in songs_to_show_in_right_panel.iterrows():
             try:
+                if not row.get('Song Name') or not row.get('Ranking'):
+                    continue
                 rank_group = str(row.get('Rank Group', '')).strip()
                 song_score = float(row.get('Ranking', 0.0))
                 song_album_id = str(row.get('Spotify Album ID', ''))
