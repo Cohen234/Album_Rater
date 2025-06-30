@@ -3,87 +3,241 @@
 <head>
     <meta charset="UTF-8">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
     <title>{{ artist_name }} - Artist Stats</title>
+    <style>
+        :root {
+            --background-color: #121212;
+            --surface-color: #282828;
+            --primary-text-color: #ffffff;
+            --secondary-text-color: #b3b3b3;
+            --border-color: #383838;
+            --spotify-green: #1DB954;
+        }
+
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background-color: var(--background-color);
+            color: var(--primary-text-color);
+            margin: 0;
+            padding: 25px;
+        }
+
+        header {
+            text-align: center;
+            padding: 40px 20px;
+            background: linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)), url('https://source.unsplash.com/1600x900/?music') no-repeat center center;
+            background-size: cover;
+            border-radius: 12px;
+            margin-bottom: 25px;
+        }
+
+        header h1 {
+            font-size: 4em;
+            margin: 0 0 20px 0;
+            font-weight: 700;
+        }
+
+        .button {
+            background-color: var(--spotify-green);
+            color: white;
+            padding: 12px 28px;
+            text-decoration: none;
+            border-radius: 500px;
+            font-weight: 600;
+            transition: transform 0.2s ease, background-color 0.2s ease;
+            margin: 0 10px;
+            text-transform: uppercase;
+            font-size: 0.9em;
+            letter-spacing: 1px;
+        }
+
+        .button:hover {
+            transform: scale(1.05);
+            background-color: #1ed760;
+        }
+
+        .disabled-button {
+            background-color: #535353;
+            cursor: not-allowed;
+        }
+        .disabled-button:hover {
+             transform: none;
+             background-color: #535353;
+        }
+
+        main {
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+        }
+
+        section { display: grid; gap: 25px; }
+        .stats-overview { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); text-align: center; }
+        .visuals-section, .leaderboards-section { grid-template-columns: 1fr 1fr; }
+
+        .stat-card, .leaderboard-card, .chart-container-card {
+            background-color: var(--surface-color);
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .stat-card h3 { font-size: 2.5em; margin: 0 0 5px 0; color: var(--primary-text-color); }
+        .stat-card p { margin: 0; color: var(--secondary-text-color); }
+        h3 { margin-top: 0; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
+        ul { list-style: none; padding: 0; margin: 0; }
+
+        ul li a {
+            display: block;
+            padding: 10px;
+            text-decoration: none;
+            color: var(--primary-text-color);
+            border-radius: 4px;
+            transition: background-color 0.2s ease;
+            font-weight: 600;
+        }
+        ul li a:hover { background-color: rgba(255, 255, 255, 0.1); }
+        .album-score { color: var(--secondary-text-color); font-size: 0.9em; margin-left: 10px; }
+
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid var(--border-color); }
+        th { color: var(--secondary-text-color); text-transform: uppercase; font-size: 0.8em; }
+        td:first-child, th:first-child { width: 50px; text-align: center; color: var(--secondary-text-color); }
+
+        .chart-container { max-width: 320px; margin: auto; }
+    </style>
 </head>
 <body>
-    <div class="stat-card">
-        <h3>{{ artist_stats.avg_song_score }}</h3>
-        <p>Average Song Score</p>
+    <header>
+    <h1>{{ artist_name }}</h1>
+    <div class="header-actions">
+        <a href="{{ url_for('select_albums_page', artist_name=artist_name) }}" class="button">Rank an Album</a>
+        <a href="#" class="button disabled-button">Rank Singles (Soon)</a>
     </div>
-    <div class="stat-card">
-        <h3>{{ artist_stats.avg_album_score }}</h3>
-        <p>Average Album Score</p>
-    </div>
-    <div class="chart-container">
-        <canvas id="rankGroupPieChart"></canvas>
-    </div>
-    <h3>Album Leaderboard</h3>
-<ul>
-    {% for album in album_leaderboard %}
-        <li>
-            <a href="{{ url_for('view_album', album_id=album.album_id) }}">
-                {{ album.album_name }} - (Score: {{ "%.2f"|format(album.average_score) }})
-            </a>
-        </li>
-    {% endfor %}
-</ul>
+</header>
 
-<a href="{{ url_for('load_albums_by_artist_route', artist_name=artist_name) }}" class="button">
-    Rank an Album
-</a>
-<a href="#" class="button"> Rank Singles / Other Songs
-</a>
+<main>
+    <section class="stats-overview">
+        <div class="stat-card">
+            <h3>{{ artist_stats.avg_song_score }}</h3>
+            <p>Average Song Score</p>
+        </div>
+        <div class="stat-card">
+            <h3>{{ artist_stats.avg_album_score }}</h3>
+            <p>Average Album Score</p>
+        </div>
+        <div class="stat-card">
+            <h3>{{ artist_stats.total_songs_ranked }}</h3>
+            <p>Total Songs Ranked</p>
+        </div>
+    </section>
 
-<h3>Song Leaderboard (Universal Top 100)</h3>
-<table>
-    <thead>
-        <tr><th>Rank</th><th>Song</th><th>Artist</th><th>Score</th></tr>
-    </thead>
-    <tbody>
-        {% for song in universal_song_leaderboard %}
-            <tr>
-                <td>{{ loop.index }}</td>
-                <td>{{ song['Song Name'] }}</td>
-                <td>{{ song['Artist Name'] }}</td>
-                <td>{{ "%.2f"|format(song.Ranking) }}</td>
-            </tr>
-        {% endfor %}
-    </tbody>
-</table>
+    <section class="visuals-section">
+        <div class="leaderboard-card">
+            <h3>Album Leaderboard</h3>
+            <ul>
+                {% for album in album_leaderboard %}
+                    <li>
+                        <a href="{{ url_for('view_album', album_id=album.album_id) }}">
+                             <span class="album-name">{{ album.album_name }}</span>
+                             <span class="album-score">Score: {{ "%.2f"|format(album.average_score) if album.average_score is not none else 'N/A' }}</span>
+                        </a>
+                    </li>
+                {% else %}
+                    <li>No albums ranked yet.</li>
+                {% endfor %}
+            </ul>
+        </div>
+        <div class="chart-container-card">
+            <h3>Rank Distribution</h3>
+            <div class="chart-container">
+                <canvas id="rankGroupPieChart"></canvas>
+            </div>
+        </div>
+    </section>
+
+    <section class="leaderboards-section">
+        <div class="leaderboard-card">
+            <h3>Song Leaderboard (Artist)</h3>
+            <table>
+                <thead>
+                    <tr><th>Rank</th><th>Song</th><th>Score</th></tr>
+                </thead>
+                <tbody>
+                    {% for song in artist_song_leaderboard %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td>{{ song['Song Name'] }}</td>
+                            <td>{{ "%.2f"|format(song.Ranking) }}</td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="3">No songs ranked for this artist yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="leaderboard-card">
+            <h3>Song Leaderboard (Universal Top 100)</h3>
+            <table>
+                <thead>
+                    <tr><th>Rank</th><th>Song</th><th>Artist</th><th>Score</th></tr>
+                </thead>
+                <tbody>
+                    {% for song in universal_song_leaderboard %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td>{{ song['Song Name'] }}</td>
+                            <td>{{ song['Artist Name'] }}</td>
+                            <td>{{ "%.2f"|format(song.Ranking) }}</td>
+                        </tr>
+                    {% else %}
+                         <tr><td colspan="4">No songs ranked yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</main>
 <script>
-    const ctx = document.getElementById('rankGroupPieChart');
-    const pieChartData = {{ pie_chart_data | tojson }};
+        const ctx = document.getElementById('rankGroupPieChart').getContext('2d');
+        const pieChartData = {{ pie_chart_data | tojson }};
 
-    new Chart(ctx, {
-        type: 'pie',
-        data: {
-            labels: pieChartData.labels,
-            datasets: [{
-                label: '# of Songs',
-                data: pieChartData.data,
-                 backgroundColor: [
-                    'rgba(255, 99, 132, 0.8)',
-                    'rgba(54, 162, 235, 0.8)',
-                    'rgba(255, 206, 86, 0.8)',
-                    'rgba(75, 192, 192, 0.8)',
-                    'rgba(153, 102, 255, 0.8)',
-                    'rgba(255, 159, 64, 0.8)',
-                    'rgba(99, 255, 132, 0.8)',
-                    'rgba(235, 54, 162, 0.8)'
-                ],
-                borderColor: '#2d2d2d',
-                borderWidth: 2
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    position: 'top',
+        new Chart(ctx, {
+            type: 'polarArea', // PolarArea is a fun, Spotify-like chart
+            data: {
+                labels: pieChartData.labels.map(String),
+                datasets: [{
+                    label: '# of Songs',
+                    data: pieChartData.data,
+                    backgroundColor: [
+                        '#1DB954', '#179c47', '#117838', '#0c5b29', '#083c1b',
+                        '#b3b3b3', '#ffffff', '#282828', '#535353'
+                    ],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { color: '#ffffff' }
+                    }
+                },
+                scales: {
+                    r: {
+                        grid: { color: 'rgba(255, 255, 255, 0.2)' },
+                        ticks: {
+                            color: 'white',
+                            backdropColor: 'rgba(0, 0, 0, 0.5)',
+                            backdropPadding: 4
+                        }
+                    }
                 }
             }
-        }
-    });
-</script>
+        });
+    </script>
 </body>
 </html>
