@@ -242,6 +242,7 @@ def submit_rankings():
                 spotify_tracks_for_album.update(
                     {song_id: f"Unknown Song {song_id}" for song_id in prelim_ranks_from_js.keys() if
                      song_id not in spotify_tracks_for_album})
+            # --- CORRECTED BACKEND CODE ---
         except Exception as e:
             logging.warning(
                 f"Could not fetch Spotify tracks for album {album_id}: {e}. Falling back to submission data for song names.",
