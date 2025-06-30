@@ -686,7 +686,14 @@ def view_album():
                 if not row.get('Song Name') or pd.isna(row.get('Ranking')):
                     continue
 
-                rank_group = str(row.get('Rank Group', '')).strip()
+                try:
+                    # Convert the value from the sheet (e.g., '4' or '4.5') to a float
+                    rank_group_val = float(row.get('Rank Group'))
+                    # Format it back to a string with one decimal place (e.g., '4.0', '4.5')
+                    rank_group = f"{rank_group_val:.1f}"
+                except (ValueError, TypeError):
+                    # If the Rank Group is not a number (like 'I' for Interlude), just use it as is.
+                    rank_group = str(row.get('Rank Group', '')).strip()
                 song_score = float(row.get('Ranking', 0.0))
                 song_album_id = str(row.get('Spotify Album ID', ''))
 
