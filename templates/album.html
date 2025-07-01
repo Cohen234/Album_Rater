@@ -750,39 +750,39 @@
             const highestScore = parseFloat(rankGroup) + range;
             return parseFloat((highestScore - (step * position)).toFixed(2));
         }
-        function updateAverageAlbumScore() {
+         function updateAverageAlbumScore() {
             const averageScoreDisplay = document.getElementById('averageScoreDisplay');
-            const interludeScoresToExclude = [1.0, 2.0, 3.0]; // Define the exact scores to exclude
             let totalScore = 0;
             let songCount = 0;
 
-            // Iterate over every group
+            // Iterate over all rank groups
             for (const groupKey in allRankedSongsByGroup) {
-                if (!allRankedSongsByGroup.hasOwnProperty(groupKey)) continue;
-
-                let songsInGroup = [];
-                // The 'I' group has a nested structure, so we handle it separately to get a flat list of its songs
-                if (groupKey === 'I') {
-                    songsInGroup = [
-                        ...allRankedSongsByGroup['I'].excellent,
-                        ...allRankedSongsByGroup['I'].average,
-                        ...allRankedSongsByGroup['I'].bad
-                    ];
-                } else {
-                    songsInGroup = allRankedSongsByGroup[groupKey];
+                // The most reliable way to identify an interlude is by its group.
+                // If the group is the Interlude group ('I'), we skip it entirely.
+                if (groupKey === 'I' || !allRankedSongsByGroup.hasOwnProperty(groupKey)) {
+                    continue;
                 }
 
-                if (Array.isArray(songsInGroup)) {
-                    songsInGroup.forEach(song => {
-                        // CRITICAL CHANGE: Only include a song in the average if its score is a number
-                        // AND its score is NOT one of the excluded interlude scores (1.0, 2.0, or 3.0).
-                        if (typeof song.calculated_score === 'number' && !interludeScoresToExclude.includes(song.calculated_score)) {
+                const group = allRankedSongsByGroup[groupKey];
+                if (Array.isArray(group)) {
+                    group.forEach(song => {
+                        // All songs in numeric groups are counted.
+                        if (typeof song.calculated_score === 'number') {
                             totalScore += song.calculated_score;
                             songCount++;
                         }
                     });
                 }
             }
+
+            if (songCount > 0) {
+                const average = totalScore / songCount;
+                averageScoreDisplay.textContent = average.toFixed(2);
+            } else {
+                averageScoreDisplay.textContent = 'N/A';
+            }
+        }
+        // --- END: CORRECTED AVERAGE SCORE FUNCTION ---
 
             if (songCount > 0) {
                 const average = totalScore / songCount;
