@@ -93,6 +93,12 @@
             font-weight: normal;
             color: #bbb;
         }
+        header .album-info h3 {
+            margin: 10px 0 0 0;
+            font-size: 16px;
+            font-weight: 500;
+            color: #ccc;
+        }
 
         #container {
             display: flex;
@@ -484,6 +490,7 @@
         <div class="album-info">
             <h1>{{ album.album_name }}</h1>
             <h2>{{ album.artist_name }}</h2>
+            <h3>Average Score: <span id="averageScoreDisplay">N/A</span></h3>
         </div>
     </header>
     <form id="rankingForm" action="/submit_rankings" method="POST">
@@ -743,6 +750,34 @@
             const highestScore = parseFloat(rankGroup) + range;
             return parseFloat((highestScore - (step * position)).toFixed(2));
         }
+        function updateAverageAlbumScore() {
+            const averageScoreDisplay = document.getElementById('averageScoreDisplay');
+            let totalScore = 0;
+            let songCount = 0;
+
+            for (const groupKey in allRankedSongsByGroup) {
+                // Skip the 'I' group for interludes and non-own properties
+                if (groupKey === 'I' || !allRankedSongsByGroup.hasOwnProperty(groupKey)) {
+                    continue;
+                }
+
+                const group = allRankedSongsByGroup[groupKey];
+                if (Array.isArray(group)) {
+                    group.forEach(song => {
+                        if (typeof song.calculated_score === 'number') {
+                            totalScore += song.calculated_score;
+                            songCount++;
+                        }
+                    });
+                }
+            }
+            if (songCount > 0) {
+                const average = totalScore / songCount;
+                averageScoreDisplay.textContent = average.toFixed(2);
+            } else {
+                averageScoreDisplay.textContent = 'N/A';
+            }
+        }
 
         // --- UI UPDATE FUNCTIONS ---
         function updateAllRankButtonIcons() {
@@ -846,6 +881,7 @@
                 loadRankedSongsIntoDisplay(originalGroup);
             }
             updateAllRankButtonIcons();
+            updateAverageAlbumScore();
             draggingSong = null;
         });
 
@@ -873,6 +909,7 @@
                 allRankedSongsByGroup['I'][interludeCategory].push(songDataToMove);
                 loadInterludeSongsIntoDisplay();
                 updateAllRankButtonIcons();
+                updateAverageAlbumScore();
                 draggingSong = null;
             });
         });
@@ -892,6 +929,7 @@
             }
             updateAllRankButtonIcons();
             updateSongCheckmarks();
+            updateAverageAlbumScore();
             draggingSong = null;
         });
 
@@ -1000,7 +1038,8 @@
                 document.getElementById('emptyState').textContent = 'Select a rank group above to start ranking songs.';
                 document.getElementById('rankedSongsList').style.display = 'none';
             }
-            updateSongCheckmarks(); // Also run this on load
+            updateSongCheckmarks();
+            updateAverageAlbumScore();// Also run this on load
         });
     </script>
 </body>
