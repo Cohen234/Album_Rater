@@ -713,18 +713,25 @@ def view_album():
 
         print(f"DEBUG: Re-rank mode for '{album_data['album_name']}': {is_rerank_mode}")
 
-        # 3. Prepare the right panel's song list
         if not all_final_ranks_df.empty and 'Spotify Album ID' in all_final_ranks_df.columns:
             other_albums_df = all_final_ranks_df[all_final_ranks_df['Spotify Album ID'] != album_id]
         else:
             other_albums_df = pd.DataFrame()
 
+            # 3. CRITICAL: Ensure 'Ranking' column is numeric and sort the ENTIRE DataFrame.
+            # This establishes the one, true, global ranking order before we do anything else.
+        if not other_albums_df.empty:
+            other_albums_df['Ranking'] = pd.to_numeric(other_albums_df['Ranking'], errors='coerce')
+            sorted_other_albums_df = other_albums_df.sort_values(by='Ranking', ascending=False)
+        else:
+            sorted_other_albums_df = pd.DataFrame()
+
             # Pre-fetch album covers for efficiency
         album_covers_cache = {}
-        if not other_albums_df.empty and 'Spotify Album ID' in other_albums_df.columns:
-            unique_album_ids = [aid for aid in other_albums_df['Spotify Album ID'].unique() if aid]
+        if not sorted_other_albums_df.empty:
+            unique_album_ids = [aid for aid in sorted_other_albums_df['Spotify Album ID'].unique() if aid]
             if unique_album_ids:
-                for i in range(0, len(unique_album_ids), 50):  # Batches of 50
+                for i in range(0, len(unique_album_ids), 50):
                     try:
                         albums_info = sp.albums(unique_album_ids[i:i + 50])
                         for info in albums_info['albums']:
@@ -733,30 +740,27 @@ def view_album():
                     except Exception as e:
                         print(f"WARNING: Could not fetch album covers batch: {e}")
 
-        # 2. Build the rank_groups_for_js object from the clean, filtered DataFrame.
+        # 4. Iterate through the PRE-SORTED DataFrame to build the groups.
+        # The songs will now be added to their lists in the correct global order.
         rank_groups_for_js = {f"{i / 2:.1f}": [] for i in range(1, 21)}
         rank_groups_for_js['I'] = {'excellent': [], 'average': [], 'bad': []}
 
-        for _, row in other_albums_df.iterrows():
+        for _, row in sorted_other_albums_df.iterrows():
             try:
                 rank_group_from_sheet = str(row.get('Rank Group', '')).strip()
-                rank_group = rank_group_from_sheet  # Default to the original value
-
+                rank_group = rank_group_from_sheet
                 try:
-                    # Try to convert to a float. If successful, reformat to one decimal place.
-                    # This turns '5' into '5.0', while leaving 'I' untouched.
                     rank_group_val = float(rank_group_from_sheet)
                     rank_group = f"{rank_group_val:.1f}"
                 except (ValueError, TypeError):
-                    # If it's not a number (like 'I'), we just use the original string.
                     pass
+
                 song_score = float(row.get('Ranking', 0.0))
                 song_album_id = str(row.get('Spotify Album ID', ''))
 
                 song_data = {
                     'song_id': str(row.get('Spotify Song ID')), 'song_name': str(row.get('Song Name')),
                     'rank_group': rank_group, 'calculated_score': song_score,
-                    'position_in_group': int(row.get('Position In Group', 0)),
                     'album_id': song_album_id, 'album_name': str(row.get('Album Name')),
                     'artist_name': str(row.get('Artist Name')),
                     'album_cover_url': album_covers_cache.get(song_album_id)
@@ -773,14 +777,6 @@ def view_album():
                     rank_groups_for_js[rank_group].append(song_data)
             except Exception as e:
                 print(f"WARNING: Error parsing row for JS: {row.to_dict()} - {e}")
-
-        # 3. THE FIX: Sort each numeric group by its saved score (descending), NOT by position.
-        logging.debug("Sorting songs within each rank group by their saved score.")
-        for group_key in rank_groups_for_js:
-            if group_key != 'I' and isinstance(rank_groups_for_js[group_key], list):
-                song_list = rank_groups_for_js[group_key]
-                # Sort by the score, from highest to lowest.
-                song_list.sort(key=lambda song: song.get('calculated_score', 0.0), reverse=True)
 
         # 5. Prepare the left panel (songs for the current album)
         songs_for_left_panel = []
