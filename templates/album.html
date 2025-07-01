@@ -754,11 +754,12 @@
             const averageScoreDisplay = document.getElementById('averageScoreDisplay');
             let totalScore = 0;
             let songCount = 0;
+            // Get the current album's ID from the global albumData object
+            const currentAlbumId = albumData.album_id;
 
             // Iterate over all rank groups
             for (const groupKey in allRankedSongsByGroup) {
-                // The most reliable way to identify an interlude is by its group.
-                // If the group is the Interlude group ('I'), we skip it entirely.
+                // Skip interludes
                 if (groupKey === 'I' || !allRankedSongsByGroup.hasOwnProperty(groupKey)) {
                     continue;
                 }
@@ -766,8 +767,9 @@
                 const group = allRankedSongsByGroup[groupKey];
                 if (Array.isArray(group)) {
                     group.forEach(song => {
-                        // All songs in numeric groups are counted.
-                        if (typeof song.calculated_score === 'number') {
+                        // THE FIX: Only include the song in the average if its album_id
+                        // matches the ID of the album we are currently ranking.
+                        if (song.album_id === currentAlbumId && typeof song.calculated_score === 'number') {
                             totalScore += song.calculated_score;
                             songCount++;
                         }
@@ -779,6 +781,7 @@
                 const average = totalScore / songCount;
                 averageScoreDisplay.textContent = average.toFixed(2);
             } else {
+                // If no songs from the current album are ranked yet, show N/A
                 averageScoreDisplay.textContent = 'N/A';
             }
         }
