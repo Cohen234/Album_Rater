@@ -449,40 +449,50 @@ def submit_rankings():
         if submission_status == 'final':
             logging.info("Recalculating all affected album averages...")
 
-            # Use the DataFrame we just wrote to the sheet as the absolute source of truth
+            # Use the DataFrame we just wrote as the absolute source of truth.
             df_for_calc = final_main_df.copy()
             df_for_calc['Ranking'] = pd.to_numeric(df_for_calc['Ranking'], errors='coerce')
             df_for_calc = df_for_calc.dropna(subset=['Ranking'])
-            df_for_calc = df_for_calc[df_for_calc['Rank Group'].astype(str) != 'I']  # Exclude interludes
+            df_for_calc = df_for_calc[df_for_calc['Rank Group'].astype(str) != 'I']
 
             if not df_for_calc.empty:
-                # 1. Calculate the new, correct average for EVERY album in our sheet
+                # Calculate the new, correct average for EVERY album in the sheet
                 new_averages = df_for_calc.groupby('Spotify Album ID')['Ranking'].mean().round(2).to_dict()
 
-                # 2. Get the existing Album Averages sheet
+                # Get the existing Album Averages sheet
                 album_averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
-                album_averages_df['album_id'] = album_averages_df['album_id'].astype(str)
-                album_averages_df.set_index('album_id', inplace=True)
 
-                # 3. Loop through the new averages and update the sheet's DataFrame
+                # Create a map of album info for creating new entries
+                album_info_map = df_for_calc[['Spotify Album ID', 'Album Name', 'Artist Name']].drop_duplicates(
+                    subset=['Spotify Album ID']).set_index('Spotify Album ID').to_dict('index')
+
+                # Loop through the new averages and update or create entries
                 for album_id_to_update, new_avg in new_averages.items():
-                    if album_id_to_update in album_averages_df.index:
-                        # If album exists, update its score
-                        album_averages_df.at[album_id_to_update, 'average_score'] = new_avg
-                        # Only increment 'times_ranked' and date for the album just submitted
-                        if album_id_to_update == album_id:
-                            album_averages_df.at[album_id_to_update, 'times_ranked'] += 1
-                            album_averages_df.at[album_id_to_update, 'last_ranked_date'] = datetime.now().strftime(
-                                '%Y-%m-%d %H:%M:%S')
+                    existing_row = album_averages_df[album_averages_df['album_id'] == album_id_to_update]
+
+                    if not existing_row.empty:
+                        # --- UPDATE EXISTING ALBUM ---
+                        idx = existing_row.index[0]
+                        album_averages_df.at[idx, 'average_score'] = new_avg
+                        if album_id_to_update == album_id:  # Only update metadata for the SUBMITTED album
+                            album_averages_df.at[idx, 'times_ranked'] = album_averages_df.at[idx, 'times_ranked'] + 1
+                            album_averages_df.at[idx, 'last_ranked_date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                     else:
-                        # This handles a rare case where a song from an unranked album is moved
-                        # You can add logic here to create a new entry if needed
-                        logging.warning(
-                            f"Album ID {album_id_to_update} has a new average but no entry in averages sheet. Ignoring for now.")
+                        # --- CREATE NEW ALBUM ENTRY ---
+                        logging.info(f"Album ID {album_id_to_update} not found in averages sheet. Creating new entry.")
+                        info = album_info_map.get(album_id_to_update)
+                        if info:
+                            new_row_df = pd.DataFrame([{
+                                'album_id': album_id_to_update,
+                                'album_name': info['Album Name'],
+                                'artist_name': info['Artist Name'],
+                                'average_score': new_avg,
+                                'times_ranked': 1,
+                                'last_ranked_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                            }])
+                            album_averages_df = pd.concat([album_averages_df, new_row_df], ignore_index=True)
 
-                album_averages_df.reset_index(inplace=True)
-
-                # 4. Write the fully updated DataFrame back to the "Album Averages" sheet
+                # Write the fully updated DataFrame back to the "Album Averages" sheet
                 album_averages_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(album_averages_sheet_name)
                 set_with_dataframe(album_averages_sheet, album_averages_df, include_index=False, resize=True)
                 logging.info("Successfully recalculated and saved all affected album averages.")
