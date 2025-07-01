@@ -92,31 +92,23 @@ def load_album_data(sp_param, album_id):
 def calculate_score_value(position, total_songs, rank_group_val):
     """
     Calculates a precise score for a song where the rank group is the floor.
-    e.g., all songs in group 5.0 will be scored >= 5.0.
     """
     try:
         rank_group_val = float(rank_group_val)
     except (ValueError, TypeError):
         return 0.0
 
-    # If there's only one song, its score is the rank group value.
     if total_songs <= 1:
         return rank_group_val
 
-    # --- NEW SCORING LOGIC ---
-    # The score range is now fixed from .00 to .49 within the rank group.
     score_spread = 0.49
-
-    # The highest possible score is at the top of the range.
     highest_score = rank_group_val + score_spread
-
-    # The step is the total spread divided by the number of "gaps" between songs.
-    step = score_spread / (total_songs - 1)
-
-    # The final score is calculated by starting high and subtracting based on position.
+    # Avoid division by zero if there's only one song
+    step = score_spread / (total_songs - 1) if total_songs > 1 else 0
     new_score = highest_score - (step * position)
 
-    return round(new_score, 2)
+    # Return with high precision to prevent score collisions
+    return round(new_score, 6)
 
 def get_album_averages_df(client_gspread, spreadsheet_id, sheet_name):
     try:
@@ -718,15 +710,13 @@ def view_album():
         else:
             other_albums_df = pd.DataFrame()
 
-            # 3. CRITICAL: Ensure 'Ranking' column is numeric and sort the ENTIRE DataFrame.
-            # This establishes the one, true, global ranking order before we do anything else.
+            # 2. CRITICAL: Ensure 'Ranking' column is numeric and sort the ENTIRE DataFrame.
         if not other_albums_df.empty:
             other_albums_df['Ranking'] = pd.to_numeric(other_albums_df['Ranking'], errors='coerce')
             sorted_other_albums_df = other_albums_df.sort_values(by='Ranking', ascending=False)
         else:
             sorted_other_albums_df = pd.DataFrame()
 
-            # Pre-fetch album covers for efficiency
         album_covers_cache = {}
         if not sorted_other_albums_df.empty:
             unique_album_ids = [aid for aid in sorted_other_albums_df['Spotify Album ID'].unique() if aid]
@@ -740,8 +730,7 @@ def view_album():
                     except Exception as e:
                         print(f"WARNING: Could not fetch album covers batch: {e}")
 
-        # 4. Iterate through the PRE-SORTED DataFrame to build the groups.
-        # The songs will now be added to their lists in the correct global order.
+        # 3. Iterate through the PRE-SORTED DataFrame to build the groups.
         rank_groups_for_js = {f"{i / 2:.1f}": [] for i in range(1, 21)}
         rank_groups_for_js['I'] = {'excellent': [], 'average': [], 'bad': []}
 
@@ -755,22 +744,22 @@ def view_album():
                 except (ValueError, TypeError):
                     pass
 
-                song_score = float(row.get('Ranking', 0.0))
-                song_album_id = str(row.get('Spotify Album ID', ''))
-
                 song_data = {
-                    'song_id': str(row.get('Spotify Song ID')), 'song_name': str(row.get('Song Name')),
-                    'rank_group': rank_group, 'calculated_score': song_score,
-                    'album_id': song_album_id, 'album_name': str(row.get('Album Name')),
+                    'song_id': str(row.get('Spotify Song ID')),
+                    'song_name': str(row.get('Song Name')),
+                    'rank_group': rank_group,
+                    'calculated_score': float(row.get('Ranking', 0.0)),
+                    'album_id': str(row.get('Spotify Album ID', '')),
+                    'album_name': str(row.get('Album Name')),
                     'artist_name': str(row.get('Artist Name')),
-                    'album_cover_url': album_covers_cache.get(song_album_id)
+                    'album_cover_url': album_covers_cache.get(str(row.get('Spotify Album ID', '')))
                 }
-
                 if rank_group == 'I':
+                    score = song_data['calculated_score']
                     category = 'average'
-                    if song_score == 3.0:
+                    if score == 3.0:
                         category = 'excellent'
-                    elif song_score == 1.0:
+                    elif score == 1.0:
                         category = 'bad'
                     rank_groups_for_js['I'][category].append(song_data)
                 elif rank_group in rank_groups_for_js:
