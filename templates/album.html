@@ -748,7 +748,7 @@
             const range = 0.49;
             const step = range / (totalSongs - 1);
             const highestScore = parseFloat(rankGroup) + range;
-            return parseFloat((highestScore - (step * position)).toFixed(2));
+            return parseFloat((highestScore - (step * position)).toFixed(6));
         }
          function updateAverageAlbumScore() {
             const averageScoreDisplay = document.getElementById('averageScoreDisplay');

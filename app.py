@@ -376,7 +376,7 @@ def submit_rankings():
                     'Artist Name': artist_name,
                     'Spotify Album ID': album_id,
                     'Song Name': song_name,
-                    'Ranking': f"{ranked_song_data.get('calculated_score', 0.0):.2f}",
+                    'Ranking': ranked_song_data.get('calculated_score', 0.0),
                     'Ranking Status': 'final',
                     'Ranked Date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                     # Use the CORRECT key from the JavaScript payload
@@ -739,7 +739,17 @@ def view_album():
 
         for _, row in other_albums_df.iterrows():
             try:
-                rank_group = str(row.get('Rank Group', '')).strip()
+                rank_group_from_sheet = str(row.get('Rank Group', '')).strip()
+                rank_group = rank_group_from_sheet  # Default to the original value
+
+                try:
+                    # Try to convert to a float. If successful, reformat to one decimal place.
+                    # This turns '5' into '5.0', while leaving 'I' untouched.
+                    rank_group_val = float(rank_group_from_sheet)
+                    rank_group = f"{rank_group_val:.1f}"
+                except (ValueError, TypeError):
+                    # If it's not a number (like 'I'), we just use the original string.
+                    pass
                 song_score = float(row.get('Ranking', 0.0))
                 song_album_id = str(row.get('Spotify Album ID', ''))
 
