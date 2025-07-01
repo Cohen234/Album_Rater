@@ -943,40 +943,29 @@
             if (!confirm("Are you sure you want to save these rankings?")) return;
 
             const globalRankedDataForSaving = [];
-            const currentAlbumId = albumData.album_id; // Get the ID of the current album
 
-            // 1. Add songs from NUMERIC rank groups
+            // THE FIX, Part 1: Iterate through ALL songs in the ranking groups.
+            // Do not filter by the current album. The `allRankedSongsByGroup` object
+            // now represents the new global source of truth for all ranked songs.
             Object.keys(allRankedSongsByGroup).forEach(groupKey => {
+                // Handle numeric groups
                 if (groupKey !== 'I' && Array.isArray(allRankedSongsByGroup[groupKey])) {
                     allRankedSongsByGroup[groupKey].forEach((song, index) => {
-                        // *** ADD THIS CHECK ***
-                        // Only include songs that belong to the current album.
-                        if (song.album_id === currentAlbumId) {
-                            globalRankedDataForSaving.push({ ...song, position_in_group: index, ranking_status: 'final' });
-                        }
+                        globalRankedDataForSaving.push({ ...song, position_in_group: index, ranking_status: 'final' });
                     });
                 }
             });
 
-            // 2. Add songs from the INTERLUDE 'I' group
+            // Handle Interlude group
             if (allRankedSongsByGroup['I']) {
                 Object.keys(allRankedSongsByGroup['I']).forEach(category => {
                     allRankedSongsByGroup['I'][category].forEach(song => {
-                        // *** ADD THIS CHECK ***
-                        // Only include songs that belong to the current album.
-                        if (song.album_id === currentAlbumId) {
-                            globalRankedDataForSaving.push({
-                                ...song,
-                                position_in_group: 0,
-                                ranking_status: 'final'
-                            });
-                        }
+                        globalRankedDataForSaving.push({ ...song, position_in_group: 0, ranking_status: 'final' });
                     });
                 });
             }
 
-            // The rest of the function remains the same...
-            // 3. Prepare PRELIMINARY ranks
+            // Prelim rank logic remains the same
             const prelimRankData = [];
             document.querySelectorAll('.song-item:not(.ranked)').forEach(songItem => {
                 const prelimInput = songItem.querySelector('.prelim-rank-input');
@@ -991,20 +980,16 @@
                 }
             });
 
-            // 4. Send all data to the backend
-            // --- CORRECTED JAVASCRIPT CODE ---
+            // The fetch call remains the same
             fetch('/submit_rankings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    // Add these keys to match your Python backend
                     album_id: albumData.album_id,
                     album_name: albumData.album_name,
                     artist_name: albumData.artist_name,
-                    album_cover_url: albumData.album_cover_url, // Send the cover URL too
-                    status: 'final', // Explicitly set the status
-
-                    // Your existing data keys
+                    album_cover_url: albumData.album_cover_url,
+                    status: 'final',
                     all_ranked_data: globalRankedDataForSaving,
                     prelim_rank_data: prelimRankData
                 })

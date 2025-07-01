@@ -345,50 +345,41 @@ def submit_rankings():
         main_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
         main_df = get_as_dataframe(main_sheet, evaluate_formulas=False).fillna("")
 
-        # 1. Filter out old rows FOR THIS ALBUM in memory.
-        # This logic will now be outside of any confusing if/else blocks.
-        if 'Spotify Album ID' in main_df.columns:
-            main_df_filtered = main_df[main_df['Spotify Album ID'].astype(str) != str(album_id)]
-            logging.info(f"Found {len(main_df) - len(main_df_filtered)} old rows to replace for album {album_id}.")
+        submitted_song_ids = {str(s.get('song_id')) for s in all_ranked_songs_from_js}
+
+        # Filter out ALL rows for the songs that are being re-submitted, regardless of album.
+        if 'Spotify Song ID' in main_df.columns and submitted_song_ids:
+            # The ~ operator inverts the boolean mask, keeping only rows whose ID is NOT in the set.
+            main_df_filtered = main_df[~main_df['Spotify Song ID'].astype(str).isin(submitted_song_ids)]
+            logging.info(f"Identified {len(submitted_song_ids)} songs for update. Removing old entries.")
         else:
-            logging.warning("Main sheet missing 'Spotify Album ID' column, cannot remove old ranks.")
-            main_df_filtered = main_df  # Proceed with the full DataFrame, no filtering possible.
+            # If no songs are submitted or column is missing, just use the original DataFrame.
+            main_df_filtered = main_df
 
-            # --- CORRECTED CODE ---
+        # Now, prepare the new rows from the submitted data.
         new_final_rows_data = []
-        if all_ranked_songs_from_js:
-            for ranked_song_data in all_ranked_songs_from_js:
-                song_id = str(ranked_song_data['song_id'])
-                song_name = spotify_tracks_for_album.get(song_id, f"Unknown Song {song_id}")
-                prelim_rank_val = ranked_song_data.get('prelim_rank', '')
+        for ranked_song_data in all_ranked_songs_from_js:
+            new_row = {
+                'Album Name': ranked_song_data.get('album_name'),
+                'Artist Name': ranked_song_data.get('artist_name'),
+                'Spotify Album ID': ranked_song_data.get('album_id'),
+                'Song Name': ranked_song_data.get('song_name'),
+                'Ranking': ranked_song_data.get('calculated_score', 0.0),
+                'Ranking Status': 'final',
+                'Ranked Date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'Position In Group': str(ranked_song_data.get('position_in_group', '')),
+                'Rank Group': str(ranked_song_data.get('rank_group')),
+                'Spotify Song ID': str(ranked_song_data.get('song_id')),
+            }
+            new_final_rows_data.append(new_row)
 
-                # Prepare the dictionary for the new row
-                new_row = {
-                    'Album Name': album_name,
-                    'Artist Name': artist_name,
-                    'Spotify Album ID': album_id,
-                    'Song Name': song_name,
-                    'Ranking': ranked_song_data.get('calculated_score', 0.0),
-                    'Ranking Status': 'final',
-                    'Ranked Date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    # Use the CORRECT key from the JavaScript payload
-                    'Position In Group': str(ranked_song_data.get('position_in_group', '')),  # <--- THE FIX IS HERE
-                    'Rank Group': str(ranked_song_data.get('rank_group')),
-                    'Spotify Song ID': song_id,
-                    'Preliminary Rank': prelim_rank_val
-                }
-                new_final_rows_data.append(new_row)
-
+        # Combine the dataframe that has old songs removed with the new updated song data.
         if new_final_rows_data:
             new_final_df = pd.DataFrame(new_final_rows_data)
             final_main_df = pd.concat([main_df_filtered, new_final_df], ignore_index=True)
-            logging.info(f"Prepared {len(new_final_rows_data)} new rows for main sheet.")
         else:
             final_main_df = main_df_filtered
-            logging.info("No new final rank rows to add.")
 
-        # 4. Write the final, combined DataFrame back to the sheet ONCE.
-        # This is both more efficient and less error-prone.
         set_with_dataframe(main_sheet, final_main_df, include_index=False, resize=True)
         logging.info(f"Wrote {len(final_main_df)} total rows back to main ranking sheet.")
 
