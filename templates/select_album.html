@@ -35,9 +35,14 @@
         .album-card:hover {
             transform: rotate(1deg) scale(1.03);
         }
+        .album-art-container {
+            position: relative; /* This "contains" the absolutely positioned bubble */
+            width: 100%;
+            aspect-ratio: 1 / 1;
+        }
         .album-card img {
             width: 100%;
-            height: auto;
+            height: 100%;
             aspect-ratio: 1 / 1;
             object-fit: cover;
             /* REVERSED: Shadow is now a light color to pop on the dark background */
@@ -79,17 +84,29 @@
         }
         .score-bubble {
             position: absolute;
-            bottom: 8px;
-            right: 8px;
-            background-color: rgba(0, 0, 0, 0.8);
+            bottom: 8px;   /* Position from the bottom edge of the image container */
+            right: 8px;    /* Position from the right edge of the image container */
+
+            /* Make it circular */
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+
+            /* Center the text inside the circle */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            /* Font and color */
             color: white;
             font-family: 'Segoe UI', sans-serif;
-            font-weight: 600;
-            font-size: 14px;
-            padding: 4px 8px;
-            border-radius: 12px;
+            font-weight: 700;
+            font-size: 16px;
+
+            /* Other styles */
             box-shadow: 0 2px 5px rgba(0,0,0,0.5);
-            border: 1px solid rgba(255,255,255,0.2);
+            border: 2px solid rgba(255,255,255,0.4);
+            /* The visibility is now constant, not dependent on hover */
         }
         .score-bubble-green {
             background-color: #2E7D32; /* Darker Green */
@@ -120,22 +137,25 @@
         {% for base_name, editions in grouped_albums.items() %}
             {% set primary_edition = editions[0] %}
             <div class="album-card" data-editions='{{ editions | tojson | forceescape }}'>
-                <img src="{{ primary_edition.image }}" alt="{{ base_name }}">
 
-                {% if primary_edition.weighted_average_score is defined and primary_edition.weighted_average_score != '' %}
-                    {% set score = primary_edition.weighted_average_score|float %}
-                    {% set bubble_class = '' %}
-                    {% if score >= 7 %}
-                        {% set bubble_class = 'score-bubble-green' %}
-                    {% elif score >= 4 %}
-                        {% set bubble_class = 'score-bubble-yellow' %}
-                    {% else %}
-                        {% set bubble_class = 'score-bubble-red' %}
+                <div class="album-art-container">
+                    <img src="{{ primary_edition.image }}" alt="{{ base_name }}">
+
+                    {% if (primary_edition.times_ranked | int) > 0 and primary_edition.weighted_average_score is defined and primary_edition.weighted_average_score != '' %}
+                        {% set score = primary_edition.weighted_average_score|float %}
+                        {% set bubble_class = '' %}
+                        {% if score >= 7 %}
+                            {% set bubble_class = 'score-bubble-green' %}
+                        {% elif score >= 4 %}
+                            {% set bubble_class = 'score-bubble-yellow' %}
+                        {% else %}
+                            {% set bubble_class = 'score-bubble-red' %}
+                        {% endif %}
+                        <div class="score-bubble {{ bubble_class }}">
+                            {{ "%.2f"|format(score) }}
+                        </div>
                     {% endif %}
-                    <div class="score-bubble {{ bubble_class }}">
-                        {{ "%.2f"|format(score) }}
-                    </div>
-                {% endif %}
+                </div>
                 <div class="album-name" title="{{ base_name }}">
                     {{ base_name }}
                     {% if editions | selectattr('has_prelim_ranks') | list | length > 0 %}
