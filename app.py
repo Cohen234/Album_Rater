@@ -133,21 +133,19 @@ def get_album_averages_df(client_gspread, spreadsheet_id, sheet_name):
 
     df = get_as_dataframe(sheet, evaluate_formulas=True)  # Use your existing get_as_dataframe helper
 
-    expected_cols = ['album_id', 'album_name', 'artist_name', 'average_score', 'times_ranked', 'last_ranked_date']
+    expected_cols = ['album_id', 'album_name', 'artist_name', 'average_score', 'weighted_average_score', 'times_ranked',
+                     'last_ranked_date']  # Add new column name here
     if df.empty:
-        logging.debug(f"Album Averages DataFrame is empty. Initializing with expected columns: {expected_cols}")
         df = pd.DataFrame(columns=expected_cols)
     else:
         for col in expected_cols:
             if col not in df.columns:
-                df[col] = None  # Add missing columns
-                logging.warning(f"Added missing column '{col}' to Album Averages DataFrame.")
+                df[col] = None
 
-    # --- CRITICAL: Force 'times_ranked' and 'average_score' to numeric types ---
-    # Convert 'times_ranked' to numeric, errors become NaN, fill NaN with 0, then convert to int
     df['times_ranked'] = pd.to_numeric(df['times_ranked'], errors='coerce').fillna(0).astype(int)
-    # Convert 'average_score' to numeric, errors become NaN
     df['average_score'] = pd.to_numeric(df['average_score'], errors='coerce')
+    df['weighted_average_score'] = pd.to_numeric(df['weighted_average_score'],
+                                                 errors='coerce')  # Add converter for new column
 
     return df.fillna("")
 def group_ranked_songs(sheet_rows):
@@ -282,220 +280,172 @@ def artist_page(artist_name):
         flash("Could not load the page for that artist.", "error")
         return redirect(url_for('index'))
 
+
 @app.route("/submit_rankings", methods=["POST"])
 def submit_rankings():
-    global sp, client  # Ensure access to global Spotify and GSheets client
-
+    global sp, client
     try:
-        # Use request.get_json() to parse data sent from the JavaScript fetch
         data = request.get_json()
         if not data:
-            flash("Invalid data received from browser.", "error")
-            return redirect(url_for('index'))
+            return jsonify({'status': 'error', 'message': 'Invalid data received.'}), 400
 
-        # Now, get all your variables from the parsed 'data' dictionary
-        album_name = data.get("album_name")
-        artist_name = data.get("artist_name")
+        # --- 1. Get Core Data from Frontend ---
         album_id = data.get("album_id")
-        submission_status = data.get("status", "final")
-        album_cover_url = data.get('album_cover_url')
-
-        # The JSON data is already a list/dict, so no need for json.loads
+        artist_name = data.get("artist_name")
+        album_name = data.get("album_name")
+        album_cover_url = data.get("album_cover_url")
         all_ranked_songs_from_js = data.get("all_ranked_data", [])
-        prelim_ranks_from_js = data.get("prelim_rank_data", {})
+        prelim_ranks_from_js = data.get("prelim_rank_data", [])
+        submission_status = data.get("status", "final")
 
-        logging.info(f"\n--- SUBMIT RANKINGS START ---")
-        logging.info(
-            f"submit_rankings called for Album: '{album_name}' (ID: {album_id}), Artist: '{artist_name}', Status: '{submission_status}'")
+        logging.info(f"\n--- SUBMIT RANKINGS START for Album ID: {album_id} ---")
 
-        # --- Fetch Song Names (centralized for both main and prelim sheets) ---
-        spotify_tracks_for_album = {}
-        try:
-            if sp:  # Check if sp is initialized
-                album_spotify_data = sp.album(album_id)
-                for track in album_spotify_data['tracks']['items']:
-                    spotify_tracks_for_album[track['id']] = track['name']
-            else:
-                logging.warning("Spotify client (sp) not initialized. Cannot fetch accurate track names from Spotify.")
-                # Fallback to submitted data for song names
-                spotify_tracks_for_album.update(
-                    {str(s.get('song_id')): s.get('song_name', f"Unknown Song {str(s.get('song_id', 'N/A'))}") for s in
-                     all_ranked_songs_from_js})
-                spotify_tracks_for_album.update(
-                    {song_id: f"Unknown Song {song_id}" for song_id in prelim_ranks_from_js.keys() if
-                     song_id not in spotify_tracks_for_album})
-            # --- CORRECTED BACKEND CODE ---
-        except Exception as e:
-            logging.warning(
-                f"Could not fetch Spotify tracks for album {album_id}: {e}. Falling back to submission data for song names.",
-                exc_info=True)
-            # Fallback for final ranks (this part was already okay)
-            spotify_tracks_for_album.update(
-                {str(s.get('song_id')): s.get('song_name', f"Unknown Song {str(s.get('song_id', 'N/A'))}") for s in
-                 all_ranked_songs_from_js})
-
-            # THE FIX IS HERE: Correctly handle the prelim ranks list
-            if prelim_ranks_from_js:
-                for prelim_data in prelim_ranks_from_js:
-                    song_id = str(prelim_data.get('song_id'))
-                    if song_id and song_id not in spotify_tracks_for_album:
-                        spotify_tracks_for_album[song_id] = f"Unknown Song {song_id}"
-
-        # --- Main Ranking Sheet Operations ---
+        # --- 2. Update Main Ranking Sheet (Sheet1) ---
         main_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
         main_df = get_as_dataframe(main_sheet, evaluate_formulas=False).fillna("")
 
-        submitted_song_ids = {str(s.get('song_id')) for s in all_ranked_songs_from_js}
+        # Fetch song details (including duration) for all submitted songs in one batch
+        all_song_ids = [s.get('song_id') for s in all_ranked_songs_from_js if s.get('song_id')]
+        song_details_map = {}
+        if sp and all_song_ids:
+            try:
+                for i in range(0, len(all_song_ids), 50):
+                    tracks_info = sp.tracks(all_song_ids[i:i + 50])
+                    for track in tracks_info['tracks']:
+                        if track:
+                            song_details_map[track['id']] = {'name': track['name'], 'duration_ms': track['duration_ms']}
+            except Exception as e:
+                logging.error(f"Failed to fetch batch track details from Spotify: {e}")
 
-        # Filter out ALL rows for the songs that are being re-submitted, regardless of album.
+        # Remove old versions of all songs being submitted
+        submitted_song_ids = {str(s.get('song_id')) for s in all_ranked_songs_from_js}
         if 'Spotify Song ID' in main_df.columns and submitted_song_ids:
-            # The ~ operator inverts the boolean mask, keeping only rows whose ID is NOT in the set.
             main_df_filtered = main_df[~main_df['Spotify Song ID'].astype(str).isin(submitted_song_ids)]
-            logging.info(f"Identified {len(submitted_song_ids)} songs for update. Removing old entries.")
         else:
-            # If no songs are submitted or column is missing, just use the original DataFrame.
             main_df_filtered = main_df
 
-        # Now, prepare the new rows from the submitted data.
+        # Prepare new rows with updated data
         new_final_rows_data = []
         for ranked_song_data in all_ranked_songs_from_js:
-            new_row = {
-                'Album Name': ranked_song_data.get('album_name'),
-                'Artist Name': ranked_song_data.get('artist_name'),
+            song_id = str(ranked_song_data.get('song_id'))
+            details = song_details_map.get(song_id, {})
+            new_final_rows_data.append({
+                'Album Name': ranked_song_data.get('album_name'), 'Artist Name': ranked_song_data.get('artist_name'),
                 'Spotify Album ID': ranked_song_data.get('album_id'),
-                'Song Name': ranked_song_data.get('song_name'),
+                'Song Name': details.get('name', ranked_song_data.get('song_name')),
                 'Ranking': ranked_song_data.get('calculated_score', 0.0),
-                'Ranking Status': 'final',
-                'Ranked Date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'Duration (ms)': details.get('duration_ms', 0),
+                'Ranking Status': 'final', 'Ranked Date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 'Position In Group': str(ranked_song_data.get('position_in_group', '')),
-                'Rank Group': str(ranked_song_data.get('rank_group')),
-                'Spotify Song ID': str(ranked_song_data.get('song_id')),
-            }
-            new_final_rows_data.append(new_row)
+                'Rank Group': str(ranked_song_data.get('rank_group')), 'Spotify Song ID': song_id,
+            })
 
-        # Combine the dataframe that has old songs removed with the new updated song data.
+        # Combine old and new data and write to sheet
+        final_main_df = main_df_filtered
         if new_final_rows_data:
             new_final_df = pd.DataFrame(new_final_rows_data)
             final_main_df = pd.concat([main_df_filtered, new_final_df], ignore_index=True)
-        else:
-            final_main_df = main_df_filtered
-
         set_with_dataframe(main_sheet, final_main_df, include_index=False, resize=True)
-        logging.info(f"Wrote {len(final_main_df)} total rows back to main ranking sheet.")
-
-        # --- PRELIMINARY RANKING SHEET OPERATIONS ---
-        # --- CORRECTED PRELIMINARY RANKING SHEET OPERATIONS (Single Write Logic) ---
-        prelim_sheet = None
-        try:
-            prelim_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(PRELIM_SHEET_NAME)
-            prelim_df = get_as_dataframe(prelim_sheet, evaluate_formulas=False).fillna("")
-        except gspread.exceptions.WorksheetNotFound:
-            logging.warning(f"Preliminary Ranks worksheet '{PRELIM_SHEET_NAME}' not found. Will create if needed.")
-            prelim_df = pd.DataFrame()  # Start with an empty DataFrame
-
-        # 1. Filter out old prelim ranks for this album IN MEMORY
-        if 'album_id' in prelim_df.columns:
-            prelim_df_filtered = prelim_df[prelim_df['album_id'].astype(str) != str(album_id)]
-        else:
-            prelim_df_filtered = prelim_df
-
-        # 2. Prepare new prelim rows by iterating over the LIST correctly
-        new_prelim_rows_data = []
+        logging.info(f"Wrote {len(final_main_df)} rows to main ranking sheet.")
         if prelim_ranks_from_js:
-            # THE FIX IS HERE: Loop through the list of objects
-            for prelim_data in prelim_ranks_from_js:
-                song_id = prelim_data.get('song_id')
-                prelim_rank_value = prelim_data.get('prelim_rank')
-                song_name = spotify_tracks_for_album.get(song_id, f"Unknown Song (ID: {song_id})")
+            try:
+                prelim_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(PRELIM_SHEET_NAME)
+                prelim_df = get_as_dataframe(prelim_sheet, evaluate_formulas=False).fillna("")
+            except gspread.exceptions.WorksheetNotFound:
+                logging.warning(f"'{PRELIM_SHEET_NAME}' not found. It will be created.")
+                prelim_sheet = None  # Ensure sheet is None so it's created later
+                prelim_df = pd.DataFrame()
 
-                new_prelim_rows_data.append({
-                    'album_id': album_id,
-                    'album_name': album_name,
-                    'artist_name': artist_name,
-                    'album_cover_url': album_cover_url,
-                    'song_id': song_id,
-                    'song_name': song_name,
-                    'prelim_rank': prelim_rank_value,
+            prelim_df_filtered = prelim_df[
+                prelim_df['album_id'].astype(str) != str(album_id)] if 'album_id' in prelim_df.columns else prelim_df
+
+            new_prelim_rows = []
+            for prelim_data in prelim_ranks_from_js:
+                new_prelim_rows.append({
+                    'album_id': album_id, 'album_name': album_name, 'artist_name': artist_name,
+                    'album_cover_url': album_cover_url, 'song_id': prelim_data.get('song_id'),
+                    'song_name': song_details_map.get(prelim_data.get('song_id'), "Unknown"),
+                    'prelim_rank': prelim_data.get('prelim_rank'),
                     'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 })
 
-        # 3. Combine the filtered old data with the new data
-        if new_prelim_rows_data:
-            new_prelim_df = pd.DataFrame(new_prelim_rows_data)
-            final_prelim_df = pd.concat([prelim_df_filtered, new_prelim_df], ignore_index=True)
-            logging.info(f"Prepared {len(new_prelim_rows_data)} PRELIMINARY rank rows.")
-        else:
-            final_prelim_df = prelim_df_filtered
-            logging.info("No new PRELIMINARY rank rows to add.")
+            final_prelim_df = pd.concat([prelim_df_filtered, pd.DataFrame(new_prelim_rows)],
+                                        ignore_index=True) if new_prelim_rows else prelim_df_filtered
 
-        # 4. Write the final, combined DataFrame back to the sheet ONCE
-        # (Your logic for creating the sheet if it doesn't exist is good and remains)
-        try:
-            if prelim_sheet is None:  # If sheet didn't exist, we must create it now
-                prelim_sheet_header_cols = ['album_id', 'album_name', 'artist_name', 'album_cover_url', 'song_id',
-                                            'song_name', 'prelim_rank', 'timestamp']
-                prelim_sheet = client.open_by_key(SPREADSHEET_ID).add_worksheet(PRELIM_SHEET_NAME, rows=1,
-                                                                                cols=len(prelim_sheet_header_cols))
-                prelim_sheet.append_row(prelim_sheet_header_cols)
+            if prelim_sheet is None:
+                prelim_sheet = client.open_by_key(SPREADSHEET_ID).add_worksheet(title=PRELIM_SHEET_NAME, rows=1, cols=8)
+                prelim_sheet.append_row(list(final_prelim_df.columns))
 
             set_with_dataframe(prelim_sheet, final_prelim_df, include_index=False, resize=True)
-            logging.info(f"Wrote {len(final_prelim_df)} total rows back to preliminary ranks sheet.")
-        except Exception as e:
-            logging.critical(f"CRITICAL ERROR: Could not write to or create Preliminary Ranks sheet: {e}",
-                             exc_info=True)
-            flash(f"Critical error with Preliminary Ranks sheet: {e}", "error")
-            # Don't halt the whole submission; the final ranks might have worked.
+            logging.info("Successfully updated preliminary ranks.")
 
+        # --- 3. Recalculate ALL Album Averages (Simple and Weighted) ---
         if submission_status == 'final':
-            logging.info("Recalculating all affected album averages...")
+            logging.info("Recalculating all album averages...")
 
-            # Use the DataFrame we just wrote as the absolute source of truth.
             df_for_calc = final_main_df.copy()
             df_for_calc['Ranking'] = pd.to_numeric(df_for_calc['Ranking'], errors='coerce')
-            df_for_calc = df_for_calc.dropna(subset=['Ranking'])
+            df_for_calc['Duration (ms)'] = pd.to_numeric(df_for_calc['Duration (ms)'], errors='coerce')
+            df_for_calc.dropna(subset=['Ranking', 'Duration (ms)'], inplace=True)
             df_for_calc = df_for_calc[df_for_calc['Rank Group'].astype(str) != 'I']
 
             if not df_for_calc.empty:
-                # Calculate the new, correct average for EVERY album in the sheet
-                new_averages = df_for_calc.groupby('Spotify Album ID')['Ranking'].mean().round(2).to_dict()
+                # Calculate both types of averages
+                simple_averages = df_for_calc.groupby('Spotify Album ID')['Ranking'].mean().round(2)
 
-                # Get the existing Album Averages sheet
+                def weighted_avg(group):
+                    total_duration = group['Duration (ms)'].sum()
+                    return ((group['Ranking'] * group[
+                        'Duration (ms)']).sum() / total_duration) if total_duration > 0 else group['Ranking'].mean()
+
+                weighted_averages = df_for_calc.groupby('Spotify Album ID').apply(weighted_avg).round(2)
+
+                # Get the existing averages sheet
                 album_averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
-
-                # Create a map of album info for creating new entries
                 album_info_map = df_for_calc[['Spotify Album ID', 'Album Name', 'Artist Name']].drop_duplicates(
-                    subset=['Spotify Album ID']).set_index('Spotify Album ID').to_dict('index')
+                    'Spotify Album ID').set_index('Spotify Album ID').to_dict('index')
 
-                # Loop through the new averages and update or create entries
-                for album_id_to_update, new_avg in new_averages.items():
-                    existing_row = album_averages_df[album_averages_df['album_id'] == album_id_to_update]
+                all_album_ids_to_update = set(simple_averages.index)
 
-                    if not existing_row.empty:
-                        # --- UPDATE EXISTING ALBUM ---
-                        idx = existing_row.index[0]
-                        album_averages_df.at[idx, 'average_score'] = new_avg
-                        if album_id_to_update == album_id:  # Only update metadata for the SUBMITTED album
-                            album_averages_df.at[idx, 'times_ranked'] = album_averages_df.at[idx, 'times_ranked'] + 1
-                            album_averages_df.at[idx, 'last_ranked_date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                    else:
-                        # --- CREATE NEW ALBUM ENTRY ---
-                        logging.info(f"Album ID {album_id_to_update} not found in averages sheet. Creating new entry.")
+                new_average_rows = []
+                for album_id_to_update in all_album_ids_to_update:
+                    # Update existing rows
+                    album_averages_df.loc[
+                        album_averages_df['album_id'] == album_id_to_update, 'average_score'] = simple_averages.get(
+                        album_id_to_update)
+                    album_averages_df.loc[album_averages_df[
+                                              'album_id'] == album_id_to_update, 'weighted_average_score'] = weighted_averages.get(
+                        album_id_to_update)
+
+                    # If it's the album submitted this session, update its metadata
+                    if album_id_to_update == album_id:
+                        album_averages_df.loc[album_averages_df['album_id'] == album_id, 'times_ranked'] += 1
+                        album_averages_df.loc[
+                            album_averages_df['album_id'] == album_id, 'last_ranked_date'] = datetime.now().strftime(
+                            '%Y-%m-%d %H:%M:%S')
+
+                    # If album is not in the sheet, prepare a new row for it
+                    if album_id_to_update not in album_averages_df['album_id'].values:
                         info = album_info_map.get(album_id_to_update)
                         if info:
-                            new_row_df = pd.DataFrame([{
-                                'album_id': album_id_to_update,
-                                'album_name': info['Album Name'],
+                            new_average_rows.append({
+                                'album_id': album_id_to_update, 'album_name': info['Album Name'],
                                 'artist_name': info['Artist Name'],
-                                'average_score': new_avg,
-                                'times_ranked': 1,
-                                'last_ranked_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                            }])
-                            album_averages_df = pd.concat([album_averages_df, new_row_df], ignore_index=True)
+                                'average_score': simple_averages.get(album_id_to_update),
+                                'weighted_average_score': weighted_averages.get(album_id_to_update),
+                                'times_ranked': 1, 'last_ranked_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                            })
 
-                # Write the fully updated DataFrame back to the "Album Averages" sheet
+                if new_average_rows:
+                    album_averages_df = pd.concat([album_averages_df, pd.DataFrame(new_average_rows)],
+                                                  ignore_index=True)
+
                 album_averages_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(album_averages_sheet_name)
                 set_with_dataframe(album_averages_sheet, album_averages_df, include_index=False, resize=True)
-                logging.info("Successfully recalculated and saved all affected album averages.")
+                logging.info("Successfully recalculated and saved all simple and weighted album averages.")
+
+        # --- 4. Update Preliminary Ranks Sheet ---
+
 
         logging.info(f"--- SUBMIT RANKINGS END (Success) ---\n")
         return jsonify({'status': 'success', 'message': 'Rankings submitted successfully!'})
@@ -548,30 +498,17 @@ def load_albums_by_artist_route():
 
     # Create a dictionary for quick lookup of averages/times ranked
     album_metadata = {}
-    processed_rows_count = 0
-    if not album_averages_df.empty: # Added check for empty df
+    if not album_averages_df.empty:
         for _, row in album_averages_df.iterrows():
-            processed_rows_count += 1
-            # --- FIX: Use 'album_id' as key and correct column names from the sheet ---
             album_id_from_sheet = str(row.get("album_id", "")).strip()
-            print(f"  - Found row with album_id: '{album_id_from_sheet}'")
-            # Use 'album_id'
-            average_score_from_sheet = row.get("average_score", None)  # Use 'average_score'
-            times_ranked_from_sheet = row.get("times_ranked", 0)
-            last_ranked_date_from_sheet = row.get("last_ranked_date", "")
-            logging.debug(f"DEBUG: Raw row from Album Averages sheet (loop): {row.to_dict()}")
-            logging.debug(
-                f"DEBUG: Processing sheet row in loop: ID='{album_id_from_sheet}', Avg='{average_score_from_sheet}', Times='{times_ranked_from_sheet}'")
-
-            if album_id_from_sheet:  # Only add if album_id is not empty
+            if album_id_from_sheet:
+                # This corrected version gets BOTH scores
                 album_metadata[album_id_from_sheet] = {
-                    "average_score": average_score_from_sheet,
-                    "times_ranked": times_ranked_from_sheet,
-                    "last_ranked_date": last_ranked_date_from_sheet
+                    "average_score": row.get("average_score"),
+                    "weighted_average_score": row.get("weighted_average_score"),  # <-- This is the essential new line
+                    "times_ranked": row.get("times_ranked", 0),
+                    "last_ranked_date": row.get("last_ranked_date", "")
                 }
-                logging.debug(
-                    f"DEBUG: Stored in album_metadata[{album_id_from_sheet}]: Avg={album_metadata[album_id_from_sheet]['average_score']}, Times={album_metadata[album_id_from_sheet]['times_ranked']}")
-    logging.debug(f"DEBUG: Completed processing {processed_rows_count} rows from Album Averages DataFrame (loop).")
 
     grouped_albums = {}
     for album_data in albums_from_spotify:
@@ -589,6 +526,7 @@ def load_albums_by_artist_route():
             "full_name": full_name,
             "image": album_data.get("image"),
             "average_score": metadata.get("average_score"),
+            "weighted_average_score": metadata.get("weighted_average_score"),
             "times_ranked": metadata.get("times_ranked"),
             "last_ranked_date": metadata.get("last_ranked_date"),
         }
