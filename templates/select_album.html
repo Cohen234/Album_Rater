@@ -46,7 +46,7 @@
             object-fit: cover;
             /* REVERSED: Shadow is now a light color to pop on the dark background */
             box-shadow: 5px 5px 0px rgba(255, 255, 255, 0.2);
-            transition: box-shadow 0.2s ease;
+            transition: all 0.2s ease;
         }
         .album-card:hover img {
             box-shadow: 8px 8px 0px rgba(255, 255, 255, 0.3);
@@ -81,32 +81,14 @@
             color: inherit;
             display: block;
         }
-        .score-ribbon-wrapper {
-            position: absolute;
-            top: 0;
-            right: 0;
-            width: 150px;
-            height: 150px;
-            overflow: hidden;
-        }
+        .glow-green { box-shadow: 0 4px 15px -2px #2E7D32; }
+        .glow-yellow { box-shadow: 0 4px 15px -2px #F9A825; }
+        .glow-red { box-shadow: 0 4px 15px -2px #B71C1C; }
 
-        .score-ribbon {
-            position: absolute;
-            right: -35px;
-            top: 40px;
-            transform: rotate(45deg);
-            width: 150px;
-            padding: 5px 0;
-            color: white;
-            text-align: center;
-            font-weight: bold;
-            font-size: 14px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.4);
-        }
-
-        .score-ribbon-green { background-color: #2E7D32; }
-        .score-ribbon-yellow { background-color: #F9A825; color: #000; }
-        .score-ribbon-red { background-color: #B71C1C; }
+        /* The text color for the score */
+        .glow-green-text { color: #66BB6A; font-weight: bold; }
+        .glow-yellow-text { color: #FDD835; font-weight: bold; }
+        .glow-red-text { color: #E57373; font-weight: bold; }
 
         /* Modal Styles (kept light for contrast, which is a common and good UI practice) */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); display: none; justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(5px); }
@@ -128,24 +110,18 @@
             <div class="album-card" data-editions='{{ editions | tojson | forceescape }}'>
 
                 <div class="album-art-container">
-                    <img src="{{ primary_edition.image }}" alt="{{ base_name }}">
-
+                    {% set score_class = '' %}
                     {% if (primary_edition.times_ranked | int) > 0 and primary_edition.weighted_average_score is defined %}
                         {% set score = primary_edition.weighted_average_score|float %}
-                        {% set ribbon_class = '' %}
                         {% if score >= 7 %}
-                            {% set ribbon_class = 'score-ribbon-green' %}
+                            {% set score_class = 'glow-green' %}
                         {% elif score >= 4 %}
-                            {% set ribbon_class = 'score-ribbon-yellow' %}
+                            {% set score_class = 'glow-yellow' %}
                         {% else %}
-                            {% set ribbon_class = 'score-ribbon-red' %}
+                            {% set score_class = 'glow-red' %}
                         {% endif %}
-                        <div class="score-ribbon-wrapper">
-                            <div class="score-ribbon {{ ribbon_class }}">
-                                <span>{{ "%.2f"|format(score) }}</span>
-                            </div>
-                        </div>
                     {% endif %}
+                    <img src="{{ primary_edition.image }}" alt="{{ base_name }}" class="{{ score_class }}">
                 </div>
                 <div class="album-name" title="{{ base_name }}">
                     {{ base_name }}
