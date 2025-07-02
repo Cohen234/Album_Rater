@@ -90,11 +90,20 @@
             line-height: 1.4;
         }
 
+        .mastery-stars {
+            margin-bottom: 8px;
+            font-size: 1.2em;
+            line-height: 1;
+        }
+
+        .mastery-stars .star { color: #444; }
+        .mastery-stars .star.filled { color: #daa520; }
+
         .score-line {
             display: flex;
             justify-content: center;
             align-items: center;
-            gap: 10px; /* Space between stats */
+            gap: 10px;
         }
 
         .stat strong {
@@ -102,18 +111,19 @@
             font-weight: 600;
         }
 
-        .separator {
-            opacity: 0.3;
-            font-weight: lighter;
-        }
+        .separator { opacity: 0.3; }
 
         .date-line {
             font-size: 0.9em;
             opacity: 0.6;
-            margin-top: 4px;
+            margin-top: 5px;
         }
 
-        /* These text color classes remain the same */
+        /* These glow and text classes remain the same */
+        .glow-green { box-shadow: 0 4px 20px -5px #2E7D32; }
+        .glow-yellow { box-shadow: 0 4px 20px -5px #F9A825; }
+        .glow-red { box-shadow: 0 4px 20px -5px #B71C1C; }
+
         .glow-green-text { color: #66BB6A; }
         .glow-yellow-text { color: #FDD835; }
         .glow-red-text { color: #E57373; }
@@ -158,6 +168,13 @@
 
                 <div class="stats-display">
                     {% if (primary_edition.times_ranked | int) > 0 %}
+                        <div class="mastery-stars">
+                            {% set display_stars = primary_edition.times_ranked | default(0) | int %}
+                            {% for i in range(3) %}
+                                <span class="star {% if i < display_stars %}filled{% endif %}">★</span>
+                            {% endfor %}
+                        </div>
+
                         <div class="score-line">
                             <span class="stat">
                                 Avg: <strong>{{ "%.2f"|format(primary_edition.average_score|float) }}</strong>
@@ -165,17 +182,11 @@
                             <span class="separator">|</span>
                             <span class="stat">
                                 {% set weighted_score = primary_edition.weighted_average_score|float %}
-                                {% set text_class = '' %}
-                                {% if weighted_score >= 7 %}
-                                    {% set text_class = 'glow-green-text' %}
-                                {% elif weighted_score >= 4 %}
-                                    {% set text_class = 'glow-yellow-text' %}
-                                {% else %}
-                                    {% set text_class = 'glow-red-text' %}
-                                {% endif %}
+                                {% set text_class = glow_class + '-text' %} {# Re-uses the glow_class for text color #}
                                 Overall: <strong class="{{ text_class }}">{{ "%.2f"|format(weighted_score) }}</strong>
                             </span>
                         </div>
+
                         <div class="date-line">
                             Last Ranked: {{ primary_edition.last_ranked_date.split(' ')[0] }}
                         </div>
@@ -185,6 +196,8 @@
                         </div>
                     {% endif %}
                 </div>
+
+            </div>
                 <form action="{{ url_for('view_album') }}" method="post" class="album-form" style="display: none;">
                     <input type="hidden" name="album_id">
                     <input type="hidden" name="album_name">
