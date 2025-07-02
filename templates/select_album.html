@@ -36,9 +36,8 @@
             transform: rotate(1deg) scale(1.03);
         }
         .album-art-container {
-            position: relative; /* This "contains" the absolutely positioned bubble */
-            width: 100%;
-            aspect-ratio: 1 / 1;
+            position: relative;
+            overflow: hidden; /* This is crucial to clip the ribbon */
         }
         .album-card img {
             width: 100%;
@@ -82,42 +81,32 @@
             color: inherit;
             display: block;
         }
-        .score-bubble {
+        .score-ribbon-wrapper {
             position: absolute;
-            bottom: 8px;   /* Position from the bottom edge of the image container */
-            right: 8px;    /* Position from the right edge of the image container */
+            top: 0;
+            right: 0;
+            width: 150px;
+            height: 150px;
+            overflow: hidden;
+        }
 
-            /* Make it circular */
-            width: 44px;
-            height: 44px;
-            border-radius: 50%;
-
-            /* Center the text inside the circle */
-            display: flex;
-            align-items: center;
-            justify-content: center;
-
-            /* Font and color */
+        .score-ribbon {
+            position: absolute;
+            right: -35px;
+            top: 40px;
+            transform: rotate(45deg);
+            width: 150px;
+            padding: 5px 0;
             color: white;
-            font-family: 'Segoe UI', sans-serif;
-            font-weight: 700;
-            font-size: 16px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 14px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+        }
 
-            /* Other styles */
-            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
-            border: 2px solid rgba(255,255,255,0.4);
-            /* The visibility is now constant, not dependent on hover */
-        }
-        .score-bubble-green {
-            background-color: #2E7D32; /* Darker Green */
-        }
-        .score-bubble-yellow {
-            background-color: #F9A825; /* Darker Yellow */
-            color: #000;
-        }
-        .score-bubble-red {
-            background-color: #B71C1C; /* Darker Red */
-        }
+        .score-ribbon-green { background-color: #2E7D32; }
+        .score-ribbon-yellow { background-color: #F9A825; color: #000; }
+        .score-ribbon-red { background-color: #B71C1C; }
 
         /* Modal Styles (kept light for contrast, which is a common and good UI practice) */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); display: none; justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(5px); }
@@ -141,18 +130,20 @@
                 <div class="album-art-container">
                     <img src="{{ primary_edition.image }}" alt="{{ base_name }}">
 
-                    {% if (primary_edition.times_ranked | int) > 0 and primary_edition.weighted_average_score is defined and primary_edition.weighted_average_score != '' %}
+                    {% if (primary_edition.times_ranked | int) > 0 and primary_edition.weighted_average_score is defined %}
                         {% set score = primary_edition.weighted_average_score|float %}
-                        {% set bubble_class = '' %}
+                        {% set ribbon_class = '' %}
                         {% if score >= 7 %}
-                            {% set bubble_class = 'score-bubble-green' %}
+                            {% set ribbon_class = 'score-ribbon-green' %}
                         {% elif score >= 4 %}
-                            {% set bubble_class = 'score-bubble-yellow' %}
+                            {% set ribbon_class = 'score-ribbon-yellow' %}
                         {% else %}
-                            {% set bubble_class = 'score-bubble-red' %}
+                            {% set ribbon_class = 'score-ribbon-red' %}
                         {% endif %}
-                        <div class="score-bubble {{ bubble_class }}">
-                            {{ "%.2f"|format(score) }}
+                        <div class="score-ribbon-wrapper">
+                            <div class="score-ribbon {{ ribbon_class }}">
+                                <span>{{ "%.2f"|format(score) }}</span>
+                            </div>
                         </div>
                     {% endif %}
                 </div>
