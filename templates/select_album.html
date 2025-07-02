@@ -81,14 +81,42 @@
             color: inherit;
             display: block;
         }
-        .glow-green { box-shadow: 0 4px 15px -2px #2E7D32; }
-        .glow-yellow { box-shadow: 0 4px 15px -2px #F9A825; }
-        .glow-red { box-shadow: 0 4px 15px -2px #B71C1C; }
 
-        /* The text color for the score */
-        .glow-green-text { color: #66BB6A; font-weight: bold; }
-        .glow-yellow-text { color: #FDD835; font-weight: bold; }
-        .glow-red-text { color: #E57373; font-weight: bold; }
+        .stats-display {
+            text-align: center;
+            font-size: 0.85em;
+            color: #a0a0a0;
+            margin-top: 12px;
+            line-height: 1.4;
+        }
+
+        .score-line {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px; /* Space between stats */
+        }
+
+        .stat strong {
+            color: #e0e0e0;
+            font-weight: 600;
+        }
+
+        .separator {
+            opacity: 0.3;
+            font-weight: lighter;
+        }
+
+        .date-line {
+            font-size: 0.9em;
+            opacity: 0.6;
+            margin-top: 4px;
+        }
+
+        /* These text color classes remain the same */
+        .glow-green-text { color: #66BB6A; }
+        .glow-yellow-text { color: #FDD835; }
+        .glow-red-text { color: #E57373; }
 
         /* Modal Styles (kept light for contrast, which is a common and good UI practice) */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); display: none; justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(5px); }
@@ -110,41 +138,51 @@
             <div class="album-card" data-editions='{{ editions | tojson | forceescape }}'>
 
                 <div class="album-art-container">
-                    {% set score_class = '' %}
-                    {% if (primary_edition.times_ranked | int) > 0 and primary_edition.weighted_average_score is defined %}
+                    {% set glow_class = '' %}
+                    {% if (primary_edition.times_ranked | int) > 0 and primary_edition.weighted_average_score is defined and primary_edition.weighted_average_score != '' %}
                         {% set score = primary_edition.weighted_average_score|float %}
                         {% if score >= 7 %}
-                            {% set score_class = 'glow-green' %}
+                            {% set glow_class = 'glow-green' %}
                         {% elif score >= 4 %}
-                            {% set score_class = 'glow-yellow' %}
+                            {% set glow_class = 'glow-yellow' %}
                         {% else %}
-                            {% set score_class = 'glow-red' %}
+                            {% set glow_class = 'glow-red' %}
                         {% endif %}
                     {% endif %}
-                    <img src="{{ primary_edition.image }}" alt="{{ base_name }}" class="{{ score_class }}">
+                    <img src="{{ primary_edition.image }}" alt="{{ base_name }}" class="{{ glow_class }}">
                 </div>
+
                 <div class="album-name" title="{{ base_name }}">
                     {{ base_name }}
-                    {% if editions | selectattr('has_prelim_ranks') | list | length > 0 %}
-                        <span class="paused-icon" title="Paused">⏸️</span>
-                    {% endif %}
                 </div>
-                <div class="stats">
-                    <div class="mastery-stars" aria-label="Ranking stars">
-                        {% set display_stars = primary_edition.times_ranked | default(0) | int %}
-                        {% for i in range(3) %}
-                            <span class="star {% if i < display_stars %}filled{% endif %}">★</span>
-                        {% endfor %}
-                    </div>
-                </div>
-                <div class="stats">
-                    {% if primary_edition.average_score is not none and (primary_edition.times_ranked | int) > 0 %}
-                        Avg Score: {{ "%.2f"|format(primary_edition.average_score|float) }}
+
+                <div class="stats-display">
+                    {% if (primary_edition.times_ranked | int) > 0 %}
+                        <div class="score-line">
+                            <span class="stat">
+                                Avg: <strong>{{ "%.2f"|format(primary_edition.average_score|float) }}</strong>
+                            </span>
+                            <span class="separator">|</span>
+                            <span class="stat">
+                                {% set weighted_score = primary_edition.weighted_average_score|float %}
+                                {% set text_class = '' %}
+                                {% if weighted_score >= 7 %}
+                                    {% set text_class = 'glow-green-text' %}
+                                {% elif weighted_score >= 4 %}
+                                    {% set text_class = 'glow-yellow-text' %}
+                                {% else %}
+                                    {% set text_class = 'glow-red-text' %}
+                                {% endif %}
+                                Overall: <strong class="{{ text_class }}">{{ "%.2f"|format(weighted_score) }}</strong>
+                            </span>
+                        </div>
+                        <div class="date-line">
+                            Last Ranked: {{ primary_edition.last_ranked_date.split(' ')[0] }}
+                        </div>
                     {% else %}
-                        Not yet ranked
-                    {% endif %}
-                    {% if primary_edition.last_ranked_date %}
-                        <br><span class="last-ranked-date">Last: {{ primary_edition.last_ranked_date.split(' ')[0] }}</span>
+                        <div class="score-line">
+                            Not yet ranked
+                        </div>
                     {% endif %}
                 </div>
                 <form action="{{ url_for('view_album') }}" method="post" class="album-form" style="display: none;">
