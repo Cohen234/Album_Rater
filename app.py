@@ -301,8 +301,10 @@ def get_album_stats(album_id):
             (main_df['Spotify Album ID'] == album_id) & (main_df['Rank Group'].astype(str) != 'I')].copy()
         album_songs_df['Ranking'] = pd.to_numeric(album_songs_df['Ranking'], errors='coerce')
 
-        best_song = album_songs_df.loc[album_songs_df['Ranking'].idxmax()] if not album_songs_df.empty else None
-        worst_song = album_songs_df.loc[album_songs_df['Ranking'].idxmin()] if not album_songs_df.empty else None
+        best_song = album_songs_df.loc[album_songs_df['Ranking'].idxmax()] if not album_songs_df.empty and not \
+        album_songs_df['Ranking'].isnull().all() else None
+        worst_song = album_songs_df.loc[album_songs_df['Ranking'].idxmin()] if not album_songs_df.empty and not \
+        album_songs_df['Ranking'].isnull().all() else None
 
         # 4. Find Leaderboard Placement
         averages_df['weighted_average_score'] = pd.to_numeric(averages_df['weighted_average_score'], errors='coerce')
@@ -320,7 +322,10 @@ def get_album_stats(album_id):
             original_score) else 0
 
         last_ranked_date = pd.to_datetime(album_stats.get('last_ranked_date'), errors='coerce')
-        times_ranked = pd.to_numeric(album_stats.get('times_ranked'), errors='coerce').fillna(0)
+        # 1. Convert the single value to a number (or NaN if it fails)
+        times_ranked_val = pd.to_numeric(album_stats.get('times_ranked'), errors='coerce')
+        # 2. If the value is NaN, default to 0, otherwise use the integer value
+        times_ranked = 0 if pd.isna(times_ranked_val) else int(times_ranked_val)
         next_rerank_date = 'N/A'
         if pd.notna(last_ranked_date):
             days_to_add = 45 if times_ranked > 1 else 15
