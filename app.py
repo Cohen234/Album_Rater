@@ -47,10 +47,11 @@ SPOTIFY_CLIENT_SECRET = os.environ.get('SPOTIFY_CLIENT_SECRET') # Changed from S
 sp = None # Initialize sp to None
 if SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET:
     try:
+        # THE FIX: Add a 'retries' parameter to automatically retry failed connections.
         sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(
             client_id=SPOTIFY_CLIENT_ID,
             client_secret=SPOTIFY_CLIENT_SECRET
-        ))
+        ), retries=3, status_forcelist=[429, 500, 502, 503, 504])
         print("DEBUG: Spotify client (sp) initialized successfully in app.py.")
     except Exception as e:
         print(f"ERROR: Failed to initialize Spotify client (sp) in app.py: {e}")
