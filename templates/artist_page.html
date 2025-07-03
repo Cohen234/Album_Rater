@@ -238,6 +238,16 @@
                 }
             }
         });
+        document.addEventListener('keydown', function(event) {
+            // On Escape, go to the homepage
+            if (event.key === 'Escape') {
+                window.location.href = 'about:blank';
+            }
+            // On Left Arrow, go back to the homepage (artist search)
+            if (event.key === 'ArrowLeft') {
+                window.location.href = '{{ url_for('index') }}';
+            }
+        });
     </script>
 </body>
 </html>
