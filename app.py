@@ -132,8 +132,10 @@ def get_album_averages_df(client_gspread, spreadsheet_id, sheet_name):
                 raise create_e  # Re-raise to stop execution if sheet creation fails
         raise e  # Re-raise the original error if it's not WorksheetNotFound or creation fails
 
-    df = get_as_dataframe(sheet, evaluate_formulas=False)  # Use your existing get_as_dataframe helper
+        # ...
+    df = get_as_dataframe(sheet, evaluate_formulas=False)
 
+    # THE FIX: This list now contains all the columns your app uses.
     expected_cols = ['album_id', 'album_name', 'artist_name', 'average_score', 'weighted_average_score',
                      'original_weighted_score', 'previous_weighted_score', 'times_ranked', 'last_ranked_date']
 
