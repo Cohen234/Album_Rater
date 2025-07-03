@@ -224,14 +224,12 @@ def artist_page(artist_name):
         all_songs_df = get_as_dataframe(main_sheet, evaluate_formulas=False).fillna("")
         all_albums_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
 
-        # 2. Filter data for the CURRENT artist
-        # Ensure 'Ranking' is numeric for calculations
+        # Filter data for the CURRENT artist
         all_songs_df['Ranking'] = pd.to_numeric(all_songs_df['Ranking'], errors='coerce')
-        # Filter both dataframes
         artist_songs_df = all_songs_df[all_songs_df['Artist Name'].str.lower() == artist_name.lower()]
         artist_albums_df = all_albums_df[all_albums_df['artist_name'].str.lower() == artist_name.lower()]
 
-        # 3. Calculate Overall Stats
+        # Calculate Overall Stats
         avg_song_score = artist_songs_df['Ranking'].mean()
         avg_album_score = artist_albums_df['average_score'].mean()
         artist_stats = {
