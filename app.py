@@ -515,21 +515,13 @@ def index():
 
 @app.route("/load_albums_by_artist", methods=["GET", "POST"])
 def load_albums_by_artist_route():
-    artist_name = None # Initialize artist_name
-
-    if request.method == "POST":
-        artist_name = request.form["artist_name"]
-        # Instead of rendering a page here, redirect to the new artist page
-        return redirect(url_for('artist_page', artist_name=artist_name))
-    elif request.method == "GET":
-        # For redirect after ranking (from url_for passing it as a query param)
-        artist_name = request.args.get("artist_name")
+    artist_name = request.form.get("artist_name") or request.args.get("artist_name")
 
     if not artist_name:
-        # Handle cases where artist_name isn't found (e.g., direct GET without param)
         flash("Artist name not provided. Please search for an artist.")
-        return redirect(url_for('index')) # Redirect to your home/search page
-    print("\n--- LOADING ALBUM LIST FOR ARTIST:", artist_name, "---")
+        return redirect(url_for('index'))
+
+    logging.info(f"\n--- LOADING ALBUM LIST FOR ARTIST: {artist_name} ---")
 
     albums_from_spotify = get_albums_by_artist(artist_name) # Renamed variable for clarity
 
