@@ -212,77 +212,76 @@
 <body>
     <h1>{{ artist_name }}</h1>
 
-    <div class="album-grid">
-        {% for base_name, editions in grouped_albums.items() %}
-            {% set primary_edition = editions[0] %}
-            <div class="album-card" data-editions='{{ editions | tojson | forceescape }}'>
-                <div class="album-art-container">
-                    {% set glow_class = '' %}
-                    {% if (primary_edition['times_ranked'] | int) > 0 and primary_edition['weighted_average_score'] is defined and primary_edition['weighted_average_score'] != '' %}
-                        {% set score = primary_edition['weighted_average_score']|float %}
-                        {% if score >= 7 %}
-                            {% set glow_class = 'glow-green' %}
-                        {% elif score >= 4 %}
-                            {% set glow_class = 'glow-yellow' %}
-                        {% else %}
-                            {% set glow_class = 'glow-red' %}
-                        {% endif %}
-                    {% endif %}
-                    <img src="{{ primary_edition['image'] }}" alt="{{ base_name }}" class="{{ glow_class }}">
-                    {% if (primary_edition['times_ranked'] | int) > 0 %}
-                        <a href="#" class="info-icon" data-album-id="{{ primary_edition['id'] }}" title="View Stats">ⓘ</a>
-                    {% endif %}
-                </div> <div class="album-name" title="{{ base_name }}">
-                    {{ base_name }}
-                </div>
-                <div class="stats-display">
-                    {% if (primary_edition['times_ranked'] | int) > 0 %}
-                        <div class="mastery-stars">
-                            {% set display_stars = primary_edition['times_ranked'] | default(0) | int %}
-                            {% for i in range(3) %}
-                                <span class="star {% if i < display_stars %}filled{% endif %}">★</span>
-                            {% endfor %}
-                        </div>
-                        <div class="score-line">
-                            <span class="stat">
-                                Avg: <strong>{{ "%.2f"|format(primary_edition['average_score']|float) }}</strong>
-                            </span>
-                            <span class="separator">|</span>
-                            <span class="stat">
-                                {% set weighted_score = primary_edition['weighted_average_score']|float %}
-                                {% set glow_class = '' %}
-                                {% if weighted_score >= 7 %}{% set glow_class = 'glow-green' %}
-                                {% elif weighted_score >= 4 %}{% set glow_class = 'glow-yellow' %}
-                                {% else %}{% set glow_class = 'glow-red' %}{% endif %}
-                                {% set text_class = glow_class + '-text' %}
-                                Overall: <strong class="{{ text_class }}">{{ "%.2f"|format(weighted_score) }}</strong>
-                            </span>
-                        </div>
-                        <div class="date-line">
-                            Last Ranked: {{ primary_edition['last_ranked_date'].split(' ')[0] if primary_edition['last_ranked_date'] else '' }}
-                        </div>
+<div class="album-grid">
+    {% for base_name, editions in grouped_albums.items() %}
+        {% set primary_edition = editions[0] %}
+        <div class="album-card" data-editions='{{ editions | tojson | forceescape }}'>
+            <div class="album-art-container">
+                {% set glow_class = '' %}
+                {% if (primary_edition['times_ranked'] | int) > 0 and primary_edition['weighted_average_score'] is defined and primary_edition['weighted_average_score'] != '' %}
+                    {% set score = primary_edition['weighted_average_score']|float %}
+                    {% if score >= 7 %}
+                        {% set glow_class = 'glow-green' %}
+                    {% elif score >= 4 %}
+                        {% set glow_class = 'glow-yellow' %}
                     {% else %}
-                        <div class="score-line">Not yet ranked</div>
+                        {% set glow_class = 'glow-red' %}
                     {% endif %}
-                </div>
-                <form action="{{ url_for('view_album') }}" method="post" class="album-form" style="display: none;">
-                    <input type="hidden" name="album_id">
-                    <input type="hidden" name="album_name">
-                    <input type="hidden" name="artist_name" value="{{ artist_name }}">
-                    <input type="hidden" name="album_cover_url">
-                </form>
+                {% endif %}
+                <img src="{{ primary_edition['image'] }}" alt="{{ base_name }}" class="{{ glow_class }}">
+                {% if (primary_edition['times_ranked'] | int) > 0 %}
+                    <a href="#" class="info-icon" data-album-id="{{ primary_edition['id'] }}" title="View Stats">ⓘ</a>
+                {% endif %}
+            </div> <div class="album-name" title="{{ base_name }}">
+                {{ base_name }}
             </div>
-        {% endfor %}
-    </div>
 
-    <div id="edition-modal" class="modal-overlay">
-      <div class="modal-content">
-          <span class="modal-close" id="modal-close-btn">&times;</span>
-          <h3 id="modal-title">Select an Edition</h3>
-          <ul id="modal-edition-list" class="edition-list">
-              </ul>
-      </div>
-    </div>
+            <div class="stats-display">
+                {% if (primary_edition['times_ranked'] | int) > 0 %}
+                    <div class="mastery-stars">
+                        {% set display_stars = primary_edition['times_ranked'] | default(0) | int %}
+                        {% for i in range(3) %}
+                            <span class="star {% if i < display_stars %}filled{% endif %}">★</span>
+                        {% endfor %}
+                    </div>
+                    <div class="score-line">
+                        <span class="stat">
+                            Avg: <strong>{{ "%.2f"|format(primary_edition['average_score']|float) }}</strong>
+                        </span>
+                        <span class="separator">|</span>
+                        <span class="stat">
+                            {% set weighted_score = primary_edition['weighted_average_score']|float %}
+                            {% set glow_class = 'glow-green' if weighted_score >= 7 else 'glow-yellow' if weighted_score >= 4 else 'glow-red' %}
+                            {% set text_class = glow_class + '-text' %}
+                            Overall: <strong class="{{ text_class }}">{{ "%.2f"|format(weighted_score) }}</strong>
+                        </span>
+                    </div>
+                    <div class="date-line">
+                        Last Ranked: {{ primary_edition['last_ranked_date'].split(' ')[0] if primary_edition['last_ranked_date'] else '' }}
+                    </div>
+                {% else %}
+                    <div class="score-line">Not yet ranked</div>
+                {% endif %}
+            </div>
+
+            <form action="{{ url_for('view_album') }}" method="post" class="album-form" style="display: none;">
+                <input type="hidden" name="album_id">
+                <input type="hidden" name="album_name">
+                <input type="hidden" name="artist_name" value="{{ artist_name }}">
+                <input type="hidden" name="album_cover_url">
+            </form>
+        </div>
+    {% endfor %}
+</div>
+
+<div id="edition-modal" class="modal-overlay">
+  <div class="modal-content">
+      <span class="modal-close" id="modal-close-btn">&times;</span>
+      <h3 id="modal-title">Select an Edition</h3>
+      <ul id="modal-edition-list" class="edition-list">
+          </ul>
+  </div>
+</div>
 
 <script>
     document.addEventListener('DOMContentLoaded', () => {
