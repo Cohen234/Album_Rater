@@ -212,95 +212,103 @@
 <body>
     <h1>{{ artist_name }}</h1>
 
-<div class="album-grid">
-    {% for base_name, editions in grouped_albums.items() %}
-        {% set primary_edition = editions[0] %}
-        <div class="album-card" data-editions='{{ editions | tojson | forceescape }}'>
-            <div class="album-art-container">
-                {% set glow_class = '' %}
-                {% if (primary_edition['times_ranked'] | int) > 0 and primary_edition['weighted_average_score'] is defined and primary_edition['weighted_average_score'] != '' %}
-                    {% set score = primary_edition['weighted_average_score']|float %}
-                    {% if score >= 7 %}
-                        {% set glow_class = 'glow-green' %}
-                    {% elif score >= 4 %}
-                        {% set glow_class = 'glow-yellow' %}
-                    {% else %}
-                        {% set glow_class = 'glow-red' %}
+    <div class="album-grid">
+        {% for base_name, editions in grouped_albums.items() %}
+            {% set primary_edition = editions[0] %}
+            <div class="album-card" data-editions='{{ editions | tojson | forceescape }}'>
+                <div class="album-art-container">
+                    {% set glow_class = '' %}
+                    {% if (primary_edition['times_ranked'] | int) > 0 and primary_edition['weighted_average_score'] is defined and primary_edition['weighted_average_score'] != '' %}
+                        {% set score = primary_edition['weighted_average_score']|float %}
+                        {% if score >= 7 %}
+                            {% set glow_class = 'glow-green' %}
+                        {% elif score >= 4 %}
+                            {% set glow_class = 'glow-yellow' %}
+                        {% else %}
+                            {% set glow_class = 'glow-red' %}
+                        {% endif %}
                     {% endif %}
-                {% endif %}
-                <img src="{{ primary_edition['image'] }}" alt="{{ base_name }}" class="{{ glow_class }}">
-                {% if (primary_edition['times_ranked'] | int) > 0 %}
-                    <a href="#" class="info-icon" data-album-id="{{ primary_edition['id'] }}" title="View Stats">ⓘ</a>
-                {% endif %}
-            </div> <div class="album-name" title="{{ base_name }}">
-                {{ base_name }}
-            </div>
+                    <img src="{{ primary_edition['image'] }}" alt="{{ base_name }}" class="{{ glow_class }}">
+                    {% if (primary_edition['times_ranked'] | int) > 0 %}
+                        <a href="#" class="info-icon" data-album-id="{{ primary_edition['id'] }}" title="View Stats">ⓘ</a>
+                    {% endif %}
+                </div> <div class="album-name" title="{{ base_name }}">
+                    {{ base_name }}
+                </div>
 
-            <div class="stats-display">
-                {% if (primary_edition['times_ranked'] | int) > 0 %}
-                    <div class="mastery-stars">
-                        {% set display_stars = primary_edition['times_ranked'] | default(0) | int %}
-                        {% for i in range(3) %}
-                            <span class="star {% if i < display_stars %}filled{% endif %}">★</span>
-                        {% endfor %}
-                    </div>
-                    <div class="score-line">
-                        <span class="stat">
-                            Avg: <strong>{{ "%.2f"|format(primary_edition['average_score']|float) }}</strong>
-                        </span>
-                        <span class="separator">|</span>
-                        <span class="stat">
-                            {% set weighted_score = primary_edition['weighted_average_score']|float %}
-                            {% set glow_class = 'glow-green' if weighted_score >= 7 else 'glow-yellow' if weighted_score >= 4 else 'glow-red' %}
-                            {% set text_class = glow_class + '-text' %}
-                            Overall: <strong class="{{ text_class }}">{{ "%.2f"|format(weighted_score) }}</strong>
-                        </span>
-                    </div>
-                    <div class="date-line">
-                        Last Ranked: {{ primary_edition['last_ranked_date'].split(' ')[0] if primary_edition['last_ranked_date'] else '' }}
-                    </div>
-                {% else %}
-                    <div class="score-line">Not yet ranked</div>
-                {% endif %}
-            </div>
+                <div class="stats-display">
+                    {% if (primary_edition['times_ranked'] | int) > 0 %}
+                        <div class="mastery-stars">
+                            {% set display_stars = primary_edition['times_ranked'] | default(0) | int %}
+                            {% for i in range(3) %}
+                                <span class="star {% if i < display_stars %}filled{% endif %}">★</span>
+                            {% endfor %}
+                        </div>
+                        <div class="score-line">
+                            <span class="stat">
+                                Avg: <strong>{{ "%.2f"|format(primary_edition['average_score']|float) }}</strong>
+                            </span>
+                            <span class="separator">|</span>
+                            <span class="stat">
+                                {% set weighted_score = primary_edition['weighted_average_score']|float %}
+                                {% set glow_class = 'glow-green' if weighted_score >= 7 else 'glow-yellow' if weighted_score >= 4 else 'glow-red' %}
+                                {% set text_class = glow_class + '-text' %}
+                                Overall: <strong class="{{ text_class }}">{{ "%.2f"|format(weighted_score) }}</strong>
+                            </span>
+                        </div>
+                        <div class="date-line">
+                            Last Ranked: {{ primary_edition['last_ranked_date'].split(' ')[0] if primary_edition['last_ranked_date'] else '' }}
+                        </div>
+                    {% else %}
+                        <div class="score-line">Not yet ranked</div>
+                    {% endif %}
+                </div>
 
-            <form action="{{ url_for('view_album') }}" method="post" class="album-form" style="display: none;">
-                <input type="hidden" name="album_id">
-                <input type="hidden" name="album_name">
-                <input type="hidden" name="artist_name" value="{{ artist_name }}">
-                <input type="hidden" name="album_cover_url">
-            </form>
+                <form action="{{ url_for('view_album') }}" method="post" class="album-form" style="display: none;">
+                    <input type="hidden" name="album_id">
+                    <input type="hidden" name="album_name">
+                    <input type="hidden" name="artist_name" value="{{ artist_name }}">
+                    <input type="hidden" name="album_cover_url">
+                </form>
+            </div>
+        {% endfor %}
+    </div>
+
+    <div id="edition-modal" class="modal-overlay">
+      <div class="modal-content">
+          <span class="modal-close" id="modal-close-btn">&times;</span>
+          <h3 id="modal-title">Select an Edition</h3>
+          <ul id="modal-edition-list" class="edition-list">
+              </ul>
+      </div>
+    </div>
+    <div id="stats-modal" class="modal-overlay">
+        <div class="modal-content">
+            <span class="modal-close" id="stats-modal-close-btn">&times;</span>
+            <div id="stats-modal-content-area">
+                </div>
         </div>
-    {% endfor %}
-</div>
-
-<div id="edition-modal" class="modal-overlay">
-  <div class="modal-content">
-      <span class="modal-close" id="modal-close-btn">&times;</span>
-      <h3 id="modal-title">Select an Edition</h3>
-      <ul id="modal-edition-list" class="edition-list">
-          </ul>
-  </div>
-</div>
+    </div>
 
 <script>
     document.addEventListener('DOMContentLoaded', () => {
-        // --- Element Definitions ---
+        // --- Get all modal elements ---
+        const editionModal = document.getElementById('edition-modal');
+        const editionModalCloseBtn = document.getElementById('edition-modal-close-btn');
+        const modalEditionList = document.getElementById('modal-edition-list');
+
         const statsModal = document.getElementById('stats-modal');
         const statsModalCloseBtn = document.getElementById('stats-modal-close-btn');
         const modalStatsContent = document.getElementById('stats-modal-content-area');
 
-        // --- Event Listener for the Info Icon ---
+        // --- Info Icon Click Logic ---
         document.querySelectorAll('.info-icon').forEach(icon => {
             icon.addEventListener('click', (event) => {
-                event.preventDefault();  // Stop the link from navigating
-                event.stopPropagation(); // Stop the main card click event
-
+                event.preventDefault();
+                event.stopPropagation();
                 const albumId = icon.dataset.albumId;
                 modalStatsContent.innerHTML = '<p>Loading stats...</p>';
-                statsModal.style.display = 'flex'; // Show the pop-up
-
-                // Fetch stats from your backend
+                statsModal.style.display = 'flex';
                 fetch(`/get_album_stats/${albumId}`)
                     .then(response => response.json())
                     .then(data => {
@@ -308,74 +316,69 @@
                             modalStatsContent.innerHTML = `<p>Error: ${data.error}</p>`;
                             return;
                         }
-
-                        // Calculate score drift and determine its class (positive/negative)
                         const scoreDrift = parseFloat(data.change_from_original);
                         const scoreDriftDisplay = scoreDrift > 0 ? `+${scoreDrift.toFixed(2)}` : scoreDrift.toFixed(2);
                         const driftClass = scoreDrift > 0 ? 'positive' : (scoreDrift < 0 ? 'negative' : '');
-
-                        // Build the HTML for the stats display
                         modalStatsContent.innerHTML = `
                             <h4>Quick Stats</h4>
                             <div class="stats-modal-content">
-                                <div class="stat-row">
-                                    <span class="stat-label">Original Score:</span>
-                                    <span class="stat-value">${data.original_score}</span>
-                                </div>
-                                <div class="stat-row">
-                                    <span class="stat-label">Score Drift:</span>
-                                    <span class="stat-value ${driftClass}">${scoreDriftDisplay}</span>
-                                </div>
-                                 <div class="stat-row">
-                                    <span class="stat-label">Best Song:</span>
-                                    <span class="stat-value">${data.best_song.name} (${data.best_song.score})</span>
-                                </div>
-                                <div class="stat-row">
-                                    <span class="stat-label">Worst Song:</span>
-                                    <span class="stat-value">${data.worst_song.name} (${data.worst_song.score})</span>
-                                </div>
-                                <div class="stat-row">
-                                    <span class="stat-label">Leaderboard:</span>
-                                    <span class="stat-value">#${data.leaderboard_placement} of all albums</span>
-                                </div>
-                                <div class="stat-row">
-                                    <span class="stat-label">Next Re-Rank Date:</span>
-                                    <span class="stat-value">${data.next_rerank_date}</span>
-                                </div>
+                                <div class="stat-row"><span class="stat-label">Original Score:</span><span class="stat-value">${data.original_score}</span></div>
+                                <div class="stat-row"><span class="stat-label">Score Drift:</span><span class="stat-value ${driftClass}">${scoreDriftDisplay}</span></div>
+                                <div class="stat-row"><span class="stat-label">Best Song:</span><span class="stat-value">${data.best_song.name} (${data.best_song.score})</span></div>
+                                <div class="stat-row"><span class="stat-label">Worst Song:</span><span class="stat-value">${data.worst_song.name} (${data.worst_song.score})</span></div>
+                                <div class="stat-row"><span class="stat-label">Leaderboard:</span><span class="stat-value">#${data.leaderboard_placement} of all albums</span></div>
+                                <div class="stat-row"><span class="stat-label">Next Re-Rank Date:</span><span class="stat-value">${data.next_rerank_date}</span></div>
                             </div>
                         `;
                     })
                     .catch(error => {
                         console.error('Error fetching stats:', error);
-                        modalStatsContent.innerHTML = `<p>Failed to load stats. Please try again.</p>`;
+                        modalStatsContent.innerHTML = `<p>Failed to load stats.</p>`;
                     });
             });
         });
 
-        // --- Logic to Close the Pop-up ---
-        // Close by clicking the 'X' button
-        statsModalCloseBtn.addEventListener('click', () => {
-            statsModal.style.display = 'none';
-        });
-
-        // Close by clicking on the background overlay
-        statsModal.addEventListener('click', (e) => {
-            if (e.target === statsModal) {
-                statsModal.style.display = 'none';
-            }
-        });
-
-        // --- Logic for clicking album to rank (unchanged) ---
+        // --- Album Card Click Logic ---
         document.querySelectorAll('.album-card').forEach(card => {
             card.addEventListener('click', (e) => {
-                // Do not trigger if the info icon was clicked
-                if (e.target.closest('.info-icon')) {
-                    return;
-                }
+                if (e.target.closest('.info-icon')) return;
+                const editions = JSON.parse(card.dataset.editions);
                 const form = card.querySelector('.album-form');
-                form.submit();
+                if (editions.length === 1) {
+                    submitFormWithEdition(form, editions[0]);
+                } else {
+                    populateAndShowModal(editions, form);
+                }
             });
         });
+
+        // --- Helper Functions for Modals ---
+        function submitFormWithEdition(form, edition) {
+            form.querySelector('input[name="album_id"]').value = edition.id;
+            form.querySelector('input[name="album_name"]').value = edition.full_name;
+            form.querySelector('input[name="album_cover_url"]').value = edition.image;
+            form.submit();
+        }
+
+        function populateAndShowModal(editions, form) {
+            modalEditionList.innerHTML = '';
+            editions.forEach(edition => {
+                const li = document.createElement('li');
+                const button = document.createElement('button');
+                button.className = 'edition-button';
+                button.textContent = edition.full_name;
+                button.addEventListener('click', () => submitFormWithEdition(form, edition));
+                li.appendChild(button);
+                modalEditionList.appendChild(li);
+            });
+            editionModal.style.display = 'flex';
+        }
+
+        // --- Universal Close Logic for both modals ---
+        statsModalCloseBtn.addEventListener('click', () => { statsModal.style.display = 'none'; });
+        editionModalCloseBtn.addEventListener('click', () => { editionModal.style.display = 'none'; });
+        statsModal.addEventListener('click', (e) => { if (e.target === statsModal) statsModal.style.display = 'none'; });
+        editionModal.addEventListener('click', (e) => { if (e.target === editionModal) editionModal.style.display = 'none'; });
     });
 </script>
 </body>
