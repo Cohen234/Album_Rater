@@ -264,8 +264,8 @@ def artist_page(artist_name):
         all_songs_df_sorted = all_songs_df.sort_values(by='Ranking', ascending=False).reset_index(drop=True)
         universal_song_leaderboard = all_songs_df_sorted.head(100).to_dict('records')  # Show top 100 universal
 
-        # 6. Prepare Album Leaderboard
-        album_leaderboard = artist_albums_df.sort_values(by='average_score', ascending=False).to_dict('records')
+        album_leaderboard = artist_albums_df.sort_values(by='weighted_average_score', ascending=False).to_dict(
+            'records')
 
         # 7. Pass all the data to the template
         return render_template(
