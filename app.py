@@ -518,6 +518,15 @@ def submit_rankings():
 @app.route('/')
 def index():
     return render_template('index.html')
+@app.route('/search', methods=['POST'])
+def search_artist():
+    artist_name = request.form.get('artist_name')
+    if artist_name:
+        # Redirect to the main artist dashboard
+        return redirect(url_for('artist_page', artist_name=artist_name))
+    else:
+        flash("Please enter an artist name.")
+        return redirect(url_for('index'))
 
 
 @app.route("/load_albums_by_artist", methods=["GET", "POST"])

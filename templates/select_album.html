@@ -23,9 +23,26 @@
         }
         .album-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 35px;
-            padding: 0 40px 40px 40px;
+            /* Default to 2 columns on small screens */
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            padding: 0 20px 40px 20px;
+        }
+
+        /* For tablets and medium screens, show 4 columns */
+        @media (min-width: 768px) {
+            .album-grid {
+                grid-template-columns: repeat(4, 1fr);
+                gap: 25px;
+                padding: 0 30px 40px 30px;
+            }
+        }
+
+        /* For large desktop screens, show the requested 6 columns */
+        @media (min-width: 1200px) {
+            .album-grid {
+                grid-template-columns: repeat(6, 1fr);
+            }
         }
         .album-card {
             background: none;

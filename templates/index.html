@@ -105,10 +105,10 @@
 <body>
   <div class="search-container">
     <h1>Album Rater</h1>
-    <form action="{{ url_for('load_albums_by_artist_route') }}" method="post">
+    <form action="{{ url_for('search_artist') }}" method="post">
       <label for="artist_name">Enter Artist Name</label>
       <input type="text" id="artist_name" name="artist_name" placeholder="e.g. Kanye West" required autocomplete="off" />
-      <input type="submit" value="Search Albums" />
+      <input type="submit" value="Search Artist" />
     </form>
   </div>
 </body>
