@@ -216,7 +216,6 @@
         {% for base_name, editions in grouped_albums.items() %}
             {% set primary_edition = editions[0] %}
             <div class="album-card" data-editions='{{ editions | tojson | forceescape }}'>
-
                 <div class="album-art-container">
                     {% set glow_class = '' %}
                     {% if (primary_edition['times_ranked'] | int) > 0 and primary_edition['weighted_average_score'] is defined and primary_edition['weighted_average_score'] != '' %}
@@ -231,11 +230,9 @@
                     {% endif %}
                     <img src="{{ primary_edition['image'] }}" alt="{{ base_name }}" class="{{ glow_class }}">
                     <a href="#" class="info-icon" data-album-id="{{ primary_edition['id'] }}" title="View Stats">ⓘ</a>
-
-                <div class="album-name" title="{{ base_name }}">
+                </div> <div class="album-name" title="{{ base_name }}">
                     {{ base_name }}
                 </div>
-
                 <div class="stats-display">
                     {% if (primary_edition['times_ranked'] | int) > 0 %}
                         <div class="mastery-stars">
@@ -244,7 +241,6 @@
                                 <span class="star {% if i < display_stars %}filled{% endif %}">★</span>
                             {% endfor %}
                         </div>
-
                         <div class="score-line">
                             <span class="stat">
                                 Avg: <strong>{{ "%.2f"|format(primary_edition['average_score']|float) }}</strong>
@@ -260,17 +256,13 @@
                                 Overall: <strong class="{{ text_class }}">{{ "%.2f"|format(weighted_score) }}</strong>
                             </span>
                         </div>
-
                         <div class="date-line">
-                            Last Ranked: {{ primary_edition['last_ranked_date'].split(' ')[0] }}
+                            Last Ranked: {{ primary_edition['last_ranked_date'].split(' ')[0] if primary_edition['last_ranked_date'] else '' }}
                         </div>
                     {% else %}
-                        <div class="score-line">
-                            Not yet ranked
-                        </div>
+                        <div class="score-line">Not yet ranked</div>
                     {% endif %}
                 </div>
-
                 <form action="{{ url_for('view_album') }}" method="post" class="album-form" style="display: none;">
                     <input type="hidden" name="album_id">
                     <input type="hidden" name="album_name">
