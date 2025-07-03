@@ -170,7 +170,7 @@
                         <tr>
                             <td>{{ loop.index }}</td>
                             <td>{{ song['Song Name'] }}</td>
-                            <td>{{ "%.2f"|format(song.Ranking) }}</td>
+                            <td>{{ "%.2f"|format(song['Ranking']) }}</td>
                         </tr>
                     {% else %}
                         <tr><td colspan="3">No songs ranked for this artist yet.</td></tr>
@@ -190,7 +190,7 @@
                             <td>{{ loop.index }}</td>
                             <td>{{ song['Song Name'] }}</td>
                             <td>{{ song['Artist Name'] }}</td>
-                            <td>{{ "%.2f"|format(song.Ranking) }}</td>
+                            <td>{{ "%.2f"|format(song['Ranking']) }}</td>
                         </tr>
                     {% else %}
                          <tr><td colspan="4">No songs ranked yet.</td></tr>
