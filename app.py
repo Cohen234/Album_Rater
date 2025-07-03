@@ -297,37 +297,35 @@ def get_album_stats(album_id):
         album_stats = album_stats.iloc[0]
 
         # 3. Find Best/Worst Songs
-        album_songs_df = main_df[(main_df['Spotify Album ID'] == album_id) & (main_df['Rank Group'].astype(str) != 'I')]
+        album_songs_df = main_df[
+            (main_df['Spotify Album ID'] == album_id) & (main_df['Rank Group'].astype(str) != 'I')].copy()
         album_songs_df['Ranking'] = pd.to_numeric(album_songs_df['Ranking'], errors='coerce')
 
         best_song = album_songs_df.loc[album_songs_df['Ranking'].idxmax()] if not album_songs_df.empty else None
         worst_song = album_songs_df.loc[album_songs_df['Ranking'].idxmin()] if not album_songs_df.empty else None
 
         # 4. Find Leaderboard Placement
+        averages_df['weighted_average_score'] = pd.to_numeric(averages_df['weighted_average_score'], errors='coerce')
+        averages_df.dropna(subset=['weighted_average_score'], inplace=True)
         averages_df.sort_values(by='weighted_average_score', ascending=False, inplace=True)
         averages_df.reset_index(drop=True, inplace=True)
+
         placement_series = averages_df.index[averages_df['album_id'] == album_id]
         leaderboard_placement = placement_series[0] + 1 if not placement_series.empty else 'N/A'
 
-        # 5. Calculate Score Changes
-        current_score = album_stats.get('weighted_average_score')
-        original_score = album_stats.get('original_weighted_score')
-        previous_score = album_stats.get('previous_weighted_score')
+        current_score = pd.to_numeric(album_stats.get('weighted_average_score'), errors='coerce')
+        original_score = pd.to_numeric(album_stats.get('original_weighted_score'), errors='coerce')
 
         change_from_original = (current_score - original_score) if pd.notna(current_score) and pd.notna(
             original_score) else 0
-        change_from_previous = (current_score - previous_score) if pd.notna(current_score) and pd.notna(
-            previous_score) else 0
 
-        # 6. Calculate Next Re-rank Date
-        last_ranked_date = pd.to_datetime(album_stats.get('last_ranked_date'))
-        times_ranked = album_stats.get('times_ranked', 0)
+        last_ranked_date = pd.to_datetime(album_stats.get('last_ranked_date'), errors='coerce')
+        times_ranked = pd.to_numeric(album_stats.get('times_ranked'), errors='coerce').fillna(0)
         next_rerank_date = 'N/A'
         if pd.notna(last_ranked_date):
             days_to_add = 45 if times_ranked > 1 else 15
             next_rerank_date = (last_ranked_date + pd.Timedelta(days=days_to_add)).strftime('%Y-%m-%d')
 
-        # 7. Assemble JSON response
         response_data = {
             'original_score': f"{original_score:.2f}" if pd.notna(original_score) else 'N/A',
             'best_song': {'name': best_song['Song Name'],
@@ -338,7 +336,6 @@ def get_album_stats(album_id):
                                                                                                     'score': ''},
             'leaderboard_placement': leaderboard_placement,
             'change_from_original': f"{change_from_original:+.2f}",
-            'change_from_previous': f"{change_from_previous:+.2f}",
             'next_rerank_date': next_rerank_date
         }
         return jsonify(response_data)
@@ -698,8 +695,10 @@ def view_album():
 
         print(f"DEBUG: Re-rank mode for '{album_data['album_name']}': {is_rerank_mode}")
 
+        # In view_album function
+        # FIX #2: Add .copy() to prevent SettingWithCopyWarning
         if not all_final_ranks_df.empty and 'Spotify Album ID' in all_final_ranks_df.columns:
-            other_albums_df = all_final_ranks_df[all_final_ranks_df['Spotify Album ID'] != album_id]
+            other_albums_df = all_final_ranks_df[all_final_ranks_df['Spotify Album ID'] != album_id].copy()
         else:
             other_albums_df = pd.DataFrame()
 
