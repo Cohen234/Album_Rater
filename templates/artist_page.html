@@ -241,7 +241,7 @@
         document.addEventListener('keydown', function(event) {
             // On Escape, go to the homepage
             if (event.key === 'Escape') {
-                window.location.href = 'about:blank';
+                window.close();
             }
             // On Left Arrow, go back to the homepage (artist search)
             if (event.key === 'ArrowLeft') {

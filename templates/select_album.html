@@ -382,15 +382,14 @@
         editionModal.addEventListener('click', (e) => { if (e.target === editionModal) editionModal.style.display = 'none'; });
     });
     document.addEventListener('keydown', function(event) {
-            // On Escape, go to the homepage
-            if (event.key === 'Escape') {
-                window.location.href = 'about:blank';
-            }
-            // On Left Arrow, go back to the artist page
-            if (event.key === 'ArrowLeft') {
-                window.location.href = '{{ url_for('artist_page', artist_name=artist_name) }}';
-            }
-        });
+        if (event.key === 'Escape') {
+            window.close();
+        }
+        // On Left Arrow, go back to the artist page
+        if (event.key === 'ArrowLeft') {
+            window.location.href = '{{ url_for('artist_page', artist_name=artist_name) }}';
+        }
+    });
 </script>
 </body>
 </html>

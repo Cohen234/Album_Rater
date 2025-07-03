@@ -1035,9 +1035,8 @@
             updateAverageAlbumScore();// Also run this on load
         });
         document.addEventListener('keydown', function(event) {
-            // On Escape, go to the homepage
             if (event.key === 'Escape') {
-                window.location.href = 'about:blank';
+                    window.close();
             }
             // On Left Arrow, go back to the album select page
             if (event.key === 'ArrowLeft') {
