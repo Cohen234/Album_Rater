@@ -202,8 +202,8 @@
 
                 <div class="album-art-container">
                     {% set glow_class = '' %}
-                    {% if (primary_edition.times_ranked | int) > 0 and primary_edition.weighted_average_score is defined and primary_edition.weighted_average_score != '' %}
-                        {% set score = primary_edition.weighted_average_score|float %}
+                    {% if (primary_edition['times_ranked'] | int) > 0 and primary_edition['weighted_average_score'] is defined and primary_edition['weighted_average_score'] != '' %}
+                        {% set score = primary_edition['weighted_average_score']|float %}
                         {% if score >= 7 %}
                             {% set glow_class = 'glow-green' %}
                         {% elif score >= 4 %}
@@ -212,8 +212,8 @@
                             {% set glow_class = 'glow-red' %}
                         {% endif %}
                     {% endif %}
-                    <img src="{{ primary_edition.image }}" alt="{{ base_name }}" class="{{ glow_class }}">
-                    <a href="#" class="info-icon" data-album-id="{{ primary_edition.id }}" title="View Stats">ⓘ</a>
+                    <img src="{{ primary_edition['image'] }}" alt="{{ base_name }}" class="{{ glow_class }}">
+                    <a href="#" class="info-icon" data-album-id="{{ primary_edition['id'] }}" title="View Stats">ⓘ</a>
 
                     {% if ... %}
                         <div class="score-bubble {{ bubble_class }}">...</div>
