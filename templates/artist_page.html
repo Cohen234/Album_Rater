@@ -140,9 +140,9 @@
             <ul>
                 {% for album in album_leaderboard %}
                     <li>
-                        <a href="{{ url_for('view_album', album_id=album.album_id) }}">
-                             <span class="album-name">{{ album.album_name }}</span>
-                             <span class="album-score">Score: {{ "%.2f"|format(album.average_score) if album.average_score is not none else 'N/A' }}</span>
+                        <a href="{{ url_for('view_album', album_id=album['album_id']) }}">
+                             <span class="album-name">{{ album['album_name'] }}</span>
+                             <span class="album-score">Score: {{ "%.2f"|format(album['average_score']) if album['average_score'] is not none else 'N/A' }}</span>
                         </a>
                     </li>
                 {% else %}
