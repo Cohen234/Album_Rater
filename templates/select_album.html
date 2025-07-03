@@ -92,6 +92,56 @@
             margin-top: 12px;
             line-height: 1.4;
         }
+        .info-icon {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            color: white;
+            background-color: rgba(0,0,0,0.5);
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 16px;
+            font-weight: bold;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .info-icon:hover {
+            background-color: rgba(0,0,0,0.8);
+            transform: scale(1.1);
+        }
+
+        /* New styles for the stats display inside the modal */
+        .stats-modal-content {
+            text-align: left;
+            font-size: 1.1em;
+        }
+        .stats-modal-content h4 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .stat-row:last-child {
+            border-bottom: none;
+        }
+        .stat-label {
+            color: #555;
+        }
+        .stat-value {
+            font-weight: bold;
+            color: #000;
+        }
+        .stat-value.positive { color: #2E7D32; }
+        .stat-value.negative { color: #B71C1C; }
 
         .mastery-stars {
             margin-bottom: 8px;
@@ -163,6 +213,11 @@
                         {% endif %}
                     {% endif %}
                     <img src="{{ primary_edition.image }}" alt="{{ base_name }}" class="{{ glow_class }}">
+                    <a href="#" class="info-icon" data-album-id="{{ primary_edition.id }}" title="View Stats">ⓘ</a>
+
+                    {% if ... %}
+                        <div class="score-bubble {{ bubble_class }}">...</div>
+                    {% endif %}
                 </div>
 
                 <div class="album-name" title="{{ base_name }}">
@@ -238,6 +293,89 @@
                 }
             });
         });
+        document.querySelectorAll('.info-icon').forEach(icon => {
+            icon.addEventListener('click', (event) => {
+                event.preventDefault();  // Stop the link from navigating
+                event.stopPropagation(); // Stop the card's click event from firing
+
+                const albumId = icon.dataset.albumId;
+                modalStatsContent.innerHTML = '<p>Loading stats...</p>';
+                modal.style.display = 'flex';
+
+                fetch(`/get_album_stats/${albumId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.error) {
+                            modalStatsContent.innerHTML = `<p>Error: ${data.error}</p>`;
+                            return;
+                        }
+
+                        // Build the stats HTML
+                        const changeOrigClass = parseFloat(data.change_from_original) > 0 ? 'positive' : (parseFloat(data.change_from_original) < 0 ? 'negative' : '');
+                        const changePrevClass = parseFloat(data.change_from_previous) > 0 ? 'positive' : (parseFloat(data.change_from_previous) < 0 ? 'negative' : '');
+
+                        modalStatsContent.innerHTML = `
+                            <h4>Quick Stats</h4>
+                            <div class="stats-modal-content">
+                                <div class="stat-row">
+                                    <span class="stat-label">Original Score:</span>
+                                    <span class="stat-value">${data.original_score}</span>
+                                </div>
+                                <div class="stat-row">
+                                    <span class="stat-label">Best Song:</span>
+                                    <span class="stat-value">${data.best_song.name} (${data.best_song.score})</span>
+                                </div>
+                                <div class="stat-row">
+                                    <span class="stat-label">Worst Song:</span>
+                                    <span class="stat-value">${data.worst_song.name} (${data.worst_song.score})</span>
+                                </div>
+                                <div class="stat-row">
+                                    <span class="stat-label">Leaderboard:</span>
+                                    <span class="stat-value">#${data.leaderboard_placement}</span>
+                                </div>
+                                <div class="stat-row">
+                                    <span class="stat-label">Change (vs Previous):</span>
+                                    <span class="stat-value ${changePrevClass}">${data.change_from_previous}</span>
+                                </div>
+                                <div class="stat-row">
+                                    <span class="stat-label">Change (vs Original):</span>
+                                    <span class="stat-value ${changeOrigClass}">${data.change_from_original}</span>
+                                </div>
+                                <div class="stat-row">
+                                    <span class="stat-label">Next Re-Rank Date:</span>
+                                    <span class="stat-value">${data.next_rerank_date}</span>
+                                </div>
+                            </div>
+                        `;
+                    })
+                    .catch(error => {
+                        modalStatsContent.innerHTML = `<p>Failed to load stats. Please try again.</p>`;
+                        console.error('Error fetching stats:', error);
+                    });
+            });
+        });
+
+        // Close modal logic
+        modalCloseBtn.addEventListener('click', () => { modal.style.display = 'none'; });
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.style.display = 'none';
+            }
+        });
+        function submitFormWithEdition(form, edition) {
+            // This line correctly sets the album's unique Spotify ID.
+            form.querySelector('input[name="album_id"]').value = edition.id;
+
+            // NEW: This line sets the full name of the selected edition (e.g., "The Life Of Pablo (Deluxe)").
+            form.querySelector('input[name="album_name"]').value = edition.full_name;
+
+            // NEW: This line sets the correct album cover URL for the selected edition.
+            form.querySelector('input[name="album_cover_url"]').value = edition.image;
+
+            // This line submits the form with all the correct data.
+            form.submit();
+        }
+
 
         function submitFormWithEdition(form, edition) {
             form.querySelector('input[name="album_id"]').value = edition.id;
