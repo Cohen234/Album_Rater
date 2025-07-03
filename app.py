@@ -313,7 +313,7 @@ def get_album_stats(album_id):
         averages_df.reset_index(drop=True, inplace=True)
 
         placement_series = averages_df.index[averages_df['album_id'] == album_id]
-        leaderboard_placement = placement_series[0] + 1 if not placement_series.empty else 'N/A'
+        leaderboard_placement = int(placement_series[0] + 1) if not placement_series.empty else 'N/A'
 
         current_score = pd.to_numeric(album_stats.get('weighted_average_score'), errors='coerce')
         original_score = pd.to_numeric(album_stats.get('original_weighted_score'), errors='coerce')
