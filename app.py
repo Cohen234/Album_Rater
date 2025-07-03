@@ -135,12 +135,9 @@ def get_album_averages_df(client_gspread, spreadsheet_id, sheet_name):
 
     expected_cols = ['album_id', 'album_name', 'artist_name', 'average_score', 'weighted_average_score', 'times_ranked',
                      'last_ranked_date']  # Add new column name here
-    if df.empty:
-        df = pd.DataFrame(columns=expected_cols)
-    else:
-        for col in expected_cols:
-            if col not in df.columns:
-                df[col] = None
+    for col in expected_cols:
+        if col not in df.columns:
+            df[col] = pd.NA
 
     for col in ['average_score', 'weighted_average_score', 'original_weighted_score', 'previous_weighted_score']:
         df[col] = pd.to_numeric(df[col], errors='coerce')
