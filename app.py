@@ -133,12 +133,18 @@ def get_album_averages_df(client_gspread, spreadsheet_id, sheet_name):
 
     df = get_as_dataframe(sheet, evaluate_formulas=False)  # Use your existing get_as_dataframe helper
 
-    expected_cols = ['album_id', 'album_name', 'artist_name', 'average_score', 'weighted_average_score', 'times_ranked',
-                     'last_ranked_date']  # Add new column name here
-    for col in expected_cols:
-        if col not in df.columns:
-            df[col] = pd.NA
+    expected_cols = ['album_id', 'album_name', 'artist_name', 'average_score', 'weighted_average_score',
+                     'original_weighted_score', 'previous_weighted_score', 'times_ranked', 'last_ranked_date']
 
+    # THE FIX: Add the if/else block to handle an empty sheet
+    if df.empty:
+        df = pd.DataFrame(columns=expected_cols)
+    else:
+        for col in expected_cols:
+            if col not in df.columns:
+                df[col] = pd.NA
+
+    # Now we can safely convert types
     for col in ['average_score', 'weighted_average_score', 'original_weighted_score', 'previous_weighted_score']:
         df[col] = pd.to_numeric(df[col], errors='coerce')
     df['times_ranked'] = pd.to_numeric(df['times_ranked'], errors='coerce').fillna(0).astype(int)
