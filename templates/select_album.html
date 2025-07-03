@@ -225,9 +225,9 @@
                 </div>
 
                 <div class="stats-display">
-                    {% if (primary_edition.times_ranked | int) > 0 %}
+                    {% if (primary_edition['times_ranked'] | int) > 0 %}
                         <div class="mastery-stars">
-                            {% set display_stars = primary_edition.times_ranked | default(0) | int %}
+                            {% set display_stars = primary_edition['times_ranked'] | default(0) | int %}
                             {% for i in range(3) %}
                                 <span class="star {% if i < display_stars %}filled{% endif %}">★</span>
                             {% endfor %}
@@ -235,18 +235,22 @@
 
                         <div class="score-line">
                             <span class="stat">
-                                Avg: <strong>{{ "%.2f"|format(primary_edition.average_score|float) }}</strong>
+                                Avg: <strong>{{ "%.2f"|format(primary_edition['average_score']|float) }}</strong>
                             </span>
                             <span class="separator">|</span>
                             <span class="stat">
-                                {% set weighted_score = primary_edition.weighted_average_score|float %}
-                                {% set text_class = glow_class + '-text' %} {# Re-uses the glow_class for text color #}
+                                {% set weighted_score = primary_edition['weighted_average_score']|float %}
+                                {% set glow_class = '' %}
+                                {% if weighted_score >= 7 %}{% set glow_class = 'glow-green' %}
+                                {% elif weighted_score >= 4 %}{% set glow_class = 'glow-yellow' %}
+                                {% else %}{% set glow_class = 'glow-red' %}{% endif %}
+                                {% set text_class = glow_class + '-text' %}
                                 Overall: <strong class="{{ text_class }}">{{ "%.2f"|format(weighted_score) }}</strong>
                             </span>
                         </div>
 
                         <div class="date-line">
-                            Last Ranked: {{ primary_edition.last_ranked_date.split(' ')[0] }}
+                            Last Ranked: {{ primary_edition['last_ranked_date'].split(' ')[0] }}
                         </div>
                     {% else %}
                         <div class="score-line">
