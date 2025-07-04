@@ -323,6 +323,17 @@
                             modalStatsContent.innerHTML = `<p>Error: ${data.error}</p>`;
                             return;
                         }
+                        let historyHtml = '';
+                        if (data.rerank_history && data.rerank_history.length > 0) {
+                            data.rerank_history.forEach((rerank, index) => {
+                                historyHtml += `
+                                    <div class="stat-row">
+                                        <span class="stat-label">Re-rank #${index + 1} (${rerank.date}):</span>
+                                        <span class="stat-value">${rerank.score.toFixed(2)}</span>
+                                    </div>
+                                `;
+                            });
+                        }
                         const scoreDrift = parseFloat(data.change_from_original);
                         const scoreDriftDisplay = scoreDrift > 0 ? `+${scoreDrift.toFixed(2)}` : scoreDrift.toFixed(2);
                         const driftClass = scoreDrift > 0 ? 'positive' : (scoreDrift < 0 ? 'negative' : '');

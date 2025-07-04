@@ -295,18 +295,29 @@ def get_album_stats(album_id):
             return jsonify({'error': 'Album not found in averages sheet.'}), 404
 
         album_stats = album_stats.iloc[0]
+        current_score = pd.to_numeric(album_stats.get('weighted_average_score'), errors='coerce')
+        previous_score = pd.to_numeric(album_stats.get('previous_weighted_score'), errors='coerce')
+        original_score = pd.to_numeric(album_stats.get('original_weighted_score'), errors='coerce')
+
+        # Score drift is now based on the most recent previous score
+        score_drift = (current_score - previous_score) if pd.notna(current_score) and pd.notna(previous_score) else 0
+
+        # Load and parse the rerank history
+        history_str = album_stats.get('rerank_history', '[]')
+        try:
+            rerank_history = json.loads(history_str) if history_str and pd.notna(history_str) else []
+        except json.JSONDecodeError:
+            rerank_history = []
 
         # 3. Find Best/Worst Songs
         album_songs_df = main_df[
             (main_df['Spotify Album ID'] == album_id) & (main_df['Rank Group'].astype(str) != 'I')].copy()
         album_songs_df['Ranking'] = pd.to_numeric(album_songs_df['Ranking'], errors='coerce')
-
         best_song = album_songs_df.loc[album_songs_df['Ranking'].idxmax()] if not album_songs_df.empty and not \
         album_songs_df['Ranking'].isnull().all() else None
         worst_song = album_songs_df.loc[album_songs_df['Ranking'].idxmin()] if not album_songs_df.empty and not \
         album_songs_df['Ranking'].isnull().all() else None
 
-        # 4. Find Leaderboard Placement
         averages_df['weighted_average_score'] = pd.to_numeric(averages_df['weighted_average_score'], errors='coerce')
         averages_df.dropna(subset=['weighted_average_score'], inplace=True)
         averages_df.sort_values(by='weighted_average_score', ascending=False, inplace=True)
@@ -315,16 +326,8 @@ def get_album_stats(album_id):
         placement_series = averages_df.index[averages_df['album_id'] == album_id]
         leaderboard_placement = int(placement_series[0] + 1) if not placement_series.empty else 'N/A'
 
-        current_score = pd.to_numeric(album_stats.get('weighted_average_score'), errors='coerce')
-        original_score = pd.to_numeric(album_stats.get('original_weighted_score'), errors='coerce')
-
-        change_from_original = (current_score - original_score) if pd.notna(current_score) and pd.notna(
-            original_score) else 0
-
         last_ranked_date = pd.to_datetime(album_stats.get('last_ranked_date'), errors='coerce')
-        # 1. Convert the single value to a number (or NaN if it fails)
         times_ranked_val = pd.to_numeric(album_stats.get('times_ranked'), errors='coerce')
-        # 2. If the value is NaN, default to 0, otherwise use the integer value
         times_ranked = 0 if pd.isna(times_ranked_val) else int(times_ranked_val)
         next_rerank_date = 'N/A'
         if pd.notna(last_ranked_date):
@@ -333,21 +336,22 @@ def get_album_stats(album_id):
 
         response_data = {
             'original_score': f"{original_score:.2f}" if pd.notna(original_score) else 'N/A',
-            'best_song': {'name': best_song['Song Name'],
+            'best_song': {'name': str(best_song['Song Name']),
                           'score': f"{best_song['Ranking']:.2f}"} if best_song is not None else {'name': 'N/A',
                                                                                                  'score': ''},
-            'worst_song': {'name': worst_song['Song Name'],
+            'worst_song': {'name': str(worst_song['Song Name']),
                            'score': f"{worst_song['Ranking']:.2f}"} if worst_song is not None else {'name': 'N/A',
                                                                                                     'score': ''},
             'leaderboard_placement': leaderboard_placement,
-            'change_from_original': f"{change_from_original:+.2f}",
-            'next_rerank_date': next_rerank_date
+            'change_from_original': f"{score_drift:+.2f}",  # This now uses the new drift calculation
+            'next_rerank_date': next_rerank_date,
+            'rerank_history': rerank_history  # Pass the history to the frontend
         }
         return jsonify(response_data)
 
     except Exception as e:
         logging.error(f"Error in get_album_stats for {album_id}: {e}", exc_info=True)
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': f'An error occurred: {e}'}), 500
 
 
 @app.route("/submit_rankings", methods=["POST"])
