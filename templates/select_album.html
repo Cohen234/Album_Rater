@@ -300,6 +300,8 @@
         const statsModal = document.getElementById('stats-modal');
         const statsModalCloseBtn = document.getElementById('stats-modal-close-btn');
         const modalStatsContent = document.getElementById('stats-modal-content-area');
+        const loadingOverlay = document.getElementById('loading-overlay');
+
 
         // --- Info Icon Click Logic ---
         document.querySelectorAll('.info-icon').forEach(icon => {
@@ -355,6 +357,7 @@
 
         // --- Helper Functions for Modals ---
         function submitFormWithEdition(form, edition) {
+            loadingOverlay.style.display = 'flex';
             form.querySelector('input[name="album_id"]').value = edition.id;
             form.querySelector('input[name="album_name"]').value = edition.full_name;
             form.querySelector('input[name="album_cover_url"]').value = edition.image;
