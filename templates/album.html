@@ -536,6 +536,8 @@
                             <li class="song-item" draggable="true" data-song-id="{{ song.song_id }}" data-song-name="{{ song.song_name }}">
                                 <span class="track-number">{{ loop.index }}</span>
                                 <span class="song-name">{{ song.song_name }}</span>
+                                <span class="checkmark">✓</span>
+                                <span class="ranked-group-display"></span>
                                 <div class="previous-rank-display" title="Previous Rank">{{ song.previous_rank }}</div>
                             </li>
                         {% endfor %}

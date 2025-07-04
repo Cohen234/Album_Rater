@@ -343,7 +343,7 @@ def get_album_stats(album_id):
                            'score': f"{worst_song['Ranking']:.2f}"} if worst_song is not None else {'name': 'N/A',
                                                                                                     'score': ''},
             'leaderboard_placement': leaderboard_placement,
-            'change_from_original': f"{score_drift:+.2f}",  # This now uses the new drift calculation
+            'change_from_last_rank': f"{score_drift:+.2f}",  # This now uses the new drift calculation
             'next_rerank_date': next_rerank_date,
             'rerank_history': rerank_history  # Pass the history to the frontend
         }
@@ -489,8 +489,24 @@ def submit_rankings():
                 if not existing_rows.empty:
                     idx = existing_rows.index[0]
                     if album_id_to_update == album_id:
-                        album_averages_df.at[idx, 'previous_weighted_score'] = album_averages_df.at[
-                            idx, 'weighted_average_score']
+                        score_before_update = album_averages_df.at[idx, 'weighted_average_score']
+
+                        # Set the previous score to what the score was right before this update
+                        album_averages_df.at[idx, 'previous_weighted_score'] = score_before_update
+
+                        # Update the rerank history
+                        if is_rerank:
+                            try:
+                                history_str = album_averages_df.at[idx, 'rerank_history']
+                                rerank_history = json.loads(history_str) if history_str and pd.notna(
+                                    history_str) else []
+                                rerank_history.append({
+                                    'date': datetime.now().strftime('%Y-%m-%d'),
+                                    'score': float(score_before_update)
+                                })
+                                album_averages_df.at[idx, 'rerank_history'] = json.dumps(rerank_history)
+                            except (json.JSONDecodeError, TypeError) as e:
+                                logging.error(f"Error updating rerank history for {album_id}: {e}")
                         album_averages_df.at[idx, 'times_ranked'] = int(
                             album_averages_df.at[idx, 'times_ranked'] or 0) + 1
                     album_averages_df.at[idx, 'average_score'] = new_simple_avg
@@ -506,7 +522,8 @@ def submit_rankings():
                                                  'original_weighted_score': new_weighted_avg,
                                                  'previous_weighted_score': new_weighted_avg,
                                                  'times_ranked': 1,
-                                                 'last_ranked_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S')}])
+                                                 'last_ranked_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                                 'rerank_history': '[]'}])
                         album_averages_df = pd.concat([album_averages_df, new_row], ignore_index=True)
 
             set_with_dataframe(client.open_by_key(SPREADSHEET_ID).worksheet(album_averages_sheet_name),

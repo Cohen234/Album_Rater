@@ -334,14 +334,20 @@
                                 `;
                             });
                         }
-                        const scoreDrift = parseFloat(data.change_from_original);
+                        const scoreDrift = parseFloat(data.change_from_last_rank);
                         const scoreDriftDisplay = scoreDrift > 0 ? `+${scoreDrift.toFixed(2)}` : scoreDrift.toFixed(2);
                         const driftClass = scoreDrift > 0 ? 'positive' : (scoreDrift < 0 ? 'negative' : '');
                         modalStatsContent.innerHTML = `
                             <h4>Quick Stats</h4>
                             <div class="stats-modal-content">
-                                <div class="stat-row"><span class="stat-label">Original Score:</span><span class="stat-value">${data.original_score}</span></div>
-                                <div class="stat-row"><span class="stat-label">Score Drift:</span><span class="stat-value ${driftClass}">${scoreDriftDisplay}</span></div>
+                                <div class="stat-row">
+                                    <span class="stat-label">Original Score:</span>
+                                    <span class="stat-value">${data.original_score}</span>
+                                </div>
+                                ${historyHtml} <div class="stat-row">
+                                    <span class="stat-label">Score Drift (since last rank):</span>
+                                    <span class="stat-value ${driftClass}">${scoreDriftDisplay}</span>
+                                </div>
                                 <div class="stat-row"><span class="stat-label">Best Song:</span><span class="stat-value">${data.best_song.name} (${data.best_song.score})</span></div>
                                 <div class="stat-row"><span class="stat-label">Worst Song:</span><span class="stat-value">${data.worst_song.name} (${data.worst_song.score})</span></div>
                                 <div class="stat-row"><span class="stat-label">Leaderboard:</span><span class="stat-value">#${data.leaderboard_placement} of all albums</span></div>
