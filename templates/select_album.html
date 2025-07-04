@@ -314,9 +314,11 @@
                 const albumId = icon.dataset.albumId;
                 modalStatsContent.innerHTML = '<p>Loading stats...</p>';
                 statsModal.style.display = 'flex';
+                loadingOverlay.style.display = 'flex';
                 fetch(`/get_album_stats/${albumId}`)
                     .then(response => response.json())
                     .then(data => {
+                        loadingOverlay.style.display = 'none';
                         if (data.error) {
                             modalStatsContent.innerHTML = `<p>Error: ${data.error}</p>`;
                             return;
@@ -338,6 +340,7 @@
                     })
                     .catch(error => {
                         console.error('Error fetching stats:', error);
+                        loadingOverlay.style.display = 'none';
                         modalStatsContent.innerHTML = `<p>Failed to load stats.</p>`;
                     });
             });
