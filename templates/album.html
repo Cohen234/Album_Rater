@@ -1031,6 +1031,7 @@
                     artist_name: albumData.artist_name,
                     album_cover_url: albumData.album_cover_url,
                     status: 'final',
+                    is_rerank_mode: albumData.is_rerank_mode,
                     all_ranked_data: globalRankedDataForSaving,
                     prelim_rank_data: prelimRankData
                 })
@@ -1038,25 +1039,38 @@
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    const animData = data.animation_data;
-                    const params = new URLSearchParams({
-                        album_name: animData.album_name,
-                        artist_name: animData.artist_name,
-                        album_cover_url: animData.album_cover_url,
-                        final_score: animData.final_score,
-                        final_rank: animData.final_rank,
-                        total_albums: animData.total_albums,
-                        dominant_color: animData.dominant_color
-                    });
-                    window.location.href = `/ranking_success?${params.toString()}`;
+                    // --- THIS IS THE NEW LOGIC ---
+                    if (data.rerank_animation_data) {
+                        // Handle re-rank animation
+                        const animData = data.rerank_animation_data;
+                        const params = new URLSearchParams({
+                            album_name: animData.album_name, artist_name: animData.artist_name,
+                            album_cover_url: animData.album_cover_url, old_score: animData.old_score,
+                            new_score: animData.new_score, old_placement: animData.old_placement,
+                            new_placement: animData.new_placement, total_albums: animData.total_albums,
+                            times_ranked: animData.times_ranked, dominant_color: animData.dominant_color
+                        });
+                        window.location.href = `/rerank_success?${params.toString()}`;
+                    } else if (data.animation_data) {
+                        // Handle first-time rank animation
+                        const animData = data.animation_data;
+                        const params = new URLSearchParams({
+                            album_name: animData.album_name, artist_name: animData.artist_name,
+                            album_cover_url: animData.album_cover_url, final_score: animData.final_score,
+                            final_rank: animData.final_rank, total_albums: animData.total_albums,
+                            dominant_color: animData.dominant_color
+                        });
+                        window.location.href = `/ranking_success?${params.toString()}`;
+                    } else {
+                        // Fallback for older logic or other cases
+                        window.location.href = `/load_albums_by_artist?artist_name=${encodeURIComponent(albumData.artist_name)}`;
+                    }
                 } else {
-                    // --- NEW: Hide loader on error ---
                     document.getElementById('loading-overlay').style.display = 'none';
                     alert('Error saving rankings: ' + data.message);
                 }
             })
             .catch(error => {
-                // --- NEW: Hide loader on error ---
                 document.getElementById('loading-overlay').style.display = 'none';
                 console.error('Error:', error);
                 alert('An error occurred while saving rankings.');

@@ -349,6 +349,7 @@ def get_album_stats(album_id):
         logging.error(f"Error in get_album_stats for {album_id}: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
+
 @app.route("/submit_rankings", methods=["POST"])
 def submit_rankings():
     global sp, client
@@ -365,14 +366,62 @@ def submit_rankings():
         all_ranked_songs_from_js = data.get("all_ranked_data", [])
         prelim_ranks_from_js = data.get("prelim_rank_data", [])
         submission_status = data.get("status", "final")
+        is_rerank = data.get("is_rerank_mode", False)
 
-        logging.info(f"\n--- SUBMIT RANKINGS START for Album ID: {album_id} ---")
+        logging.info(f"\n--- SUBMIT RANKINGS START for Album ID: {album_id} (Status: {submission_status}) ---")
 
-        # --- 2. Update Main Ranking Sheet (Sheet1) ---
+        # --- 2. Handle Preliminary (Draft) Submissions ---
+        if submission_status != 'final':
+            if prelim_ranks_from_js:
+                try:
+                    prelim_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(PRELIM_SHEET_NAME)
+                    prelim_df = get_as_dataframe(prelim_sheet, evaluate_formulas=False).fillna("")
+                except gspread.exceptions.WorksheetNotFound:
+                    prelim_sheet = client.open_by_key(SPREADSHEET_ID).add_worksheet(title=PRELIM_SHEET_NAME, rows=1,
+                                                                                    cols=8)
+                    prelim_df = pd.DataFrame()
+
+                prelim_df_filtered = prelim_df[prelim_df['album_id'].astype(str) != str(
+                    album_id)] if 'album_id' in prelim_df.columns else prelim_df
+
+                new_prelim_rows = []
+                for prelim_data in prelim_ranks_from_js:
+                    new_prelim_rows.append({
+                        'album_id': album_id, 'album_name': album_name, 'artist_name': artist_name,
+                        'album_cover_url': album_cover_url, 'song_id': prelim_data.get('song_id'),
+                        'song_name': "Unknown",
+                        'prelim_rank': prelim_data.get('prelim_rank'),
+                        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    })
+
+                final_prelim_df = pd.concat([prelim_df_filtered, pd.DataFrame(new_prelim_rows)],
+                                            ignore_index=True) if new_prelim_rows else prelim_df_filtered
+                set_with_dataframe(prelim_sheet, final_prelim_df, include_index=False, resize=True)
+                logging.info("Successfully updated preliminary ranks.")
+            return jsonify({'status': 'success', 'message': 'Progress saved.'})
+
+        # --- 3. Get "BEFORE" data (only for final re-ranks) ---
+        old_score = 0
+        old_placement = 0
+        if is_rerank:
+            averages_df_before = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
+            if not averages_df_before.empty:
+                averages_df_before['weighted_average_score'] = pd.to_numeric(
+                    averages_df_before['weighted_average_score'], errors='coerce')
+                averages_df_before.dropna(subset=['weighted_average_score'], inplace=True)
+                averages_df_before.sort_values(by='weighted_average_score', ascending=False, inplace=True)
+                averages_df_before.reset_index(drop=True, inplace=True)
+
+                old_album_data = averages_df_before[averages_df_before['album_id'] == album_id]
+                if not old_album_data.empty:
+                    old_score = old_album_data.iloc[0]['weighted_average_score']
+                    old_placement_series = averages_df_before.index[averages_df_before['album_id'] == album_id]
+                    old_placement = int(old_placement_series[0] + 1) if not old_placement_series.empty else 1
+
+        # --- 4. Update Google Sheets with New Final Rankings ---
         main_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
         main_df = get_as_dataframe(main_sheet, evaluate_formulas=False).fillna("")
 
-        # Fetch song details (including duration) for all submitted songs in one batch
         all_song_ids = [s.get('song_id') for s in all_ranked_songs_from_js if s.get('song_id')]
         song_details_map = {}
         if sp and all_song_ids:
@@ -380,19 +429,15 @@ def submit_rankings():
                 for i in range(0, len(all_song_ids), 50):
                     tracks_info = sp.tracks(all_song_ids[i:i + 50])
                     for track in tracks_info['tracks']:
-                        if track:
-                            song_details_map[track['id']] = {'name': track['name'], 'duration_ms': track['duration_ms']}
+                        if track: song_details_map[track['id']] = {'name': track['name'],
+                                                                   'duration_ms': track['duration_ms']}
             except Exception as e:
                 logging.error(f"Failed to fetch batch track details from Spotify: {e}")
 
-        # Remove old versions of all songs being submitted
         submitted_song_ids = {str(s.get('song_id')) for s in all_ranked_songs_from_js}
-        if 'Spotify Song ID' in main_df.columns and submitted_song_ids:
-            main_df_filtered = main_df[~main_df['Spotify Song ID'].astype(str).isin(submitted_song_ids)]
-        else:
-            main_df_filtered = main_df
+        main_df_filtered = main_df[~main_df['Spotify Song ID'].astype(str).isin(
+            submitted_song_ids)] if 'Spotify Song ID' in main_df.columns and submitted_song_ids else main_df
 
-        # Prepare new rows with updated data
         new_final_rows_data = []
         for ranked_song_data in all_ranked_songs_from_js:
             song_id = str(ranked_song_data.get('song_id'))
@@ -408,146 +453,133 @@ def submit_rankings():
                 'Rank Group': str(ranked_song_data.get('rank_group')), 'Spotify Song ID': song_id,
             })
 
-        # Combine old and new data and write to sheet
-        final_main_df = main_df_filtered
-        if new_final_rows_data:
-            new_final_df = pd.DataFrame(new_final_rows_data)
-            final_main_df = pd.concat([main_df_filtered, new_final_df], ignore_index=True)
+        final_main_df = pd.concat([main_df_filtered, pd.DataFrame(new_final_rows_data)],
+                                  ignore_index=True) if new_final_rows_data else main_df_filtered
         set_with_dataframe(main_sheet, final_main_df, include_index=False, resize=True)
-        logging.info(f"Wrote {len(final_main_df)} rows to main ranking sheet.")
-        if prelim_ranks_from_js:
-            try:
-                prelim_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(PRELIM_SHEET_NAME)
-                prelim_df = get_as_dataframe(prelim_sheet, evaluate_formulas=False).fillna("")
-            except gspread.exceptions.WorksheetNotFound:
-                logging.warning(f"'{PRELIM_SHEET_NAME}' not found. It will be created.")
-                prelim_sheet = None  # Ensure sheet is None so it's created later
-                prelim_df = pd.DataFrame()
+        logging.info("Updated main ranking sheet.")
 
-            prelim_df_filtered = prelim_df[
-                prelim_df['album_id'].astype(str) != str(album_id)] if 'album_id' in prelim_df.columns else prelim_df
+        # Recalculate and Update Album Averages Sheet
+        df_for_calc = final_main_df.copy()
+        df_for_calc['Ranking'] = pd.to_numeric(df_for_calc['Ranking'], errors='coerce')
+        df_for_calc['Duration (ms)'] = pd.to_numeric(df_for_calc['Duration (ms)'], errors='coerce')
+        df_for_calc.dropna(subset=['Ranking', 'Duration (ms)'], inplace=True)
+        df_for_calc_no_interludes = df_for_calc[df_for_calc['Rank Group'].astype(str) != 'I']
 
-            new_prelim_rows = []
-            for prelim_data in prelim_ranks_from_js:
-                new_prelim_rows.append({
-                    'album_id': album_id, 'album_name': album_name, 'artist_name': artist_name,
-                    'album_cover_url': album_cover_url, 'song_id': prelim_data.get('song_id'),
-                    'song_name': song_details_map.get(prelim_data.get('song_id'), "Unknown"),
-                    'prelim_rank': prelim_data.get('prelim_rank'),
-                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                })
+        if not df_for_calc_no_interludes.empty:
+            simple_averages = df_for_calc_no_interludes.groupby('Spotify Album ID')['Ranking'].mean().round(2)
 
-            final_prelim_df = pd.concat([prelim_df_filtered, pd.DataFrame(new_prelim_rows)],
-                                        ignore_index=True) if new_prelim_rows else prelim_df_filtered
+            def weighted_avg(group):
+                total_duration = group['Duration (ms)'].sum()
+                return ((group['Ranking'] * group['Duration (ms)']).sum() / total_duration) if total_duration > 0 else \
+                group['Ranking'].mean()
 
-            if prelim_sheet is None:
-                prelim_sheet = client.open_by_key(SPREADSHEET_ID).add_worksheet(title=PRELIM_SHEET_NAME, rows=1, cols=8)
-                prelim_sheet.append_row(list(final_prelim_df.columns))
+            weighted_averages = df_for_calc_no_interludes.groupby('Spotify Album ID').apply(weighted_avg).round(2)
 
-            set_with_dataframe(prelim_sheet, final_prelim_df, include_index=False, resize=True)
-            logging.info("Successfully updated preliminary ranks.")
+            album_averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
+            album_info_map = df_for_calc[['Spotify Album ID', 'Album Name', 'Artist Name']].drop_duplicates(
+                'Spotify Album ID').set_index('Spotify Album ID').to_dict('index')
 
-        # --- 3. Recalculate ALL Album Averages (Simple and Weighted) ---
-        if submission_status == 'final':
-            logging.info("Recalculating all album averages...")
+            for album_id_to_update, new_weighted_avg in weighted_averages.items():
+                new_simple_avg = simple_averages.get(album_id_to_update)
+                existing_rows = album_averages_df[album_averages_df['album_id'] == album_id_to_update]
+                if not existing_rows.empty:
+                    idx = existing_rows.index[0]
+                    if album_id_to_update == album_id:
+                        album_averages_df.at[idx, 'previous_weighted_score'] = album_averages_df.at[
+                            idx, 'weighted_average_score']
+                        album_averages_df.at[idx, 'times_ranked'] = int(
+                            album_averages_df.at[idx, 'times_ranked'] or 0) + 1
+                    album_averages_df.at[idx, 'average_score'] = new_simple_avg
+                    album_averages_df.at[idx, 'weighted_average_score'] = new_weighted_avg
+                    album_averages_df.at[idx, 'last_ranked_date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                else:
+                    info = album_info_map.get(album_id_to_update)
+                    if info:
+                        new_row = pd.DataFrame([{'album_id': album_id_to_update, 'album_name': info['Album Name'],
+                                                 'artist_name': info['Artist Name'],
+                                                 'average_score': new_simple_avg,
+                                                 'weighted_average_score': new_weighted_avg,
+                                                 'original_weighted_score': new_weighted_avg,
+                                                 'previous_weighted_score': new_weighted_avg,
+                                                 'times_ranked': 1,
+                                                 'last_ranked_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S')}])
+                        album_averages_df = pd.concat([album_averages_df, new_row], ignore_index=True)
 
-            df_for_calc = final_main_df.copy()
-            df_for_calc['Ranking'] = pd.to_numeric(df_for_calc['Ranking'], errors='coerce')
-            df_for_calc['Duration (ms)'] = pd.to_numeric(df_for_calc['Duration (ms)'], errors='coerce')
-            df_for_calc.dropna(subset=['Ranking', 'Duration (ms)'], inplace=True)
-            df_for_calc_no_interludes = df_for_calc[df_for_calc['Rank Group'].astype(str) != 'I']
+            set_with_dataframe(client.open_by_key(SPREADSHEET_ID).worksheet(album_averages_sheet_name),
+                               album_averages_df, include_index=False, resize=True)
+            logging.info("Successfully recalculated and saved all averages.")
 
-            if not df_for_calc_no_interludes.empty:
-                simple_averages = df_for_calc_no_interludes.groupby('Spotify Album ID')['Ranking'].mean().round(2)
+        # --- 5. Get "AFTER" data for the animation ---
+        averages_df_after = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
+        averages_df_after['weighted_average_score'] = pd.to_numeric(averages_df_after['weighted_average_score'],
+                                                                    errors='coerce')
+        averages_df_after.dropna(subset=['weighted_average_score'], inplace=True)
+        averages_df_after.sort_values(by='weighted_average_score', ascending=False, inplace=True)
+        averages_df_after.reset_index(drop=True, inplace=True)
 
-                def weighted_avg(group):
-                    total_duration = group['Duration (ms)'].sum()
-                    return ((group['Ranking'] * group[
-                        'Duration (ms)']).sum() / total_duration) if total_duration > 0 else group['Ranking'].mean()
+        new_album_data = averages_df_after[averages_df_after['album_id'] == album_id]
+        if new_album_data.empty:
+            return jsonify({'status': 'error', 'message': 'Could not find album after ranking.'}), 500
 
-                weighted_averages = df_for_calc_no_interludes.groupby('Spotify Album ID').apply(weighted_avg).round(2)
+        new_score = new_album_data.iloc[0]['weighted_average_score']
+        times_ranked = new_album_data.iloc[0]['times_ranked']
+        new_placement_series = averages_df_after.index[averages_df_after['album_id'] == album_id]
+        new_placement = int(new_placement_series[0] + 1) if not new_placement_series.empty else 1
+        total_albums = len(averages_df_after)
+        dominant_color = get_dominant_color(album_cover_url)
 
-                album_averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
-                album_info_map = df_for_calc[['Spotify Album ID', 'Album Name', 'Artist Name']].drop_duplicates(
-                    'Spotify Album ID').set_index('Spotify Album ID').to_dict('index')
-
-                newly_created_rows = []
-                for album_id_to_update in set(simple_averages.index):
-                    new_simple_avg = simple_averages.get(album_id_to_update)
-                    new_weighted_avg = weighted_averages.get(album_id_to_update)
-
-                    existing_rows = album_averages_df[album_averages_df['album_id'] == album_id_to_update]
-
-                    if not existing_rows.empty:
-                        idx = existing_rows.index[0]
-                        current_weighted_score = album_averages_df.at[idx, 'weighted_average_score']
-                        album_averages_df.at[idx, 'previous_weighted_score'] = current_weighted_score if pd.notna(
-                            current_weighted_score) else new_weighted_avg
-                        album_averages_df.at[idx, 'average_score'] = new_simple_avg
-                        album_averages_df.at[idx, 'weighted_average_score'] = new_weighted_avg
-                        if album_id_to_update == album_id:
-                            album_averages_df.at[idx, 'times_ranked'] += 1
-                            album_averages_df.at[idx, 'last_ranked_date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                    else:
-                        info = album_info_map.get(album_id_to_update)
-                        if info:
-                            newly_created_rows.append({
-                                'album_id': album_id_to_update, 'album_name': info['Album Name'],
-                                'artist_name': info['Artist Name'],
-                                'average_score': new_simple_avg, 'weighted_average_score': new_weighted_avg,
-                                'original_weighted_score': new_weighted_avg,
-                                'previous_weighted_score': new_weighted_avg,
-                                'times_ranked': 1, 'last_ranked_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                            })
-
-                if newly_created_rows:
-                    album_averages_df = pd.concat([album_averages_df, pd.DataFrame(newly_created_rows)],
-                                                  ignore_index=True)
-
-                set_with_dataframe(client.open_by_key(SPREADSHEET_ID).worksheet(album_averages_sheet_name),
-                                   album_averages_df, include_index=False, resize=True)
-                logging.info("Successfully recalculated and saved all averages.")
-
-            logging.info(f"--- SUBMIT RANKINGS END (Success) ---\n")
-            averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
-            averages_df['weighted_average_score'] = pd.to_numeric(averages_df['weighted_average_score'], errors='coerce')
-            averages_df.dropna(subset=['weighted_average_score'], inplace=True)
-            averages_df.sort_values(by='weighted_average_score', ascending=False, inplace=True)
-            averages_df.reset_index(drop=True, inplace=True)
-
-            # Find the rank of our album
-            placement_series = averages_df.index[averages_df['album_id'] == album_id]
-            final_rank = int(placement_series[0] + 1) if not placement_series.empty else 1
-
-            # Get the total number of ranked albums
-            total_albums = len(averages_df)
-
-            # Get the final score for the newly ranked album
-            final_score_series = averages_df[averages_df['album_id'] == album_id]
-            final_score = float(final_score_series.iloc[0]['weighted_average_score']) if not final_score_series.empty else 0
-
-            # Get the dominant color from the album art
-            dominant_color = get_dominant_color(album_cover_url)
-
-        # Instead of a simple success message, return the data needed for the animation page
+        # --- 6. Return the correct JSON for the frontend ---
+        if is_rerank:
             return jsonify({
                 'status': 'success',
-                'message': 'Rankings submitted successfully!',
-                'animation_data': {
-                    'album_name': album_name,
-                    'artist_name': artist_name,
-                    'album_cover_url': album_cover_url,
-                    'final_score': final_score,
-                    'final_rank': final_rank,
-                    'total_albums': total_albums,
+                'rerank_animation_data': {
+                    'album_name': album_name, 'artist_name': artist_name, 'album_cover_url': album_cover_url,
+                    'old_score': old_score, 'new_score': new_score,
+                    'old_placement': old_placement, 'new_placement': new_placement,
+                    'total_albums': total_albums, 'times_ranked': times_ranked,
                     'dominant_color': dominant_color
                 }
             })
-        return jsonify({'status': 'success', 'message': 'Progress saved.'})
+        else:
+            return jsonify({
+                'status': 'success',
+                'animation_data': {
+                    'album_name': album_name, 'artist_name': artist_name, 'album_cover_url': album_cover_url,
+                    'final_score': new_score, 'final_rank': new_placement,
+                    'total_albums': total_albums, 'dominant_color': dominant_color
+                }
+            })
 
     except Exception as e:
         logging.critical(f"\n🔥 CRITICAL ERROR in /submit_rankings: {e}", exc_info=True)
         return jsonify({'status': 'error', 'message': f"An unexpected error occurred: {e}"}), 500
+
+
+@app.route('/rerank_success')
+def rerank_success():
+    # Get all the data passed from the redirect
+    album_name = request.args.get('album_name')
+    artist_name = request.args.get('artist_name')
+    album_cover_url = request.args.get('album_cover_url')
+    old_score = float(request.args.get('old_score', 0))
+    new_score = float(request.args.get('new_score', 0))
+    old_placement = int(request.args.get('old_placement', 1))
+    new_placement = int(request.args.get('new_placement', 1))
+    total_albums = int(request.args.get('total_albums', 1))
+    times_ranked = int(request.args.get('times_ranked', 2))
+    dominant_color = request.args.get('dominant_color', '#121212')
+
+    # Determine colors for the scores
+    old_score_color = 'green' if old_score >= 7 else 'yellow' if old_score >= 4 else 'red'
+    new_score_color = 'green' if new_score >= 7 else 'yellow' if new_score >= 4 else 'red'
+
+    return render_template(
+        'rerank_success.html',
+        album_name=album_name, artist_name=artist_name, album_cover_url=album_cover_url,
+        old_score=old_score, new_score=new_score, old_placement=old_placement,
+        new_placement=new_placement, total_albums=total_albums, times_ranked=times_ranked,
+        dominant_color=dominant_color, old_score_color=old_score_color, new_score_color=new_score_color
+    )
 @app.route('/')
 def index():
     return render_template('index.html')
