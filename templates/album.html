@@ -517,7 +517,6 @@
         <div class="album-info">
             <h1>{{ album.album_name }}</h1>
             <h2>{{ album.artist_name }}</h2>
-            <h3>Average Score: <span id="averageScoreDisplay">N/A</span></h3>
         </div>
     </header>
     <form id="rankingForm" action="/submit_rankings" method="POST">
@@ -771,7 +770,12 @@
         }
 
         function calculateScoreValue(position, totalSongs, rankGroup) {
-            if (totalSongs <= 1) return rankGroup;
+            if (rankGroup === 10.0) {
+                return 10.0;
+            }
+            if (totalSongs <= 1) {
+                return rankGroup;
+            }
             const range = 0.49;
             const step = range / (totalSongs - 1);
             const highestScore = parseFloat(rankGroup) + range;
@@ -816,21 +820,25 @@
 
         // --- UI UPDATE FUNCTIONS ---
         function updateAllRankButtonIcons() {
+            const currentAlbumId = albumData.album_id;
             Object.keys(allRankedSongsByGroup).forEach(groupKey => {
                 const rankButton = document.getElementById(`rank-btn-${groupKey}`);
                 if (!rankButton) return;
 
                 let count = 0;
                 if (groupKey === 'I') {
-                    count = allRankedSongsByGroup['I'].excellent.length +
-                            allRankedSongsByGroup['I'].average.length +
-                            allRankedSongsByGroup['I'].bad.length;
+                    count = (allRankedSongsByGroup['I'].excellent.filter(s => s.album_id === currentAlbumId).length +
+                             allRankedSongsByGroup['I'].average.filter(s => s.album_id === currentAlbumId).length +
+                             allRankedSongsByGroup['I'].bad.filter(s => s.album_id === currentAlbumId).length);
                 } else {
-                    count = allRankedSongsByGroup[groupKey].length;
+                    count = allRankedSongsByGroup[groupKey].filter(s => s.album_id === currentAlbumId).length;
                 }
 
-                if (count > 0) rankButton.classList.add('has-songs');
-                else rankButton.classList.remove('has-songs');
+                if (count > 0) {
+                    rankButton.classList.add('has-songs');
+                } else {
+                    rankButton.classList.remove('has-songs');
+                }
             });
         }
 
