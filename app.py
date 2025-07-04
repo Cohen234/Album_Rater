@@ -232,19 +232,25 @@ def artist_page(artist_name):
     try:
         logging.info(f"--- Loading Artist Stats Page for: {artist_name} ---")
 
-        # All the logic to get data for the leaderboards, stats cards, and
-        # pie chart is correct and belongs here.
         main_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
         all_songs_df = get_as_dataframe(main_sheet, evaluate_formulas=False).fillna("")
         all_albums_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
 
         # Filter data for the CURRENT artist
         all_songs_df['Ranking'] = pd.to_numeric(all_songs_df['Ranking'], errors='coerce')
+
+        # FIX: Ensure the 'Artist Name' column is a string before using .str
+        all_songs_df['Artist Name'] = all_songs_df['Artist Name'].astype(str)
         artist_songs_df = all_songs_df[all_songs_df['Artist Name'].str.lower() == artist_name.lower()]
+
+        # FIX: Ensure the 'artist_name' column is a string before using .str
+        all_albums_df['artist_name'] = all_albums_df['artist_name'].astype(str)
         artist_albums_df = all_albums_df[all_albums_df['artist_name'].str.lower() == artist_name.lower()]
 
         # Calculate Overall Stats
         avg_song_score = artist_songs_df['Ranking'].mean()
+        # FIX: Ensure 'average_score' is numeric for calculation
+        all_albums_df['average_score'] = pd.to_numeric(all_albums_df['average_score'], errors='coerce')
         avg_album_score = artist_albums_df['average_score'].mean()
         artist_stats = {
             'avg_song_score': f"{avg_song_score:.2f}" if pd.notna(avg_song_score) else "N/A",
@@ -253,6 +259,8 @@ def artist_page(artist_name):
         }
 
         # Prepare Pie Chart Data
+        # FIX: Ensure 'Rank Group' is a string before counting
+        all_songs_df['Rank Group'] = all_songs_df['Rank Group'].astype(str)
         pie_data = artist_songs_df['Rank Group'].value_counts().reset_index()
         pie_data.columns = ['rank_group', 'count']
         pie_chart_data = {
@@ -262,8 +270,13 @@ def artist_page(artist_name):
 
         # Prepare Leaderboards
         artist_song_leaderboard = artist_songs_df.sort_values(by='Ranking', ascending=False).to_dict('records')
-        universal_song_leaderboard = all_songs_df.sort_values(by='Ranking', ascending=False).head(100).to_dict('records')
-        album_leaderboard = artist_albums_df.sort_values(by='weighted_average_score', ascending=False).to_dict('records')
+        universal_song_leaderboard = all_songs_df.sort_values(by='Ranking', ascending=False).head(100).to_dict(
+            'records')
+        # FIX: Ensure 'weighted_average_score' is numeric for sorting
+        all_albums_df['weighted_average_score'] = pd.to_numeric(all_albums_df['weighted_average_score'],
+                                                                errors='coerce')
+        album_leaderboard = artist_albums_df.sort_values(by='weighted_average_score', ascending=False).to_dict(
+            'records')
 
         return render_template(
             "artist_page.html",
