@@ -1000,15 +1000,29 @@
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    alert(data.message);
-                    window.location.href = `/load_albums_by_artist?artist_name=${encodeURIComponent(albumData.artist_name)}`;
+                    const animData = data.animation_data;
+                    const params = new URLSearchParams({
+                        album_name: animData.album_name,
+                        artist_name: animData.artist_name,
+                        album_cover_url: animData.album_cover_url,
+                        final_score: animData.final_score,
+                        final_rank: animData.final_rank,
+                        total_albums: animData.total_albums,
+                        dominant_color: animData.dominant_color
+                    });
+                    // Redirect to the new success page
+                    window.location.href = `/ranking_success?${params.toString()}`;
                 } else {
                     alert('Error saving rankings: ' + data.message);
+                    finalRankBtn.disabled = false;
+                    finalRankBtn.textContent = 'Final Rank';
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
                 alert('An error occurred while saving rankings.');
+                finalRankBtn.disabled = false;
+                finalRankBtn.textContent = 'Final Rank';
             });
         }
 

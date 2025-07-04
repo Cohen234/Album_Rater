@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ranking Complete!</title>
+    <style>
+        /* All the CSS from the animation demo remains the same here */
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&family=Roboto:wght@400&display=swap');
+        :root {
+            --surface-color: #1e1e1e;
+            --text-color: #ffffff;
+            --secondary-text-color: #b3b3b3;
+            --sheen-color: rgba(255, 255, 255, 0.25);
+            --score-green: #1DB954;
+            --score-yellow: #FDD835;
+            --score-red: #E57373;
+        }
+        body, html {
+            height: 100%; margin: 0; font-family: 'Roboto', sans-serif;
+            color: var(--text-color); overflow: hidden; box-sizing: border-box;
+            transition: background 1s ease-in-out;
+        }
+        .main-content-wrapper {
+            display: flex; flex-direction: column; align-items: center;
+            width: 100%; padding: 50px 20px 0 20px; box-sizing: border-box;
+        }
+        .animation-container { position: relative; text-align: center; width: 100%; z-index: 10; }
+        .album-info-container {
+            display: inline-flex; flex-direction: column; align-items: center; gap: 15px;
+            transition: all 1.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            transform: translateY(calc(50vh - 50% - 100px));
+        }
+        .album-art {
+            width: 300px; height: 300px; border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            position: relative; overflow: hidden;
+            transition: width 1s ease-in-out, height 1s ease-in-out;
+        }
+        .album-art img { width: 100%; height: 100%; object-fit: cover; }
+        .album-art::after {
+            content: ''; position: absolute; top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background: linear-gradient(to right, transparent 0%, transparent 40%, var(--sheen-color) 50%, transparent 60%, transparent 100%);
+            transform: rotate(-45deg); animation: sheen 2s ease-in-out forwards;
+        }
+        @keyframes sheen {
+            0% { transform: rotate(-45deg) translateX(-250%) translateY(-250%); }
+            100% { transform: rotate(-45deg) translateX(250%) translateY(250%); }
+        }
+        .glimmer-star {
+            position: absolute; top: 15px; right: 15px; width: 25px; height: 25px;
+            background: white;
+            clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+            opacity: 0; transform: scale(0);
+            animation: glimmer 0.8s ease-out forwards; animation-delay: 1.8s;
+        }
+        @keyframes glimmer {
+            0% { opacity: 0; transform: scale(0) rotate(0deg); }
+            50% { opacity: 1; transform: scale(1.5) rotate(180deg); }
+            100% { opacity: 0; transform: scale(0) rotate(360deg); }
+        }
+        .album-title {
+            font-family: 'Montserrat', sans-serif; font-size: 2rem; font-weight: 700;
+            transition: font-size 1s ease-in-out, text-align 1s ease-in-out;
+        }
+        .shrunk .album-info-container {
+            transform: translateY(0); flex-direction: row; justify-content: center;
+            align-items: center; width: 100%; background-color: var(--surface-color);
+            padding: 10px; border-radius: 12px; box-sizing: border-box;
+        }
+        .shrunk .album-art { width: 80px; height: 80px; }
+        .shrunk .album-title { font-size: 1.5rem; text-align: left; padding-left: 20px; }
+        .stats-results-container {
+            margin-top: 40px; display: flex; flex-direction: column;
+            align-items: center; gap: 20px; width: 100%; max-width: 600px;
+        }
+        .score-card, .placement-card, .actions-card {
+            background-color: var(--surface-color); border-radius: 12px; width: 100%;
+            box-sizing: border-box; box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+            opacity: 0; animation: fadeInUp 1s ease-out forwards; animation-play-state: paused;
+        }
+        .reveal .score-card { animation-play-state: running; animation-delay: 0.2s; }
+        .reveal .placement-card { animation-play-state: running; animation-delay: 0.5s; }
+        .reveal .actions-card { animation-play-state: running; animation-delay: 1.2s; }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: translateY(0); } }
+        .score-card { padding: 20px 30px; }
+        .score-card h3 { margin: 0 0 10px 0; font-weight: 400; font-size: 1rem; color: var(--secondary-text-color); text-align: center; }
+        .score-card .score-value { margin: 0; font-family: 'Montserrat', sans-serif; font-weight: 700; font-size: 3rem; text-align: center; }
+        .score-value.green { color: var(--score-green); }
+        .score-value.yellow { color: var(--score-yellow); }
+        .score-value.red { color: var(--score-red); }
+        .placement-card { padding: 20px 30px; }
+        .placement-card h3 { margin: 0 0 10px 0; font-weight: 400; font-size: 1rem; color: var(--secondary-text-color); text-align: center; }
+        .placement-display { display: flex; justify-content: center; align-items: baseline; gap: 10px; font-family: 'Montserrat', sans-serif; font-weight: 700; font-size: 3rem; }
+        .placement-display .total-albums { font-size: 1.5rem; font-weight: 400; color: var(--secondary-text-color); }
+        #album-rank { transition: color 0.1s linear; }
+        .actions-card { background: none; box-shadow: none; display: flex; gap: 20px; justify-content: center; padding: 20px 0; }
+        .action-btn {
+            background-color: var(--surface-color); color: var(--text-color); text-decoration: none;
+            padding: 12px 24px; border-radius: 50px; font-weight: 700;
+            transition: transform 0.2s ease, background-color 0.2s ease;
+        }
+        .action-btn:hover { transform: scale(1.05); background-color: #333; }
+        .action-btn.primary { background-color: var(--score-green); }
+        .action-btn.primary:hover { background-color: #1ed760; }
+    </style>
+</head>
+<body>
+    <div class="main-content-wrapper">
+        <div class="animation-container">
+            <div class="album-info-container">
+                <!-- Use Jinja to display dynamic data -->
+                <h1 class="album-title">{{ album_name }}</h1>
+                <div class="album-art">
+                    <img src="{{ album_cover_url }}" alt="Album Art for {{ album_name }}">
+                    <div class="glimmer-star"></div>
+                </div>
+            </div>
+        </div>
+        <div class="stats-results-container">
+            <div class="score-card">
+                <h3>Album Score</h3>
+                <p class="score-value {{ score_color }}" id="album-score-value">{{ "%.2f"|format(final_score) }}</p>
+            </div>
+            <div class="placement-card">
+                <h3>Album Placement</h3>
+                <div class="placement-display">
+                    <span id="album-rank">{{ total_albums }}</span>
+                    <span id="total-albums" class="total-albums">/ {{ total_albums }}</span>
+                </div>
+            </div>
+            <div class="actions-card">
+                <!-- Use Jinja to create dynamic links -->
+                <a href="#" class="action-btn">View Album Stats</a>
+                <a href="{{ url_for('artist_page', artist_name=artist_name) }}" class="action-btn primary">View Artist Page</a>
+            </div>
+        </div>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const animationContainer = document.querySelector('.animation-container');
+            const mainWrapper = document.querySelector('.main-content-wrapper');
+            const body = document.body;
+            const rankElement = document.getElementById('album-rank');
+            const totalRankElement = document.getElementById('total-albums');
+
+            // Use Jinja to pass data from Python to JavaScript
+            const dominantColor = '{{ dominant_color }}';
+            const finalRank = {{ final_rank }};
+            const totalAlbums = {{ total_albums }};
+            const startRank = {{ start_rank }};
+
+            body.style.background = `radial-gradient(circle at top, ${dominantColor} 0%, #000000 80%)`;
+
+            function animateRank(current, end) {
+                let currentRank = current;
+                let delay = 25;
+                const red = [229, 115, 115];
+                const yellow = [253, 216, 53];
+                const green = [29, 185, 84];
+
+                function updateRank() {
+                    if (currentRank >= end) {
+                        rankElement.textContent = currentRank;
+                        const progress = (startRank - currentRank) / (startRank > 1 ? startRank - 1 : 1);
+                        let r, g, b;
+                        if (progress < 0.5) {
+                            const p = progress * 2;
+                            r = red[0] + p * (yellow[0] - red[0]);
+                            g = red[1] + p * (yellow[1] - red[1]);
+                            b = red[2] + p * (yellow[2] - red[2]);
+                        } else {
+                            const p = (progress - 0.5) * 2;
+                            r = yellow[0] + p * (green[0] - yellow[0]);
+                            g = yellow[1] + p * (green[1] - yellow[1]);
+                            b = yellow[2] + p * (green[2] - yellow[2]);
+                        }
+                        rankElement.style.color = `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
+                        if (currentRank < end + 5) { delay += 35; }
+                        else if (currentRank < end + 15) { delay += 10; }
+                        currentRank--;
+                        setTimeout(updateRank, delay);
+                    } else {
+                        rankElement.textContent = end;
+                    }
+                }
+                updateRank();
+            }
+
+            setTimeout(() => animationContainer.classList.add('shrunk'), 3000);
+            setTimeout(() => mainWrapper.classList.add('reveal'), 3500);
+            setTimeout(() => animateRank(startRank, finalRank, totalAlbums), 4200);
+        });
+    </script>
+</body>
+</html>

@@ -508,11 +508,42 @@ def submit_rankings():
                                    album_averages_df, include_index=False, resize=True)
                 logging.info("Successfully recalculated and saved all averages.")
 
-        # --- 4. Update Preliminary Ranks Sheet ---
+            logging.info(f"--- SUBMIT RANKINGS END (Success) ---\n")
+            averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
+            averages_df['weighted_average_score'] = pd.to_numeric(averages_df['weighted_average_score'], errors='coerce')
+            averages_df.dropna(subset=['weighted_average_score'], inplace=True)
+            averages_df.sort_values(by='weighted_average_score', ascending=False, inplace=True)
+            averages_df.reset_index(drop=True, inplace=True)
 
+            # Find the rank of our album
+            placement_series = averages_df.index[averages_df['album_id'] == album_id]
+            final_rank = int(placement_series[0] + 1) if not placement_series.empty else 1
 
-        logging.info(f"--- SUBMIT RANKINGS END (Success) ---\n")
-        return jsonify({'status': 'success', 'message': 'Rankings submitted successfully!'})
+            # Get the total number of ranked albums
+            total_albums = len(averages_df)
+
+            # Get the final score for the newly ranked album
+            final_score_series = averages_df[averages_df['album_id'] == album_id]
+            final_score = float(final_score_series.iloc[0]['weighted_average_score']) if not final_score_series.empty else 0
+
+            # Get the dominant color from the album art
+            dominant_color = get_dominant_color(album_cover_url)
+
+        # Instead of a simple success message, return the data needed for the animation page
+            return jsonify({
+                'status': 'success',
+                'message': 'Rankings submitted successfully!',
+                'animation_data': {
+                    'album_name': album_name,
+                    'artist_name': artist_name,
+                    'album_cover_url': album_cover_url,
+                    'final_score': final_score,
+                    'final_rank': final_rank,
+                    'total_albums': total_albums,
+                    'dominant_color': dominant_color
+                }
+            })
+        return jsonify({'status': 'success', 'message': 'Progress saved.'})
 
     except Exception as e:
         logging.critical(f"\n🔥 CRITICAL ERROR in /submit_rankings: {e}", exc_info=True)
@@ -520,6 +551,40 @@ def submit_rankings():
 @app.route('/')
 def index():
     return render_template('index.html')
+@app.route('/ranking_success')
+def ranking_success():
+    # Get all the data passed from the redirect
+    album_name = request.args.get('album_name')
+    artist_name = request.args.get('artist_name')
+    album_cover_url = request.args.get('album_cover_url')
+    final_score = float(request.args.get('final_score', 0))
+    final_rank = int(request.args.get('final_rank', 1))
+    total_albums = int(request.args.get('total_albums', 1))
+    dominant_color = request.args.get('dominant_color', '#121212')
+
+    # Determine the color for the score text
+    if final_score >= 7:
+        score_color = 'green'
+    elif final_score >= 4:
+        score_color = 'yellow'
+    else:
+        score_color = 'red'
+
+    # The animation should start counting from the bottom rank
+    start_rank = total_albums
+
+    return render_template(
+        'ranking_success.html',
+        album_name=album_name,
+        artist_name=artist_name,
+        album_cover_url=album_cover_url,
+        final_score=final_score,
+        final_rank=final_rank,
+        total_albums=total_albums,
+        dominant_color=dominant_color,
+        score_color=score_color,
+        start_rank=start_rank
+    )
 @app.route('/search', methods=['POST'])
 def search_artist():
     artist_name = request.form.get('artist_name')
