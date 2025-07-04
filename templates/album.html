@@ -853,12 +853,18 @@
                     item.querySelector('.prelim-rank-input').disabled = true;
                     rankGroupDisplay.textContent = rankedGroup;
                     rankGroupDisplay.style.display = 'inline-block';
+                    if (prelimInput) {
+                        prelimInput.disabled = true;
+                    }
                 } else {
                     item.classList.remove('ranked');
                     item.setAttribute('draggable', 'true');
                     item.querySelector('.prelim-rank-input').disabled = false;
                     rankGroupDisplay.textContent = '';
                     rankGroupDisplay.style.display = 'none';
+                    if (prelimInput) {
+                        prelimInput.disabled = false;
+                    }
                 }
             });
         }

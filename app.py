@@ -521,8 +521,8 @@ def submit_rankings():
         if new_album_data.empty:
             return jsonify({'status': 'error', 'message': 'Could not find album after ranking.'}), 500
 
-        new_score = new_album_data.iloc[0]['weighted_average_score']
-        times_ranked = new_album_data.iloc[0]['times_ranked']
+        new_score = float(new_album_data.iloc[0]['weighted_average_score'])
+        times_ranked = int(new_album_data.iloc[0]['times_ranked'])
         new_placement_series = averages_df_after.index[averages_df_after['album_id'] == album_id]
         new_placement = int(new_placement_series[0] + 1) if not new_placement_series.empty else 1
         total_albums = len(averages_df_after)
