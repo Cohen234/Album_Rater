@@ -834,6 +834,8 @@
                     count = allRankedSongsByGroup[groupKey].filter(s => s.album_id === currentAlbumId).length;
                 }
 
+
+                // Add or remove the 'has-songs' class, which controls the star's visibility.
                 if (count > 0) {
                     rankButton.classList.add('has-songs');
                 } else {

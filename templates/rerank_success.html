@@ -177,6 +177,7 @@
             const totalAlbums = {{ total_albums }};
 
             function animateArrows() {
+                // Score Arrow
                 setTimeout(() => {
                     scoreArrow.classList.add('visible');
                     if (newScore > oldScore) {
@@ -185,9 +186,13 @@
                     } else if (newScore < oldScore) {
                         scoreArrow.textContent = '↓';
                         scoreArrow.classList.add('red');
+                    } else {
+                        // FIX: Show a dash for no change
+                        scoreArrow.textContent = '—';
                     }
                 }, 500);
 
+                // Placement Arrow
                 setTimeout(() => {
                     placementArrow.classList.add('visible');
                     if (newPlacement < oldPlacement) {
@@ -196,6 +201,9 @@
                     } else if (newPlacement > oldPlacement) {
                         placementArrow.textContent = '↓';
                         placementArrow.classList.add('red');
+                    } else {
+                        // FIX: Show a dash for no change
+                        placementArrow.textContent = '—';
                     }
                 }, 500);
             }

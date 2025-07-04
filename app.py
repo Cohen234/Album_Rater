@@ -122,7 +122,7 @@ def get_album_averages_df(client_gspread, spreadsheet_id, sheet_name):
             try:
                 # Ensure 'last_ranked_date' is in the initial header
                 header = ['album_id', 'album_name', 'artist_name', 'average_score', 'weighted_average_score',
-                          'original_weighted_score', 'previous_weighted_score', 'times_ranked', 'last_ranked_date']
+                          'original_weighted_score', 'previous_weighted_score', 'times_ranked', 'last_ranked_date', 'rerank_history']
                 sheet = client_gspread.open_by_key(spreadsheet_id).add_worksheet(title=sheet_name, rows=1,
                                                                                  cols=len(header))
                 sheet.append_row(header)
@@ -137,22 +137,22 @@ def get_album_averages_df(client_gspread, spreadsheet_id, sheet_name):
 
     # THE FIX: This list now contains all the columns your app uses.
     expected_cols = ['album_id', 'album_name', 'artist_name', 'average_score', 'weighted_average_score',
-                     'original_weighted_score', 'previous_weighted_score', 'times_ranked', 'last_ranked_date']
+                     'original_weighted_score', 'previous_weighted_score', 'times_ranked', 'last_ranked_date', 'rerank_history']
 
     # THE FIX: Add the if/else block to handle an empty sheet
     if df.empty:
-        df = pd.DataFrame(columns=expected_cols)
+        return pd.DataFrame(columns=expected_cols)
     else:
         for col in expected_cols:
             if col not in df.columns:
-                df[col] = pd.NA
+                df[col] = pd.NA if col != 'rerank_history' else '[]'
 
     # Now we can safely convert types
     for col in ['average_score', 'weighted_average_score', 'original_weighted_score', 'previous_weighted_score']:
         df[col] = pd.to_numeric(df[col], errors='coerce')
     df['times_ranked'] = pd.to_numeric(df['times_ranked'], errors='coerce').fillna(0).astype(int)
 
-    return df.fillna("")
+    return df.fillna({'rerank_history': '[]'})
 def group_ranked_songs(sheet_rows):
     group_bins = {round(x * 0.5, 1): [] for x in range(2, 21)}  # 1.0 to 10.0
     for row in sheet_rows:
