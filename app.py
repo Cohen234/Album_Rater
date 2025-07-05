@@ -186,7 +186,7 @@ def get_ordinal_suffix(n):
     if 11 <= (n % 100) <= 13:
         return f"{n}th"
     return f"{n}{'st' if n % 10 == 1 else 'nd' if n % 10 == 2 else 'rd' if n % 10 == 3 else 'th'}"
-def calculate_streak(rerank_history, original_score, current_score):
+def calculate_streak(rerank_history, original_score):
     """Calculates if an album is on a hot or cold streak."""
     if not rerank_history or len(rerank_history) < 2:
         return 'none'
@@ -798,13 +798,20 @@ def load_albums_by_artist_route():
 
             # --- NEW: Streak Logic ---
             streak_status = 'none'
-            if metadata and metadata.get('times_ranked', 0) > 2:
+            # To have a streak of 3, must be ranked at least 4 times (original + 3 re-ranks)
+            if metadata and metadata.get('times_ranked', 0) > 3:
                 try:
+                    original_score_val = metadata.get('original_weighted_score')
+
+                    # THE FIX: Check if the original score exists and is a valid number.
+                    if pd.isna(original_score_val):
+                        raise ValueError("Original score is missing; cannot calculate streak.")
+
                     history = json.loads(metadata.get('rerank_history', '[]'))
-                    original_score = float(metadata.get('original_weighted_score', 0))
-                    current_score = float(metadata.get('weighted_average_score', 0))
-                    streak_status = calculate_streak(history, original_score, current_score)
-                except (json.JSONDecodeError, TypeError, ValueError):
+                    streak_status = calculate_streak(history, float(original_score_val))
+
+                except (json.JSONDecodeError, TypeError, ValueError) as e:
+                    logging.warning(f"Could not calculate streak for {metadata.get('album_id')}: {e}")
                     streak_status = 'none'
 
             edition_data = {
