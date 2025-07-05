@@ -777,7 +777,7 @@ def load_albums_by_artist_route():
             # Add the current edition to the list for its base name
             grouped_albums[base_name].append(edition_data)
 
-        return render_template("select_album.html", artist_name=artist_name, albums=albums_for_template,  grouped_albums=grouped_albums)
+        return render_template("select_album.html", artist_name=artist_name, grouped_albums=grouped_albums)
 
     except Exception as e:
         logging.error(f"Error in load_albums_by_artist_route for {artist_name}: {e}", exc_info=True)
