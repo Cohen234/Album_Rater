@@ -600,6 +600,9 @@
                     </div>
                 </div>
                 <div id="actions">
+                    <button type="button" class="action-button" id="saveDraftBtn">
+                        Save for Later
+                    </button>
                     <button type="button" class="action-button" id="finalRankBtn">
                         {% if album.is_rerank_mode %}Submit Re-Rank{% else %}Final Rank{% endif %}
                     </button>
@@ -657,6 +660,70 @@
             });
             updateSongCheckmarks();
         }
+        function saveDraft() {
+            document.getElementById('loading-overlay').style.display = 'flex';
+
+            const prelimRankData = [];
+            document.querySelectorAll('.song-item:not(.ranked)').forEach(songItem => {
+                const prelimInput = songItem.querySelector('.prelim-rank-input');
+                if (prelimInput && prelimInput.value.trim() !== '') {
+                    prelimRankData.push({
+                        song_id: songItem.dataset.songId,
+                        song_name: songItem.dataset.songName, // Pass name for backend
+                        prelim_rank: parseFloat(prelimInput.value)
+                    });
+                }
+            });
+
+            if (prelimRankData.length === 0) {
+                document.getElementById('loading-overlay').style.display = 'none';
+                alert("Please enter at least one preliminary rank to save.");
+                return;
+            }
+
+            // This fetch call ONLY sends preliminary data
+            fetch('/submit_rankings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    album_id: albumData.album_id,
+                    album_name: albumData.album_name,
+                    artist_name: albumData.artist_name,
+                    album_cover_url: albumData.album_cover_url,
+                    status: 'draft', // <-- This new status is key
+                    prelim_rank_data: prelimRankData,
+                    all_ranked_data: [] // Send empty list for final ranks
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success' && data.animation_data) {
+                    // Redirect to the new "to be continued" page
+                    const animData = data.animation_data;
+                    const params = new URLSearchParams({
+                        album_name: animData.album_name,
+                        artist_name: animData.artist_name,
+                        album_cover_url: animData.album_cover_url,
+                        dominant_color: animData.dominant_color
+                    });
+                    window.location.href = `/prelim_success?${params.toString()}`;
+                } else {
+                    document.getElementById('loading-overlay').style.display = 'none';
+                    alert('Error saving draft: ' + data.message);
+                }
+            })
+            .catch(error => {
+                document.getElementById('loading-overlay').style.display = 'none';
+                console.error('Error:', error);
+                alert('An error occurred while saving the draft.');
+            });
+        }
+
+        // Add the event listener for the new button
+        document.getElementById('saveDraftBtn').addEventListener('click', saveDraft);
+
+        // Find your existing saveRankings function and keep it for the final rank button
+        document.getElementById('finalRankBtn').addEventListener('click', saveRankings);
 
         function loadInterludeSongsIntoDisplay() {
             document.getElementById('excellent-list').innerHTML = '';
