@@ -828,14 +828,19 @@
                 if (!rankButton) return;
 
                 let count = 0;
-                if (groupKey === 'I') {
-                    count = (allRankedSongsByGroup['I'].excellent.filter(s => s.album_id === currentAlbumId).length +
-                             allRankedSongsByGroup['I'].average.filter(s => s.album_id === currentAlbumId).length +
-                             allRankedSongsByGroup['I'].bad.filter(s => s.album_id === currentAlbumId).length);
-                } else {
-                    count = allRankedSongsByGroup[groupKey].filter(s => s.album_id === currentAlbumId).length;
-                }
 
+                // This logic now correctly and safely filters for the current album
+                if (groupKey === 'I') {
+                    count = (
+                        allRankedSongsByGroup['I'].excellent.filter(s => s && String(s.album_id) === String(currentAlbumId)).length +
+                        allRankedSongsByGroup['I'].average.filter(s => s && String(s.album_id) === String(currentAlbumId)).length +
+                        allRankedSongsByGroup['I'].bad.filter(s => s && String(s.album_id) === String(currentAlbumId)).length
+                    );
+                } else if (allRankedSongsByGroup[groupKey]) {
+                    // THE FIX: Convert both IDs to strings before comparing them.
+                    // This prevents data type mismatches.
+                    count = allRankedSongsByGroup[groupKey].filter(s => s && String(s.album_id) === String(currentAlbumId)).length;
+                }
 
                 // Add or remove the 'has-songs' class, which controls the star's visibility.
                 if (count > 0) {
@@ -935,6 +940,7 @@
             }
             updateAllRankButtonIcons();
             updateAverageAlbumScore();
+            updateSongCheckmarks();
             draggingSong = null;
         });
 
@@ -963,6 +969,7 @@
                 loadInterludeSongsIntoDisplay();
                 updateAllRankButtonIcons();
                 updateAverageAlbumScore();
+                updateSongCheckmarks();
                 draggingSong = null;
             });
         });
