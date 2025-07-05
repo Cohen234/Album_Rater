@@ -59,6 +59,30 @@
             position: relative;
             overflow: hidden; /* This is crucial to clip the ribbon */
         }
+        .pause-icon {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            color: black;
+            background-color: rgba(255, 215, 0, 0.9); /* Gold color */
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 14px;
+            font-weight: bold;
+            text-align: center;
+            line-height: 28px;
+            border: 1px solid rgba(0,0,0,0.2);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+
+        .paused-text {
+            color: #FDD835; /* A vibrant yellow */
+            font-weight: 600;
+        }
         .album-card img {
             width: 100%;
             height: 100%;
@@ -232,6 +256,9 @@
                         {% endif %}
                     {% endif %}
                     <img src="{{ primary_edition['image'] }}" alt="{{ base_name }}" class="{{ glow_class }}">
+                    {% if primary_edition.has_prelim_ranks and (primary_edition.times_ranked | int) == 0 %}
+                        <div class="pause-icon" title="Paused">||</div>
+                    {% endif %}
                     {% if (primary_edition['times_ranked'] | int) > 0 %}
                         <a href="#" class="info-icon" data-album-id="{{ primary_edition['id'] }}" title="View Stats">ⓘ</a>
                     {% endif %}
@@ -262,6 +289,8 @@
                         <div class="date-line">
                             Last Ranked: {{ primary_edition['last_ranked_date'].split(' ')[0] if primary_edition['last_ranked_date'] else '' }}
                         </div>
+                    {% elif primary_edition.has_prelim_ranks %}
+                        <div class="score-line paused-text">Paused</div>
                     {% else %}
                         <div class="score-line">Not yet ranked</div>
                     {% endif %}
