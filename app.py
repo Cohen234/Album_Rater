@@ -502,17 +502,18 @@ def submit_rankings():
                 if not existing_rows.empty:
                     idx = existing_rows.index[0]
                     if album_id_to_update == album_id:
-                        score_before_update = album_averages_df.at[idx, 'weighted_average_score']
-                        album_averages_df.at[idx, 'previous_weighted_score'] = score_before_update
+                        album_averages_df.at[idx, 'previous_weighted_score'] = new_weighted_avg
 
                         # Update the times ranked
-                        album_averages_df.at[idx, 'times_ranked'] = int(album_averages_df.at[idx, 'times_ranked'] or 0) + 1
+                        album_averages_df.at[idx, 'times_ranked'] = int(
+                            album_averages_df.at[idx, 'times_ranked'] or 0) + 1
 
-                        # THE FIX: Update history with the NEW score
+                        # Update history with the NEW score
                         if is_rerank:
                             try:
                                 history_str = album_averages_df.at[idx, 'rerank_history']
-                                rerank_history = json.loads(history_str) if history_str and pd.notna(history_str) else []
+                                rerank_history = json.loads(history_str) if history_str and pd.notna(
+                                    history_str) else []
                                 # Append the new score that was just calculated
                                 rerank_history.append({
                                     'date': datetime.now().strftime('%Y-%m-%d'),
@@ -521,10 +522,14 @@ def submit_rankings():
                                 album_averages_df.at[idx, 'rerank_history'] = json.dumps(rerank_history)
                             except (json.JSONDecodeError, TypeError) as e:
                                 logging.error(f"Error updating rerank history for {album_id}: {e}")
+
+                        # Now, update the main scores and the last ranked date
                     album_averages_df.at[idx, 'average_score'] = new_simple_avg
                     album_averages_df.at[idx, 'weighted_average_score'] = new_weighted_avg
                     album_averages_df.at[idx, 'last_ranked_date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
                 else:
+                    # This logic for adding a brand new row needs to be consistent
                     info = album_info_map.get(album_id_to_update)
                     if info:
                         new_row = pd.DataFrame([{'album_id': album_id_to_update, 'album_name': info['Album Name'],
@@ -532,6 +537,7 @@ def submit_rankings():
                                                  'average_score': new_simple_avg,
                                                  'weighted_average_score': new_weighted_avg,
                                                  'original_weighted_score': new_weighted_avg,
+                                                 # Ensure previous_weighted_score is also set on creation
                                                  'previous_weighted_score': new_weighted_avg,
                                                  'times_ranked': 1,
                                                  'last_ranked_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
