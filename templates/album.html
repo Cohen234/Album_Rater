@@ -855,22 +855,29 @@
             document.querySelectorAll('.song-item').forEach(item => {
                 const songId = item.dataset.songId;
                 const rankGroupDisplay = item.querySelector('.ranked-group-display');
+
+                // THE FIX: Define the prelimInput variable and check if it exists.
+                const prelimInput = item.querySelector('.prelim-rank-input');
+
                 const rankedGroup = getSongRankGroup(songId);
+
                 if (rankedGroup) {
                     item.classList.add('ranked');
                     item.setAttribute('draggable', 'false');
-                    item.querySelector('.prelim-rank-input').disabled = true;
                     rankGroupDisplay.textContent = rankedGroup;
                     rankGroupDisplay.style.display = 'inline-block';
+
+                    // Only try to disable the input if it was found
                     if (prelimInput) {
                         prelimInput.disabled = true;
                     }
                 } else {
                     item.classList.remove('ranked');
                     item.setAttribute('draggable', 'true');
-                    item.querySelector('.prelim-rank-input').disabled = false;
                     rankGroupDisplay.textContent = '';
                     rankGroupDisplay.style.display = 'none';
+
+                    // Only try to enable the input if it was found
                     if (prelimInput) {
                         prelimInput.disabled = false;
                     }
