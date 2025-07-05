@@ -202,8 +202,10 @@ def calculate_streak(rerank_history, original_score, current_score):
     # Check the last 3 changes
     last_three_changes = [scores[i] - scores[i-1] for i in range(len(scores)-3, len(scores))]
 
-    is_hot_streak = all(change > 0 for change in last_three_changes)
-    is_cold_streak = all(change < 0 for change in last_three_changes)
+    is_hot_streak = all(change >= 0 for change in last_three_changes) and any(
+        change > 0 for change in last_three_changes)
+    is_cold_streak = all(change <= 0 for change in last_three_changes) and any(
+        change < 0 for change in last_three_changes)
 
     if is_hot_streak:
         return 'hot_streak'
@@ -520,14 +522,14 @@ def submit_rankings():
             df_for_calc_no_interludes = df_for_calc[df_for_calc['Rank Group'].astype(str) != 'I']
 
             if not df_for_calc_no_interludes.empty:
-                simple_averages = df_for_calc_no_interludes.groupby('Spotify Album ID')['Ranking'].mean().round(2)
+                simple_averages = df_for_calc_no_interludes.groupby('Spotify Album ID')['Ranking'].mean().round(6)
 
                 def weighted_avg(group):
                     total_duration = group['Duration (ms)'].sum()
                     return ((group['Ranking'] * group['Duration (ms)']).sum() / total_duration) if total_duration > 0 else \
                     group['Ranking'].mean()
 
-                weighted_averages = df_for_calc_no_interludes.groupby('Spotify Album ID').apply(weighted_avg).round(2)
+                weighted_averages = df_for_calc_no_interludes.groupby('Spotify Album ID').apply(weighted_avg).round(6)
 
                 album_averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
                 album_info_map = df_for_calc[['Spotify Album ID', 'Album Name', 'Artist Name']].drop_duplicates(
@@ -766,13 +768,9 @@ def load_albums_by_artist_route():
             for _, row in album_averages_df.iterrows():
                 album_id_from_sheet = str(row.get("album_id", "")).strip()
                 if album_id_from_sheet:
-                    # This corrected version gets BOTH scores
-                    album_metadata[album_id_from_sheet] = {
-                        "average_score": row.get("average_score"),
-                        "weighted_average_score": row.get("weighted_average_score"),  # <-- This is the essential new line
-                        "times_ranked": row.get("times_ranked", 0),
-                        "last_ranked_date": row.get("last_ranked_date", "")
-                    }
+                    # THE FIX: Use .to_dict() to include ALL columns from the sheet,
+                    # including 'rerank_history' and 'original_weighted_score'.
+                    album_metadata[album_id_from_sheet] = row.to_dict()
 
         grouped_albums = {}
         today = datetime.now()
