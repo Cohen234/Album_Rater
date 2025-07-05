@@ -20,6 +20,14 @@
             gap: 15px;
             width: 100%;
         }
+        .global-placement-display {
+            color: #aaa;
+            font-size: 0.9em;
+            font-weight: 500;
+            margin-left: auto; /* Pushes it to the far right */
+            padding-left: 15px; /* Space from the other elements */
+            white-space: nowrap;
+        }
         .loading-overlay {
             position: fixed;
             top: 0;
@@ -539,6 +547,7 @@
                                 <span class="checkmark">✓</span>
                                 <span class="ranked-group-display"></span>
                                 <div class="previous-rank-display" title="Previous Rank">{{ song.previous_rank }}</div>
+                                <span class="global-placement-display" title="Previous Global Placement">{{ song.global_placement }}</span>
                             </li>
                         {% endfor %}
                     {% else %}

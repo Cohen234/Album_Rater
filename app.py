@@ -181,8 +181,35 @@ def get_dominant_color(image_url):
     except Exception as e:
         print(f"ERROR: Failed to get dominant color for {image_url}: {e}")
         return "#ffffff"
+def get_ordinal_suffix(n):
+    """Converts a number to its ordinal form (e.g., 1 -> 1st, 2 -> 2nd)."""
+    if 11 <= (n % 100) <= 13:
+        return f"{n}th"
+    return f"{n}{'st' if n % 10 == 1 else 'nd' if n % 10 == 2 else 'rd' if n % 10 == 3 else 'th'}"
+def calculate_streak(rerank_history, original_score, current_score):
+    """Calculates if an album is on a hot or cold streak."""
+    if not rerank_history or len(rerank_history) < 2:
+        return 'none'
 
+    # Create a full history of scores: original -> reranks -> current
+    # Note: The history already contains the scores *after* each rerank.
+    scores = [original_score] + [h['score'] for h in rerank_history]
 
+    # We need at least 3 consecutive changes (4 scores) to have a streak of 3.
+    if len(scores) < 4:
+        return 'none'
+
+    # Check the last 3 changes
+    last_three_changes = [scores[i] - scores[i-1] for i in range(len(scores)-3, len(scores))]
+
+    is_hot_streak = all(change > 0 for change in last_three_changes)
+    is_cold_streak = all(change < 0 for change in last_three_changes)
+
+    if is_hot_streak:
+        return 'hot_streak'
+    if is_cold_streak:
+        return 'cold_streak'
+    return 'none'
 def merge_album_with_rankings(album_tracks, sheet_rows, artist_name):
     merged_tracks = []
     for track in album_tracks:
@@ -748,6 +775,7 @@ def load_albums_by_artist_route():
                     }
 
         grouped_albums = {}
+        today = datetime.now()
         for album_data in albums_from_spotify:
             full_name = album_data.get("name")
             album_id_spotify = album_data.get("id")
@@ -758,6 +786,28 @@ def load_albums_by_artist_route():
             # Get stats for this specific edition
             metadata = album_metadata.get(album_id_spotify, {})
             has_prelim_ranks = album_id_spotify in prelim_ranked_albums_ids
+            rerank_status = 'none'
+            if metadata.get('last_ranked_date') and pd.notna(metadata.get('last_ranked_date')):
+                last_ranked_date = pd.to_datetime(metadata['last_ranked_date'])
+                times_ranked = int(metadata.get('times_ranked', 0))
+                days_to_add = 45 if times_ranked > 1 else 15
+                next_rerank_date = last_ranked_date + pd.Timedelta(days=days_to_add)
+
+                if next_rerank_date < today:
+                    rerank_status = 'overdue'
+                elif (next_rerank_date - today).days <= 5:
+                    rerank_status = 'due'
+
+            # --- NEW: Streak Logic ---
+            streak_status = 'none'
+            if metadata and metadata.get('times_ranked', 0) > 2:
+                try:
+                    history = json.loads(metadata.get('rerank_history', '[]'))
+                    original_score = float(metadata.get('original_weighted_score', 0))
+                    current_score = float(metadata.get('weighted_average_score', 0))
+                    streak_status = calculate_streak(history, original_score, current_score)
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    streak_status = 'none'
 
             edition_data = {
                 "id": album_id_spotify,
@@ -767,7 +817,9 @@ def load_albums_by_artist_route():
                 "weighted_average_score": metadata.get("weighted_average_score"),
                 "times_ranked": metadata.get("times_ranked"),
                 "last_ranked_date": metadata.get("last_ranked_date"),
-                "has_prelim_ranks": has_prelim_ranks
+                "has_prelim_ranks": has_prelim_ranks,
+                "rerank_status": rerank_status,  # <-- New flag for date icon
+                "streak_status": streak_status
             }
 
             # If we haven't seen this base name before, create a new list for it
@@ -882,10 +934,13 @@ def view_album():
         # 5. Prepare the left panel (songs for the current album)
         songs_for_left_panel = []
         if is_rerank_mode:
+            all_final_ranks_df['Ranking'] = pd.to_numeric(all_final_ranks_df['Ranking'], errors='coerce')
+            global_leaderboard = all_final_ranks_df.sort_values(by='Ranking', ascending=False).reset_index(drop=True)
             current_album_previous_ranks = all_final_ranks_df[all_final_ranks_df['Spotify Album ID'] == album_id]
             for song in album_data['songs']:
                 song_id = str(song['song_id'])
                 previous_rank = "N/A"
+                global_placement_text = ""
                 song_rank_info = current_album_previous_ranks[
                     current_album_previous_ranks['Spotify Song ID'] == song_id]
                 if not song_rank_info.empty:
@@ -900,7 +955,11 @@ def view_album():
                             previous_rank = 'Bad'
                     else:
                         previous_rank = f"{rank_value:.2f}"
-                songs_for_left_panel.append({**song, 'previous_rank': previous_rank})
+                    placement_series = global_leaderboard.index[global_leaderboard['Spotify Song ID'] == song_id]
+                    if not placement_series.empty:
+                        placement = int(placement_series[0] + 1)
+                        global_placement_text = get_ordinal_suffix(placement)
+                songs_for_left_panel.append({**song, 'previous_rank': previous_rank, 'global_placement': global_placement_text})
         else:
             # For initial ranking, load prelims and check for globally ranked songs
             existing_prelim_ranks = {}
