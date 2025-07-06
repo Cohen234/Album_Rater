@@ -92,4 +92,4 @@ def get_albums_by_artist(artist_name):
             unique_albums.append(album)
             seen_names.add(cleaned_name.lower())
 
-    return unique_albums[::-1]
+    return unique_albums
