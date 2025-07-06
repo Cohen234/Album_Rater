@@ -51,6 +51,8 @@
             padding: 0;
             cursor: pointer;
             transition: transform 0.2s ease;
+            text-decoration: none; /* Add this line to remove the underline */
+            color: inherit;
         }
         .album-card:hover {
             transform: rotate(1deg) scale(1.03);
@@ -431,16 +433,16 @@
         });
 
         // --- Album Card Click Logic ---
-        document.querySelectorAll('.album-card').forEach(card => {
-                card.addEventListener('click', (e) => {
-                    if (e.target.closest('.info-icon, .pause-icon, .status-icon, .top-left-icon, .top-right-icon')) return;
+        document.querySelectorAll('.album-card[data-editions]').forEach(card => {
+            card.addEventListener('click', (e) => {
+                // Prevent card click if an icon on it was clicked
+                if (e.target.closest('.info-icon, .pause-icon, .status-icon, .top-left-icon, .top-right-icon')) return;
 
-                    if (card.dataset.editions) {
-                        const editions = JSON.parse(card.dataset.editions);
-                        populateAndShowModal(editions);
-                    }
-                });
+                // This logic now only runs for cards that have editions
+                const editions = JSON.parse(card.dataset.editions);
+                populateAndShowModal(editions);
             });
+        });
 
 
         // --- Helper Functions for Modals ---
