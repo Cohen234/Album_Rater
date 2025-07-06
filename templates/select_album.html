@@ -366,13 +366,16 @@
     document.addEventListener('DOMContentLoaded', () => {
         // --- Get all modal elements ---
         const editionModal = document.getElementById('edition-modal');
-        const editionModalCloseBtn = document.getElementById('edition-modal-close-btn');
+        // FIX #1: The ID in your HTML is 'modal-close-btn'
+        const editionModalCloseBtn = document.getElementById('modal-close-btn');
+        // This variable name is correct
         const modalEditionList = document.getElementById('modal-edition-list');
 
         const statsModal = document.getElementById('stats-modal');
         const statsModalCloseBtn = document.getElementById('stats-modal-close-btn');
         const modalStatsContent = document.getElementById('stats-modal-content-area');
         const loadingOverlay = document.getElementById('loading-overlay');
+        const hiddenForm = document.getElementById('album-form');
 
 
         // --- Info Icon Click Logic ---
@@ -455,7 +458,8 @@
         }
 
         function populateAndShowModal(editions) {
-            modalEditionGrid.innerHTML = '';
+            // FIX #2: Use the correct variable name 'modalEditionList'
+            modalEditionList.innerHTML = '';
             editions.forEach(edition => {
                 const button = document.createElement('button');
                 button.className = 'edition-button';
@@ -464,7 +468,8 @@
                     <p>${edition.full_name}</p>
                 `;
                 button.addEventListener('click', () => submitFormWithEdition(edition));
-                modalEditionGrid.appendChild(button);
+                // FIX #2: Use the correct variable name 'modalEditionList'
+                modalEditionList.appendChild(button);
             });
             editionModal.style.display = 'flex';
         }
