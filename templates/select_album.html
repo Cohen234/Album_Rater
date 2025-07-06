@@ -252,29 +252,75 @@
         .glow-red-text { color: #E57373; }
 
         /* Modal Styles (kept light for contrast, which is a common and good UI practice) */
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); display: none; justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(5px); }
-        .modal-content { background: white; color: #333; padding: 30px; border-radius: 12px; width: 90%; max-width: 500px; text-align: center; position: relative; box-shadow: 0 5px 25px rgba(0,0,0,0.4); }
-        .modal-content h3 { margin-top: 0; }
-        .modal-close { position: absolute; top: 10px; right: 15px; font-size: 24px; font-weight: bold; cursor: pointer; color: #888; }
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+        }
+        .modal-content {
+            background: #282828; /* Dark background to match theme */
+            color: #ffffff; /* White text */
+            padding: 25px 30px;
+            border-radius: 12px;
+            border: 1px solid #444;
+            width: 90%;
+            max-width: 800px; /* A wider modal for horizontal items */
+            text-align: center;
+            position: relative;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+        }
+        .modal-content h3 {
+            margin: 0 0 20px 0;
+            padding-bottom: 15px;
+            font-size: 1.5rem;
+            border-bottom: 1px solid #444; /* Subtle separator */
+        }
+        .modal-close {
+            position: absolute; top: 15px; right: 20px;
+            font-size: 24px; font-weight: bold;
+            cursor: pointer;
+            color: #aaa; /* Lighter color for dark background */
+            transition: color 0.2s ease;
+        }
+        .modal-close:hover {
+            color: #ffffff;
+        }
         .edition-grid {
             display: flex; /* Makes items horizontal */
             gap: 20px;
             padding: 10px;
-            overflow-x: auto; /* Adds a scrollbar if items overflow */
-            justify-content: flex-start; /* Aligns items to the start */
+            overflow-x: auto; /* Adds a scrollbar if many editions exist */
+            justify-content: flex-start;
         }
         .edition-button {
-            background: none; border: none; padding: 0;
-            cursor: pointer; text-align: center; color: var(--text-color);
-            flex: 0 0 150px; /* Prevents items from shrinking, sets a base width */
+            background: none;
+            border: none;
+            padding: 0;
+            cursor: pointer;
+            text-align: center;
+            color: #e0e0e0;
+            flex: 0 0 150px; /* Prevents items from shrinking */
         }
         .edition-button img {
-            width: 150px; height: 150px;
-            border-radius: 8px; transition: transform 0.2s ease;
+            width: 150px;
+            height: 150px;
+            border-radius: 8px;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
             box-shadow: 0 4px 15px rgba(0,0,0,0.4);
         }
-        .edition-button:hover img { transform: scale(1.05); }
-        .edition-button p { margin: 10px 0 0 0; font-weight: 600; font-size: 0.9em;}
+        .edition-button:hover img {
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(161, 196, 253, 0.4); /* Adds a subtle blue glow */
+        }
+        .edition-button p {
+            margin: 10px 0 0 0;
+            font-weight: 600;
+            font-size: 0.9em;
+        }
     </style>
 </head>
 <body>
