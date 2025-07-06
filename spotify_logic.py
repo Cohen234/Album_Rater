@@ -45,29 +45,25 @@ def load_album_data(spotify_url):
 
 def get_albums_by_artist(artist_name):
     results = sp.search(q=f"artist:{artist_name}", type="artist", limit=1)
-    items = results.get('artists', {}).get('items', [])
-    if not items:
-        return []
+    # ... (rest of the artist ID logic) ...
+    artist_id = results['artists']['items'][0]['id']
 
-    artist_id = items[0]['id']
-
-    # THE FIX: Expanded list of keywords to catch more live albums
-    live_keywords = ['(live', 'live at', 'live from', 'unplugged', 'sessions']
+    # THE FIX: Use a more specific list of keywords to identify live albums.
+    # The leading space or parenthesis is important to avoid matching words like "alive".
+    live_keywords = [
+        '(live', ' live at ', ' live from ', ' live in ',
+        'unplugged', 'sessions', 'live licks', 'flashpoint'
+    ]
 
     all_api_albums = []
     offset = 0
-    # Paginate through all results from Spotify
     while True:
-        # THE FIX: Set album_type='album' to exclude singles
         response = sp.artist_albums(artist_id, album_type='album', limit=50, offset=offset)
-
         if not response['items']:
             break
-
         all_api_albums.extend(response['items'])
         offset += 50
 
-    # Process and filter the collected albums
     album_list = []
     for album in all_api_albums:
         album_name_lower = album['name'].lower()
@@ -83,8 +79,7 @@ def get_albums_by_artist(artist_name):
                 'image': album['images'][0]['url'] if album['images'] else ""
             })
 
-    # Remove duplicates based on a cleaned name (e.g., "Donda" and "Donda (Deluxe)" are treated separately)
-    # This keeps the earliest released version if names are identical after cleaning
+    # (The rest of your de-duplication logic remains the same)
     unique_albums = []
     seen_names = set()
     # Spotify returns newest first, so we reverse to process oldest first
