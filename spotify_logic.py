@@ -44,25 +44,48 @@ def load_album_data(spotify_url):
     }
 
 def get_albums_by_artist(artist_name):
-    results = sp.search(q=f"artist:{artist_name}", type="artist", limit=1)
-    items = results.get('artists', {}).get('items', [])
-    if not items:
+    results = sp.search(q=f'artist:{artist_name}', type='artist', limit=1)
+    if not results['artists']['items']:
         return []
 
-    artist_id = items[0]['id']
-    albums = sp.artist_albums(artist_id=artist_id, album_type='album', limit=50)
-    sorted_albums = sorted(albums['items'], key=lambda x: x.get('release_date', '9999-99-99'))
-    album_set = set()
-    album_list = []
+    artist_id = results['artists']['items'][0]['id']
 
-    for album in sorted_albums:
-        name = album['name']
-        if name not in album_set:
-            album_set.add(name)
-            album_list.append({
-                'name': name,
-                'id': album['id'],
-                'url': album['external_urls']['spotify'],
-                'image': album['images'][0]['url'] if album['images'] else ""
-            })
-    return album_list
+    albums = []
+    offset = 0
+    limit = 50
+
+    # Define keywords that typically indicate a live album
+    live_keywords = ['live at', 'live from', 'unplugged', 'sessions', 'live in']
+
+    while True:
+        response = sp.artist_albums(artist_id, album_type='album,single', limit=limit, offset=offset)
+        if not response['items']:
+            break
+
+        for album in response['items']:
+            album_name_lower = album['name'].lower()
+
+            # THE FIX: Check if any live keyword is in the album title
+            is_live_album = any(keyword in album_name_lower for keyword in live_keywords)
+
+            # Only add the album if it's NOT a live album
+            if not is_live_album:
+                albums.append({
+                    'id': album['id'],
+                    'name': album['name'],
+                    'image': album['images'][0]['url'] if album['images'] else "",
+                    'url': album['external_urls'].get('spotify', '')
+                })
+
+        offset += limit
+
+    # Remove duplicate albums based on name
+    unique_albums = []
+    seen_names = set()
+    for album in albums:
+        if album['name'] not in seen_names:
+            unique_albums.append(album)
+            seen_names.add(album['name'])
+
+    return unique_albums
+
