@@ -44,48 +44,57 @@ def load_album_data(spotify_url):
     }
 
 def get_albums_by_artist(artist_name):
-    results = sp.search(q=f'artist:{artist_name}', type='artist', limit=1)
-    if not results['artists']['items']:
+    results = sp.search(q=f"artist:{artist_name}", type="artist", limit=1)
+    items = results.get('artists', {}).get('items', [])
+    if not items:
         return []
 
-    artist_id = results['artists']['items'][0]['id']
+    artist_id = items[0]['id']
 
-    albums = []
+    # THE FIX: Expanded list of keywords to catch more live albums
+    live_keywords = ['(live', 'live at', 'live from', 'unplugged', 'sessions']
+
+    all_api_albums = []
     offset = 0
-    limit = 50
-
-    # Define keywords that typically indicate a live album
-    live_keywords = ['live at', 'live from', 'unplugged', 'sessions', 'live in']
-
+    # Paginate through all results from Spotify
     while True:
-        response = sp.artist_albums(artist_id, album_type='album,single', limit=limit, offset=offset)
+        # THE FIX: Set album_type='album' to exclude singles
+        response = sp.artist_albums(artist_id, album_type='album', limit=50, offset=offset)
+
         if not response['items']:
             break
 
-        for album in response['items']:
-            album_name_lower = album['name'].lower()
+        all_api_albums.extend(response['items'])
+        offset += 50
 
-            # THE FIX: Check if any live keyword is in the album title
-            is_live_album = any(keyword in album_name_lower for keyword in live_keywords)
+    # Process and filter the collected albums
+    album_list = []
+    for album in all_api_albums:
+        album_name_lower = album['name'].lower()
 
-            # Only add the album if it's NOT a live album
-            if not is_live_album:
-                albums.append({
-                    'id': album['id'],
-                    'name': album['name'],
-                    'image': album['images'][0]['url'] if album['images'] else "",
-                    'url': album['external_urls'].get('spotify', '')
-                })
+        # Check if any live keyword is in the album title
+        is_live_album = any(keyword in album_name_lower for keyword in live_keywords)
 
-        offset += limit
+        if not is_live_album:
+            album_list.append({
+                'name': album['name'],
+                'id': album['id'],
+                'url': album['external_urls']['spotify'],
+                'image': album['images'][0]['url'] if album['images'] else ""
+            })
 
-    # Remove duplicate albums based on name
+    # Remove duplicates based on a cleaned name (e.g., "Donda" and "Donda (Deluxe)" are treated separately)
+    # This keeps the earliest released version if names are identical after cleaning
     unique_albums = []
     seen_names = set()
-    for album in albums:
-        if album['name'] not in seen_names:
+    # Spotify returns newest first, so we reverse to process oldest first
+    for album in reversed(album_list):
+        # Clean the name by removing content in parentheses for better de-duplication
+        cleaned_name = re.sub(r'\s*\([^)]*\)$', '', album['name']).strip()
+        if cleaned_name.lower() not in seen_names:
             unique_albums.append(album)
-            seen_names.add(album['name'])
+            seen_names.add(cleaned_name.lower())
 
-    return unique_albums
+    # Return the unique list, reversed again to show newest first
+    return unique_albums[::-1]
 
