@@ -43,17 +43,25 @@ def load_album_data(spotify_url):
         'songs': songs
     }
 
-def get_albums_by_artist(artist_name):
-    results = sp.search(q=f"artist:{artist_name}", type="artist", limit=1)
-    # ... (rest of the artist ID logic) ...
-    artist_id = results['artists']['items'][0]['id']
 
-    # THE FIX: Use a more specific list of keywords to identify live albums.
-    # The leading space or parenthesis is important to avoid matching words like "alive".
-    live_keywords = [
-        '(live', ' live at ', ' live from ', ' live in ',
-        'unplugged', 'sessions', 'live licks', 'flashpoint'
-    ]
+# In spotify_logic.py
+import re  # Make sure 're' is imported at the top of your file
+
+
+def get_albums_by_artist(artist_name):
+    """
+    Fetches all studio albums for a given artist, using a regex to filter out live albums and singles.
+    """
+    results = sp.search(q=f"artist:{artist_name}", type="artist", limit=1)
+    items = results.get('artists', {}).get('items', [])
+    if not items:
+        return []
+    artist_id = items[0]['id']
+
+    # THE FIX: Use a single, powerful regular expression.
+    # \b ensures we match "live" as a whole word, not as part of another word.
+    # re.IGNORECASE makes the search case-insensitive (catches 'Live' and 'live').
+    live_pattern = re.compile(r'\blive\b|unplugged|sessions|live licks|flashpoint', re.IGNORECASE)
 
     all_api_albums = []
     offset = 0
@@ -66,12 +74,8 @@ def get_albums_by_artist(artist_name):
 
     album_list = []
     for album in all_api_albums:
-        album_name_lower = album['name'].lower()
-
-        # Check if any live keyword is in the album title
-        is_live_album = any(keyword in album_name_lower for keyword in live_keywords)
-
-        if not is_live_album:
+        # Check if the regex pattern is found anywhere in the album name
+        if not live_pattern.search(album['name']):
             album_list.append({
                 'name': album['name'],
                 'id': album['id'],
@@ -79,17 +83,13 @@ def get_albums_by_artist(artist_name):
                 'image': album['images'][0]['url'] if album['images'] else ""
             })
 
-    # (The rest of your de-duplication logic remains the same)
+    # De-duplication logic remains the same
     unique_albums = []
     seen_names = set()
-    # Spotify returns newest first, so we reverse to process oldest first
     for album in reversed(album_list):
-        # Clean the name by removing content in parentheses for better de-duplication
         cleaned_name = re.sub(r'\s*\([^)]*\)$', '', album['name']).strip()
         if cleaned_name.lower() not in seen_names:
             unique_albums.append(album)
             seen_names.add(cleaned_name.lower())
 
-    # Return the unique list, reversed again to show newest first
     return unique_albums[::-1]
-
