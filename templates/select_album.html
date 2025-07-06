@@ -291,19 +291,20 @@
         }
         .edition-grid {
             display: flex;
+            flex-wrap: wrap; /* This is the key: allows items to wrap to the next line */
             gap: 20px;
             padding: 10px;
-            overflow-x: auto;
-            justify-content: space-evenly; /* Changed to space items out */
+            justify-content: center; /* Center the grid items */
+            max-height: 60vh;
+            overflow-y: auto; /* Allow vertical scrolling if there are many rows */
         }
-        .edition-button {
-            background: none;
-            border: none;
-            padding: 0;
-            cursor: pointer;
-            text-align: center;
-            color: #e0e0e0;
-            flex: 0 0 150px; /* Prevents items from shrinking */
+
+        .edition-button p {
+            margin: 10px 0 0 0;
+            font-weight: 600;
+            font-size: 0.9em;
+            white-space: normal; /* Ensures long text will wrap within its container */
+            height: 3em; /* Allocates space for up to two lines of text */
         }
         .edition-button img {
             width: 150px;
