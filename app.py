@@ -137,7 +137,8 @@ def get_album_averages_df(client_gspread, spreadsheet_id, sheet_name):
 
     # THE FIX: This list now contains all the columns your app uses.
     expected_cols = ['album_id', 'album_name', 'artist_name', 'average_score', 'weighted_average_score',
-                     'original_weighted_score', 'previous_weighted_score', 'times_ranked', 'last_ranked_date', 'rerank_history']
+                     'original_weighted_score', 'previous_weighted_score', 'times_ranked',
+                     'last_ranked_date', 'rerank_history', 'score_history']
 
     # THE FIX: Add the if/else block to handle an empty sheet
     if df.empty:
@@ -145,7 +146,8 @@ def get_album_averages_df(client_gspread, spreadsheet_id, sheet_name):
     else:
         for col in expected_cols:
             if col not in df.columns:
-                df[col] = pd.NA if col != 'rerank_history' else '[]'
+                # Initialize both history columns as an empty JSON array string
+                df[col] = pd.NA if col not in ['rerank_history', 'score_history'] else '[]'
 
     # Now we can safely convert types
     for col in ['average_score', 'weighted_average_score', 'original_weighted_score', 'previous_weighted_score']:
@@ -186,21 +188,17 @@ def get_ordinal_suffix(n):
     if 11 <= (n % 100) <= 13:
         return f"{n}th"
     return f"{n}{'st' if n % 10 == 1 else 'nd' if n % 10 == 2 else 'rd' if n % 10 == 3 else 'th'}"
-def calculate_streak(rerank_history, original_score):
-    """Calculates if an album is on a hot or cold streak."""
-    if not rerank_history or len(rerank_history) < 2:
+
+
+def calculate_streak(score_history):
+    """Calculates a streak based on the complete score history."""
+    # Need at least 4 ranking events to have 3 consecutive changes
+    if len(score_history) < 4:
         return 'none'
 
-    # Create a full history of scores: original -> reranks -> current
-    # Note: The history already contains the scores *after* each rerank.
-    scores = [original_score] + [h['score'] for h in rerank_history]
-
-    # We need at least 3 consecutive changes (4 scores) to have a streak of 3.
-    if len(scores) < 4:
-        return 'none'
-
-    # Check the last 3 changes
-    last_three_changes = [scores[i] - scores[i-1] for i in range(len(scores)-3, len(scores))]
+    # Get the last 3 score changes from the history
+    last_three_changes = [score_history[i] - score_history[i - 1] for i in
+                          range(len(score_history) - 3, len(score_history))]
 
     is_hot_streak = all(change >= 0 for change in last_three_changes) and any(
         change > 0 for change in last_three_changes)
@@ -211,6 +209,7 @@ def calculate_streak(rerank_history, original_score):
         return 'hot_streak'
     if is_cold_streak:
         return 'cold_streak'
+
     return 'none'
 def merge_album_with_rankings(album_tracks, sheet_rows, artist_name):
     merged_tracks = []
@@ -535,15 +534,26 @@ def submit_rankings():
                 album_info_map = df_for_calc[['Spotify Album ID', 'Album Name', 'Artist Name']].drop_duplicates(
                     'Spotify Album ID').set_index('Spotify Album ID').to_dict('index')
 
+                # THE FIX: This loop now updates the score history for ALL albums
                 for album_id_to_update, new_weighted_avg in weighted_averages.items():
                     new_simple_avg = simple_averages.get(album_id_to_update)
                     existing_rows = album_averages_df[album_averages_df['album_id'] == album_id_to_update]
+
                     if not existing_rows.empty:
                         idx = existing_rows.index[0]
+
+                        # --- Update Score History for EVERY album ---
+                        try:
+                            history_str = album_averages_df.at[idx, 'score_history']
+                            score_history = json.loads(history_str) if history_str and pd.notna(history_str) else []
+                            score_history.append(float(new_weighted_avg))
+                            album_averages_df.at[idx, 'score_history'] = json.dumps(score_history)
+                        except (json.JSONDecodeError, TypeError) as e:
+                            logging.error(f"Error updating score_history for {album_id_to_update}: {e}")
+
+                        # --- Logic for the SUBMITTED album ---
                         if album_id_to_update == album_id:
                             album_averages_df.at[idx, 'previous_weighted_score'] = new_weighted_avg
-
-                            # Update the times ranked
                             album_averages_df.at[idx, 'times_ranked'] = int(
                                 album_averages_df.at[idx, 'times_ranked'] or 0) + 1
 
@@ -567,20 +577,22 @@ def submit_rankings():
                         album_averages_df.at[idx, 'weighted_average_score'] = new_weighted_avg
                         album_averages_df.at[idx, 'last_ranked_date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
+
                     else:
-                        # This logic for adding a brand new row needs to be consistent
+                        # Logic for adding a brand new album
                         info = album_info_map.get(album_id_to_update)
                         if info:
-                            new_row = pd.DataFrame([{'album_id': album_id_to_update, 'album_name': info['Album Name'],
-                                                     'artist_name': info['Artist Name'],
-                                                     'average_score': new_simple_avg,
-                                                     'weighted_average_score': new_weighted_avg,
-                                                     'original_weighted_score': new_weighted_avg,
-                                                     # Ensure previous_weighted_score is also set on creation
-                                                     'previous_weighted_score': new_weighted_avg,
-                                                     'times_ranked': 1,
-                                                     'last_ranked_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                                                     'rerank_history': '[]'}])
+                            new_row = pd.DataFrame([{
+                                'album_id': album_id_to_update, 'album_name': info['Album Name'],
+                                'artist_name': info['Artist Name'], 'average_score': new_simple_avg,
+                                'weighted_average_score': new_weighted_avg,
+                                'original_weighted_score': new_weighted_avg,
+                                'previous_weighted_score': new_weighted_avg, 'times_ranked': 1,
+                                'last_ranked_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                'rerank_history': '[]',
+                                'score_history': json.dumps([float(new_weighted_avg)])
+                            }])
+
                             album_averages_df = pd.concat([album_averages_df, new_row], ignore_index=True)
 
                 set_with_dataframe(client.open_by_key(SPREADSHEET_ID).worksheet(album_averages_sheet_name),
@@ -798,18 +810,11 @@ def load_albums_by_artist_route():
 
             # --- NEW: Streak Logic ---
             streak_status = 'none'
-            # To have a streak of 3, must be ranked at least 4 times (original + 3 re-ranks)
-            if metadata and metadata.get('times_ranked', 0) > 3:
+            if metadata:
                 try:
-                    original_score_val = metadata.get('original_weighted_score')
-
-                    # THE FIX: Check if the original score exists and is a valid number.
-                    if pd.isna(original_score_val):
-                        raise ValueError("Original score is missing; cannot calculate streak.")
-
-                    history = json.loads(metadata.get('rerank_history', '[]'))
-                    streak_status = calculate_streak(history, float(original_score_val))
-
+                    # THE FIX: Use the new 'score_history' column
+                    history = json.loads(metadata.get('score_history', '[]'))
+                    streak_status = calculate_streak(history)
                 except (json.JSONDecodeError, TypeError, ValueError) as e:
                     logging.warning(f"Could not calculate streak for {metadata.get('album_id')}: {e}")
                     streak_status = 'none'
