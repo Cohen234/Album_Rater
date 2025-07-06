@@ -268,80 +268,81 @@
 
     <div class="album-grid">
         {% for base_name, editions in grouped_albums.items() %}
-            {% set primary_edition = editions[0] %}
-            <div class="album-card" data-editions='{{ editions | tojson | forceescape }}'>
-                <div class="album-art-container">
-                    {% set glow_class = '' %}
-                    {% if (primary_edition['times_ranked'] | int) > 0 and primary_edition['weighted_average_score'] is defined and primary_edition['weighted_average_score'] != '' %}
-                        {% set score = primary_edition['weighted_average_score']|float %}
-                        {% if score >= 7 %}
-                            {% set glow_class = 'glow-green' %}
-                        {% elif score >= 4 %}
-                            {% set glow_class = 'glow-yellow' %}
-                        {% else %}
-                            {% set glow_class = 'glow-red' %}
-                        {% endif %}
-                    {% endif %}
-                    <img src="{{ primary_edition['image'] }}" alt="{{ base_name }}" class="{{ glow_class }}">
-                    {% if primary_edition.rerank_status == 'due' %}
-                        <div class="status-icon due" title="Re-rank is due soon">⏰</div>
-                    {% elif primary_edition.rerank_status == 'overdue' %}
-                        <div class="status-icon overdue" title="Re-rank is overdue!">⚠️</div>
-                    {% endif %}
-                    {% if primary_edition.has_prelim_ranks and (primary_edition.times_ranked | int) == 0 %}
-                        <div class="pause-icon" title="Paused">||</div>
-                    {% endif %}
-                    {% if (primary_edition['times_ranked'] | int) > 0 %}
-                        <a href="#" class="info-icon" data-album-id="{{ primary_edition['id'] }}" title="View Stats">ⓘ</a>
-                    {% endif %}
-                </div> <div class="album-name" title="{{ base_name }}">
-                    {{ base_name }}
-                    {% if primary_edition.streak_status == 'hot_streak' %}
-                        <span class="streak-icon" title="Hot Streak!">🔥</span>
-                    {% elif primary_edition.streak_status == 'cold_streak' %}
-                        <span class="streak-icon" title="Cold Streak">🧊</span>
-                    {% endif %}
-                </div>
 
-                <div class="stats-display">
-                    {% if (primary_edition['times_ranked'] | int) > 0 %}
+            {# Check if any edition in this group has already been ranked #}
+            {% set ranked_edition = namespace(data=None) %}
+            {% for edition in editions %}
+                {% if (edition.times_ranked | int) > 0 %}
+                    {% set ranked_edition.data = edition %}
+                {% endif %}
+            {% endfor %}
+
+            {% if ranked_edition.data %}
+                {# --- 1. An edition IS ranked: Display only that specific card --- #}
+                {% set album = ranked_edition.data %}
+
+                {# Logic for glow effect is now included #}
+                {% set glow_class = '' %}
+                {% if album.weighted_average_score is defined and album.weighted_average_score != '' %}
+                    {% set score = album.weighted_average_score|float %}
+                    {% if score >= 7 %}{% set glow_class = 'glow-green' %}
+                    {% elif score >= 4 %}{% set glow_class = 'glow-yellow' %}
+                    {% else %}{% set glow_class = 'glow-red' %}{% endif %}
+                {% endif %}
+
+                <a href="{{ url_for('view_album', album_id=album.id) }}" class="album-card">
+                    <div class="album-art-container">
+                        <img src="{{ album.image }}" alt="{{ album.full_name }}" class="{{ glow_class }}">
+                        {% if album.rerank_status == 'due' %}<div class="top-left-icon due" title="Re-rank is due soon">⏰</div>
+                        {% elif album.rerank_status == 'overdue' %}<div class="top-left-icon overdue" title="Re-rank is overdue!">⚠️</div>
+                        {% endif %}
+                        <div class="top-right-icon info-icon" data-album-id="{{ album.id }}" title="View Stats">ⓘ</div>
+                    </div>
+                    <div class="album-name">
+                        {{ album.full_name }}
+                        {% if album.streak_status == 'hot_streak' %}<span class="streak-icon" title="Hot Streak!">🔥</span>
+                        {% elif album.streak_status == 'cold_streak' %}<span class="streak-icon" title="Cold Streak">🧊</span>
+                        {% endif %}
+                    </div>
+                    <div class="stats-display">
                         <div class="mastery-stars">
-                            {% set display_stars = primary_edition['times_ranked'] | default(0) | int %}
-                            {% for i in range(3) %}
-                                <span class="star {% if i < display_stars %}filled{% endif %}">★</span>
-                            {% endfor %}
+                            {% for i in range(3) %}<span class="star {% if i < (album.times_ranked|int) %}filled{% endif %}">★</span>{% endfor %}
                         </div>
                         <div class="score-line">
-                            <span class="stat">
-                                Avg: <strong>{{ "%.2f"|format(primary_edition['average_score']|float) }}</strong>
-                            </span>
+                            <span class="stat">Avg: <strong>{{ "%.2f"|format(album.average_score|float) }}</strong></span>
                             <span class="separator">|</span>
-                            <span class="stat">
-                                {% set weighted_score = primary_edition['weighted_average_score']|float %}
-                                {% set glow_class = 'glow-green' if weighted_score >= 7 else 'glow-yellow' if weighted_score >= 4 else 'glow-red' %}
-                                {% set text_class = glow_class + '-text' %}
-                                Overall: <strong class="{{ text_class }}">{{ "%.2f"|format(weighted_score) }}</strong>
-                            </span>
+                            <span class="stat">Overall: <strong>{{ "%.2f"|format(album.weighted_average_score|float) }}</strong></span>
                         </div>
-                        <div class="date-line">
-                            Last Ranked: {{ primary_edition['last_ranked_date'].split(' ')[0] if primary_edition['last_ranked_date'] else '' }}
-                        </div>
-                    {% elif primary_edition.has_prelim_ranks %}
-                        <div class="score-line paused-text">Paused</div>
-                    {% else %}
-                        <div class="score-line">Not yet ranked</div>
-                    {% endif %}
-                </div>
+                        <div class="date-line">Last Ranked: {{ album.last_ranked_date.split(' ')[0] if album.last_ranked_date else '' }}</div>
+                    </div>
+                </a>
 
-                <form action="{{ url_for('view_album') }}" method="post" class="album-form" style="display: none;">
-                    <input type="hidden" name="album_id">
-                    <input type="hidden" name="album_name">
-                    <input type="hidden" name="artist_name" value="{{ artist_name }}">
-                    <input type="hidden" name="album_cover_url">
-                </form>
-            </div>
+            {% else %}
+                {# --- 2. NO edition is ranked: Display a grouped card that opens the modal --- #}
+                {% set primary_edition = editions[0] %}
+                {% set has_prelim = editions | selectattr('has_prelim_ranks', 'equalto', True) | list | length > 0 %}
+                <div class="album-card" data-editions='{{ editions | tojson | forceescape }}'>
+                    <div class="album-art-container">
+                        <img src="{{ primary_edition.image }}" alt="{{ base_name }}">
+                        {% if has_prelim %}<div class="top-right-icon pause-icon" title="Paused">||</div>{% endif %}
+                    </div>
+                    <div class="album-name">{{ base_name }}</div>
+                    <div class="stats-display">
+                        {% if has_prelim %}<div class="score-line paused-text">Paused</div>
+                        {% else %}<div class="score-line">Not yet ranked</div>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endif %}
         {% endfor %}
     </div>
+
+    <form action="{{ url_for('view_album') }}" method="post" id="album-form" style="display: none;">
+        <input type="hidden" name="album_id">
+        <input type="hidden" name="album_name">
+        <input type="hidden" name="artist_name" value="{{ artist_name }}">
+        <input type="hidden" name="album_cover_url">
+    </form>
 
     <div id="edition-modal" class="modal-overlay">
       <div class="modal-content">
@@ -431,38 +432,37 @@
 
         // --- Album Card Click Logic ---
         document.querySelectorAll('.album-card').forEach(card => {
-            card.addEventListener('click', (e) => {
-                if (e.target.closest('.info-icon')) return;
-                const editions = JSON.parse(card.dataset.editions);
-                const form = card.querySelector('.album-form');
-                if (editions.length === 1) {
-                    submitFormWithEdition(form, editions[0]);
-                } else {
-                    populateAndShowModal(editions, form);
-                }
+                card.addEventListener('click', (e) => {
+                    if (e.target.closest('.info-icon, .pause-icon, .status-icon, .top-left-icon, .top-right-icon')) return;
+
+                    if (card.dataset.editions) {
+                        const editions = JSON.parse(card.dataset.editions);
+                        populateAndShowModal(editions);
+                    }
+                });
             });
-        });
 
 
         // --- Helper Functions for Modals ---
-        function submitFormWithEdition(form, edition) {
+        function submitFormWithEdition(edition) {
             loadingOverlay.style.display = 'flex';
-            form.querySelector('input[name="album_id"]').value = edition.id;
-            form.querySelector('input[name="album_name"]').value = edition.full_name;
-            form.querySelector('input[name="album_cover_url"]').value = edition.image;
-            form.submit();
+            hiddenForm.querySelector('input[name="album_id"]').value = edition.id;
+            hiddenForm.querySelector('input[name="album_name"]').value = edition.full_name;
+            hiddenForm.querySelector('input[name="album_cover_url"]').value = edition.image;
+            hiddenForm.submit();
         }
 
-        function populateAndShowModal(editions, form) {
-            modalEditionList.innerHTML = '';
+        function populateAndShowModal(editions) {
+            modalEditionGrid.innerHTML = '';
             editions.forEach(edition => {
-                const li = document.createElement('li');
                 const button = document.createElement('button');
                 button.className = 'edition-button';
-                button.textContent = edition.full_name;
-                button.addEventListener('click', () => submitFormWithEdition(form, edition));
-                li.appendChild(button);
-                modalEditionList.appendChild(li);
+                button.innerHTML = `
+                    <img src="${edition.image}" alt="${edition.full_name}">
+                    <p>${edition.full_name}</p>
+                `;
+                button.addEventListener('click', () => submitFormWithEdition(edition));
+                modalEditionGrid.appendChild(button);
             });
             editionModal.style.display = 'flex';
         }
