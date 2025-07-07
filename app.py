@@ -268,7 +268,7 @@ def load_google_sheet_data():
 # In app.py
 
 @app.route("/artist/<string:artist_name>")
-def artist_page(artist_name):
+def artist_page_v2(artist_name):
     try:
         logging.info(f"--- Loading Artist Stats Page for: {artist_name} ---")
 
