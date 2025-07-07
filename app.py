@@ -173,7 +173,20 @@ def group_ranked_songs(sheet_rows):
             print(f"WARNING: Skipping bad row in group_ranked_songs: {row} - {e}")
             continue
     return group_bins
-
+def get_album_release_dates(sp_instance, album_ids):
+    """Fetches release dates for a list of album IDs."""
+    release_dates = {}
+    if not album_ids:
+        return release_dates
+    for i in range(0, len(album_ids), 50):
+        try:
+            albums_info = sp_instance.albums(album_ids[i:i + 50])
+            for album in albums_info['albums']:
+                if album:
+                    release_dates[album['id']] = album.get('release_date')
+        except Exception as e:
+            logging.error(f"Could not fetch album release dates batch: {e}")
+    return release_dates
 def get_dominant_color(image_url):
     try:
         response = requests.get(image_url)
@@ -252,68 +265,118 @@ def load_google_sheet_data():
     return sheet.get_all_records()
 
 
+# In app.py
+
 @app.route("/artist/<string:artist_name>")
 def artist_page(artist_name):
-    """
-    This route ONLY displays the artist's statistics dashboard.
-    """
     try:
         logging.info(f"--- Loading Artist Stats Page for: {artist_name} ---")
 
+        # 1. --- Load All Base Data ---
         main_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
         all_songs_df = get_as_dataframe(main_sheet, evaluate_formulas=False).fillna("")
         all_albums_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
 
-        # Filter data for the CURRENT artist
         all_songs_df['Ranking'] = pd.to_numeric(all_songs_df['Ranking'], errors='coerce')
-
-        # FIX: Ensure the 'Artist Name' column is a string before using .str
-        all_songs_df['Artist Name'] = all_songs_df['Artist Name'].astype(str)
-        artist_songs_df = all_songs_df[all_songs_df['Artist Name'].str.lower() == artist_name.lower()]
-
-        # FIX: Ensure the 'artist_name' column is a string before using .str
-        all_albums_df['artist_name'] = all_albums_df['artist_name'].astype(str)
-        artist_albums_df = all_albums_df[all_albums_df['artist_name'].str.lower() == artist_name.lower()]
-
-        # Calculate Overall Stats
-        avg_song_score = artist_songs_df['Ranking'].mean()
-        # FIX: Ensure 'average_score' is numeric for calculation
-        all_albums_df['average_score'] = pd.to_numeric(all_albums_df['average_score'], errors='coerce')
-        avg_album_score = artist_albums_df['average_score'].mean()
-        artist_stats = {
-            'avg_song_score': f"{avg_song_score:.2f}" if pd.notna(avg_song_score) else "N/A",
-            'avg_album_score': f"{avg_album_score:.2f}" if pd.notna(avg_album_score) else "N/A",
-            'total_songs_ranked': len(artist_songs_df)
-        }
-
-        # Prepare Pie Chart Data
-        # FIX: Ensure 'Rank Group' is a string before counting
-        all_songs_df['Rank Group'] = all_songs_df['Rank Group'].astype(str)
-        pie_data = artist_songs_df['Rank Group'].value_counts().reset_index()
-        pie_data.columns = ['rank_group', 'count']
-        pie_chart_data = {
-            'labels': pie_data['rank_group'].tolist(),
-            'data': pie_data['count'].tolist()
-        }
-
-        # Prepare Leaderboards
-        artist_song_leaderboard = artist_songs_df.sort_values(by='Ranking', ascending=False).to_dict('records')
-        universal_song_leaderboard = all_songs_df.sort_values(by='Ranking', ascending=False).head(100).to_dict(
-            'records')
-        # FIX: Ensure 'weighted_average_score' is numeric for sorting
         all_albums_df['weighted_average_score'] = pd.to_numeric(all_albums_df['weighted_average_score'],
                                                                 errors='coerce')
-        album_leaderboard = artist_albums_df.sort_values(by='weighted_average_score', ascending=False).to_dict(
-            'records')
+
+        # Create global leaderboards with rank columns
+        all_songs_df.sort_values(by='Ranking', ascending=False, inplace=True)
+        all_songs_df['Universal Rank'] = range(1, len(all_songs_df) + 1)
+
+        all_albums_df.sort_values(by='weighted_average_score', ascending=False, inplace=True)
+        all_albums_df['Global Rank'] = range(1, len(all_albums_df) + 1)
+
+        # Filter for the current artist
+        artist_songs_df = all_songs_df[
+            all_songs_df['Artist Name'].astype(str).str.lower() == artist_name.lower()].copy()
+        artist_albums_df = all_albums_df[
+            all_albums_df['artist_name'].astype(str).str.lower() == artist_name.lower()].copy()
+
+        # 2. --- Calculate New Stats ---
+
+        # ARTIST MASTERY
+        total_spotify_albums = len(get_albums_by_artist(artist_name))
+        ranked_albums_count = len(artist_albums_df)
+        mastery_points = artist_albums_df['times_ranked'].clip(upper=3).sum()
+        max_mastery_points = total_spotify_albums * 3
+        mastery_percentage = (mastery_points / max_mastery_points) * 100 if max_mastery_points > 0 else 0
+
+        # LEADERBOARD POINTS
+        total_songs = len(all_songs_df)
+        total_albums = len(all_albums_df)
+        song_points = (total_songs - artist_songs_df['Universal Rank'] + 1).sum()
+        album_points = ((total_albums - artist_albums_df['Global Rank'] + 1) * 10).sum()
+        total_leaderboard_points = song_points + album_points
+
+        # ARTIST SCORE (My suggested implementation)
+        # Average percentile of albums and songs, weighted 60/40
+        album_percentile = ((total_albums - artist_albums_df[
+            'Global Rank'].mean()) / total_albums) * 100 if total_albums > 0 else 0
+        song_percentile = ((total_songs - artist_songs_df[
+            'Universal Rank'].mean()) / total_songs) * 100 if total_songs > 0 else 0
+        artist_score = (album_percentile * 0.6) + (song_percentile * 0.4) if ranked_albums_count > 0 else 0
+
+        # 3. --- Prepare Data for Histograms ---
+
+        # RELEASE HISTORY HISTOGRAM
+        ranked_album_ids = artist_albums_df['album_id'].tolist()
+        release_dates = get_album_release_dates(sp, ranked_album_ids)
+        artist_albums_df['release_date'] = artist_albums_df['album_id'].map(release_dates)
+        release_history_data = artist_albums_df.sort_values(by='release_date')
+
+        release_chart_data = {
+            'labels': release_history_data['album_name'].tolist(),
+            'scores': release_history_data['weighted_average_score'].tolist()
+        }
+
+        # RANKING HISTORY HISTOGRAM
+        ranking_history_events = []
+        for _, row in artist_albums_df.iterrows():
+            history = json.loads(row.get('rerank_history', '[]'))
+            if not history:  # If no re-ranks, use the original ranking event
+                ranking_history_events.append({
+                    'date': pd.to_datetime(row['last_ranked_date']).strftime('%Y-%m-%d'),
+                    'score': row['original_weighted_score'],
+                    'album_name': row['album_name']
+                })
+            else:
+                for event in history:
+                    ranking_history_events.append({**event, 'album_name': row['album_name']})
+
+        ranking_history_data = sorted(ranking_history_events, key=lambda x: x['date'])
+        ranking_chart_data = {
+            'labels': [f"{event['album_name']} ({event['date']})" for event in ranking_history_data],
+            'scores': [event['score'] for event in ranking_history_data]
+        }
+
+        # 4. --- Prepare Data for Leaderboards ---
+
+        artist_songs_df.sort_values(by='Ranking', ascending=False, inplace=True)
+        artist_songs_df['Artist Rank'] = range(1, len(artist_songs_df) + 1)
+
+        artist_albums_df.sort_values(by='weighted_average_score', ascending=False, inplace=True)
+        artist_albums_df['Artist Rank'] = range(1, len(artist_albums_df) + 1)
+
+        # Rank Distribution (Pie Chart)
+        pie_data = artist_songs_df['Rank Group'].astype(str).value_counts().reset_index()
+        pie_chart_data = {'labels': pie_data.iloc[:, 0].tolist(), 'data': pie_data.iloc[:, 1].tolist()}
 
         return render_template(
-            "artist_page.html",
+            "artist_page_v2.html",  # We'll use a new template
             artist_name=artist_name,
-            artist_stats=artist_stats,
+            # Pass all the new stats
+            artist_mastery=mastery_percentage,
+            leaderboard_points=total_leaderboard_points,
+            artist_score=artist_score,
+            # Pass chart data
             pie_chart_data=pie_chart_data,
-            artist_song_leaderboard=artist_song_leaderboard,
-            universal_song_leaderboard=universal_song_leaderboard,
-            album_leaderboard=album_leaderboard
+            release_chart_data=release_chart_data,
+            ranking_chart_data=ranking_chart_data,
+            # Pass leaderboard data
+            song_leaderboard=artist_songs_df.to_dict('records'),
+            album_leaderboard=artist_albums_df.to_dict('records')
         )
 
     except Exception as e:
@@ -721,7 +784,7 @@ def search_artist():
     artist_name = request.form.get('artist_name')
     if artist_name:
         # Redirect to the main artist dashboard
-        return redirect(url_for('artist_page', artist_name=artist_name))
+        return redirect(url_for('artist_page_v2', artist_name=artist_name))
     else:
         flash("Please enter an artist name.")
         return redirect(url_for('index'))

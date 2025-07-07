@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ artist_name }} - Artist Stats</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #121212;
+            --surface-color: #181818;
+            --primary-text: #ffffff;
+            --secondary-text: #b3b3b3;
+            --border-color: #282828;
+            --spotify-green: #1DB954;
+        }
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--primary-text);
+            margin: 0;
+            padding: 25px;
+        }
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 25px;
+        }
+        header { text-align: center; margin-bottom: 25px; }
+        header h1 { font-size: 4em; margin: 0; }
+
+        .section-grid-4 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 25px;
+        }
+        .section-grid-2 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 25px;
+        }
+
+        .stat-card, .chart-card {
+            background-color: var(--surface-color);
+            border-radius: 8px;
+            padding: 25px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        }
+        .stat-card h3 {
+            margin: 0 0 10px 0;
+            font-size: 1rem;
+            color: var(--secondary-text);
+            text-transform: uppercase;
+        }
+        .stat-card .value {
+            font-size: 3rem;
+            font-weight: 700;
+            color: var(--spotify-green);
+        }
+        .chart-card h3 { margin-top: 0; }
+
+        /* Table styles for leaderboards */
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid var(--border-color); }
+        th { color: var(--secondary-text); text-transform: uppercase; font-size: 0.8em; }
+        td:first-child, th:first-child { width: 50px; text-align: center; color: var(--secondary-text); }
+        .global-rank { font-size: 0.8em; color: var(--secondary-text); }
+    </style>
+</head>
+<body>
+    <header><h1>{{ artist_name }}</h1></header>
+
+    <main class="main-grid">
+        <section class="section-grid-4">
+            <div class="stat-card">
+                <h3>Artist Score</h3>
+                <p class="value">{{ "%.1f"|format(artist_score) }}</p>
+            </div>
+            <div class="stat-card">
+                <h3>Artist Mastery</h3>
+                <p class="value">{{ "%.1f"|format(artist_mastery) }}%</p>
+            </div>
+            <div class="stat-card">
+                <h3>Leaderboard Points</h3>
+                <p class="value">{{ "{:,}".format(leaderboard_points|int) }}</p>
+            </div>
+            <div class="chart-card">
+                <canvas id="rankGroupPieChart"></canvas>
+            </div>
+        </section>
+
+        <section class="section-grid-2">
+            <div class="chart-card">
+                <h3>Release Era Scores</h3>
+                <canvas id="releaseHistoryChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>Ranking Timeline</h3>
+                <canvas id="rankingHistoryChart"></canvas>
+            </div>
+        </section>
+
+        <section class="section-grid-2">
+            <div class="chart-card">
+                <h3>Album Leaderboard</h3>
+                <table>
+                    <thead><tr><th>#</th><th>Album</th><th>Score</th><th>Global</th></tr></thead>
+                    <tbody>
+                        {% for album in album_leaderboard %}
+                        <tr>
+                            <td>{{ album['Artist Rank'] }}</td>
+                            <td>{{ album['album_name'] }}</td>
+                            <td>{{ "%.2f"|format(album['weighted_average_score']) }}</td>
+                            <td class="global-rank">#{{ album['Global Rank'] }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="chart-card">
+                <h3>Song Leaderboard</h3>
+                <table>
+                    <thead><tr><th>#</th><th>Song</th><th>Score</th><th>Universal</th></tr></thead>
+                    <tbody>
+                        {% for song in song_leaderboard %}
+                        <tr>
+                            <td>{{ song['Artist Rank'] }}</td>
+                            <td>{{ song['Song Name'] }}</td>
+                            <td>{{ "%.2f"|format(song['Ranking']) }}</td>
+                            <td class="global-rank">#{{ song['Universal Rank'] }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+<script>
+    // --- Chart Config ---
+    const chartOptions = {
+        plugins: { legend: { display: false } },
+        scales: {
+            y: { ticks: { color: 'white' }, grid: { color: '#282828' } },
+            x: { ticks: { color: 'white' }, grid: { color: '#282828' } }
+        }
+    };
+
+    // --- 1. Rank Distribution (Pie Chart) ---
+    const pieCtx = document.getElementById('rankGroupPieChart').getContext('2d');
+    const pieChartData = {{ pie_chart_data | tojson }};
+    new Chart(pieCtx, {
+        type: 'doughnut',
+        data: {
+            labels: pieChartData.labels,
+            datasets: [{ data: pieChartData.data, backgroundColor: ['#1DB954', '#179c47', '#117838', '#0c5b29', '#b3b3b3', '#ffffff'] }]
+        },
+        options: { plugins: { legend: { position: 'right', labels: { color: 'white' } } } }
+    });
+
+    // --- 2. Release History (Bar Chart) ---
+    const releaseCtx = document.getElementById('releaseHistoryChart').getContext('2d');
+    const releaseChartData = {{ release_chart_data | tojson }};
+    new Chart(releaseCtx, {
+        type: 'bar',
+        data: {
+            labels: releaseChartData.labels,
+            datasets: [{ label: 'Album Score', data: releaseChartData.scores, backgroundColor: '#1DB954' }]
+        },
+        options: chartOptions
+    });
+
+    // --- 3. Ranking Timeline (Line Chart) ---
+    const rankingCtx = document.getElementById('rankingHistoryChart').getContext('2d');
+    const rankingChartData = {{ ranking_chart_data | tojson }};
+    new Chart(rankingCtx, {
+        type: 'line',
+        data: {
+            labels: rankingChartData.labels,
+            datasets: [{ label: 'Score Over Time', data: rankingChartData.scores, borderColor: '#1DB954', tension: 0.1 }]
+        },
+        options: chartOptions
+    });
+</script>
+</body>
+</html>
