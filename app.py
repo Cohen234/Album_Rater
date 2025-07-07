@@ -326,33 +326,47 @@ def artist_page_v2(artist_name):
         artist_albums_df['release_date'] = artist_albums_df['album_id'].map(release_dates)
         release_history_data = artist_albums_df.sort_values(by='release_date')
 
+        # THE FIX: Format data as {x, y} points for a time-series scatter plot
         release_chart_data = {
-            'labels': release_history_data['album_name'].tolist(),
-            'scores': release_history_data['weighted_average_score'].tolist()
+            'datasets': [{
+                'label': 'Album Score',
+                'data': [
+                    {'x': row['release_date'], 'y': row['weighted_average_score'], 'label': row['album_name']}
+                    for _, row in release_history_data.iterrows()
+                ],
+                'backgroundColor': '#1DB954',
+                'pointRadius': 6,
+                'pointHoverRadius': 8
+            }]
         }
 
-        # RANKING HISTORY HISTOGRAM
+        # RANKING TIMELINE CHART (Line Chart with Auto-Zoom)
         ranking_history_events = []
         for _, row in artist_albums_df.iterrows():
-            history = json.loads(row.get('rerank_history', '[]'))
-            if not history:  # If no re-ranks, use the original ranking event
+            history = json.loads(row.get('score_history', '[]'))
+            # Use the full score history for this chart
+            for i, score in enumerate(history):
                 ranking_history_events.append({
-                    'date': pd.to_datetime(row['last_ranked_date']).strftime('%Y-%m-%d'),
-                    'score': row['original_weighted_score'],
+                    'event_num': i + 1,
+                    'score': score,
                     'album_name': row['album_name']
                 })
-            else:
-                for event in history:
-                    ranking_history_events.append({**event, 'album_name': row['album_name']})
 
-        ranking_history_data = sorted(ranking_history_events, key=lambda x: x['date'])
+        # THE FIX: Calculate min/max scores to automatically zoom the y-axis
+        all_scores = [event['score'] for event in ranking_history_events]
+        y_axis_min = 0
+        y_axis_max = 10
+        if all_scores:
+            # Add a small padding to the min and max scores for better visibility
+            y_axis_min = max(0, min(all_scores) - 0.25)
+            y_axis_max = min(10, max(all_scores) + 0.25)
+
         ranking_chart_data = {
-            'labels': [f"{event['album_name']} ({event['date']})" for event in ranking_history_data],
-            'scores': [event['score'] for event in ranking_history_data]
+            'labels': [f"Ranking Event #{event['event_num']}" for event in ranking_history_events],
+            'scores': all_scores,
+            'y_min': y_axis_min,
+            'y_max': y_axis_max
         }
-
-        # 4. --- Prepare Data for Leaderboards ---
-
         artist_songs_df.sort_values(by='Ranking', ascending=False, inplace=True)
         artist_songs_df['Artist Rank'] = range(1, len(artist_songs_df) + 1)
 

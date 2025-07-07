@@ -163,15 +163,34 @@
     const releaseCtx = document.getElementById('releaseHistoryChart').getContext('2d');
     const releaseChartData = {{ release_chart_data | tojson }};
     new Chart(releaseCtx, {
-        type: 'bar',
-        data: {
-            labels: releaseChartData.labels,
-            datasets: [{ label: 'Album Score', data: releaseChartData.scores, backgroundColor: '#1DB954' }]
-        },
-        options: chartOptions
+        type: 'scatter', // Changed from 'bar' to 'scatter'
+        data: releaseChartData, // Use the new data structure directly
+        options: {
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        // Display 'Album Name: Score' in the tooltip
+                        label: function(context) {
+                            const point = context.raw;
+                            return `${point.label}: ${point.y.toFixed(2)}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: { ticks: { color: 'white' }, grid: { color: '#282828' } },
+                x: {
+                    type: 'time', // Set x-axis to be a time scale
+                    time: { unit: 'year' }, // Display units in years
+                    ticks: { color: 'white' },
+                    grid: { color: '#282828' }
+                }
+            }
+        }
     });
 
-    // --- 3. Ranking Timeline (Line Chart) ---
+    // --- 3. Ranking Timeline (Line Chart with Auto-Zoom) ---
     const rankingCtx = document.getElementById('rankingHistoryChart').getContext('2d');
     const rankingChartData = {{ ranking_chart_data | tojson }};
     new Chart(rankingCtx, {
@@ -180,7 +199,19 @@
             labels: rankingChartData.labels,
             datasets: [{ label: 'Score Over Time', data: rankingChartData.scores, borderColor: '#1DB954', tension: 0.1 }]
         },
-        options: chartOptions
+        options: {
+             plugins: { legend: { display: false } },
+             scales: {
+                y: {
+                    // THE FIX: Set min and max to auto-zoom the y-axis
+                    min: rankingChartData.y_min,
+                    max: rankingChartData.y_max,
+                    ticks: { color: 'white' },
+                    grid: { color: '#282828' }
+                },
+                x: { ticks: { color: 'white' }, grid: { color: '#282828' } }
+             }
+        }
     });
 </script>
 </body>
