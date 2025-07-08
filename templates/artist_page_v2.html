@@ -80,6 +80,78 @@
             transform: scale(1.05);
             background-color: #1ed760;
         }
+        .timeline-container {
+            position: relative;
+            padding: 20px 0;
+        }
+        .timeline-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 3px;
+            height: 100%;
+            background-color: #383838;
+        }
+        .timeline-event {
+            position: relative;
+            width: 50%;
+            padding: 10px 40px;
+            box-sizing: border-box;
+        }
+        .timeline-event:nth-child(odd) {
+            left: 0;
+        }
+        .timeline-event:nth-child(even) {
+            left: 50%;
+        }
+        .timeline-event::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            top: 20px;
+            background-color: var(--surface-color);
+            border: 4px solid var(--spotify-green);
+            border-radius: 50%;
+            z-index: 1;
+        }
+        .timeline-event:nth-child(odd)::after {
+            right: -10px;
+        }
+        .timeline-event:nth-child(even)::after {
+            left: -10px;
+        }
+        .timeline-card {
+            background-color: #282828;
+            padding: 15px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .timeline-card img {
+            width: 60px;
+            height: 60px;
+            border-radius: 4px;
+        }
+        .timeline-info h4 {
+            margin: 0 0 5px 0;
+            font-size: 1.1em;
+        }
+        .timeline-info p {
+            margin: 0;
+            font-size: 0.9em;
+            color: var(--secondary-text);
+        }
+        .hidden-row { display: none; }
+        #see-more-btn {
+            background: none; border: 1px solid var(--secondary-text); color: var(--secondary-text);
+            padding: 8px 16px; border-radius: 500px; cursor: pointer; margin-top: 15px;
+            transition: all 0.2s ease;
+        }
+        #see-more-btn:hover { background-color: var(--border-color); color: var(--primary-text); }
 
         /* Table styles for leaderboards */
         table { width: 100%; border-collapse: collapse; }
@@ -123,7 +195,23 @@
             </div>
             <div class="chart-card">
                 <h3>Ranking Timeline</h3>
-                <canvas id="rankingHistoryChart"></canvas>
+                 <div class="chart-card">
+                <h3>Ranking Timeline</h3>
+                <div class="timeline-container">
+                    {% for event in timeline_data %}
+                    <div class="timeline-event">
+                        <div class="timeline-card">
+                            <img src="{{ event.album_cover_url }}" alt="{{ event.album_name }}">
+                            <div class="timeline-info">
+                                <h4>{{ event.album_name }}</h4>
+                                <p>Score: {{ "%.2f"|format(event.score) }} | Placement: {{ event.placement }}</p>
+                                {% if event.is_rerank %}<p><em>*Re-rank*</em></p>{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
             </div>
         </section>
 
@@ -147,10 +235,10 @@
             <div class="chart-card">
                 <h3>Song Leaderboard</h3>
                 <table>
-                    <thead><tr><th>#</th><th>Song</th><th>Score</th><th>Universal</th></tr></thead>
                     <tbody>
                         {% for song in song_leaderboard %}
-                        <tr>
+                        {# Add a class to rows after 50 #}
+                        <tr class="{{ 'hidden-row' if loop.index > 50 else '' }}">
                             <td>{{ song['Artist Rank'] }}</td>
                             <td>{{ song['Song Name'] }}</td>
                             <td>{{ "%.2f"|format(song['Ranking']) }}</td>
@@ -159,6 +247,10 @@
                         {% endfor %}
                     </tbody>
                 </table>
+                {# Add the button if there are more than 50 songs #}
+                {% if song_leaderboard | length > 50 %}
+                <button id="see-more-btn">See More</button>
+                {% endif %}
             </div>
         </section>
     </main>
@@ -172,6 +264,15 @@
             x: { ticks: { color: 'white' }, grid: { color: '#282828' } }
         }
     };
+    const seeMoreBtn = document.getElementById('see-more-btn');
+    if (seeMoreBtn) {
+        seeMoreBtn.addEventListener('click', () => {
+            document.querySelectorAll('.hidden-row').forEach(row => {
+                row.style.display = 'table-row';
+            });
+            seeMoreBtn.style.display = 'none'; // Hide the button after clicking
+        });
+    }
 
     // --- 1. Rank Distribution (Pie Chart) ---
     const pieCtx = document.getElementById('rankGroupPieChart').getContext('2d');
@@ -185,21 +286,25 @@
         options: { plugins: { legend: { position: 'right', labels: { color: 'white' } } } }
     });
 
-    // --- 2. Release History (Bar Chart) ---
+
+    // --- 2. Release Era Scores (Scatter Chart with Images) ---
     const releaseCtx = document.getElementById('releaseHistoryChart').getContext('2d');
     const releaseChartData = {{ release_chart_data | tojson }};
 
-    // Create Image objects for each data point
+    // Create Image objects for each data point before creating the chart
     const pointImages = releaseChartData.datasets[0].data.map(point => {
         const img = new Image();
         img.src = point.image;
-        img.width = 40; // Set desired width
-        img.height = 40; // Set desired height
+        img.width = 40;
+        img.height = 40;
         return img;
     });
 
+    // Register the plugin globally for all charts
+    Chart.register(ChartDataLabels);
+
     new Chart(releaseCtx, {
-        type: 'line', // Use 'line' type to easily connect dots
+        type: 'line', // Using 'line' makes connecting the dots easy
         data: releaseChartData,
         options: {
             plugins: {
@@ -207,38 +312,26 @@
                 tooltip: {
                     callbacks: {
                         label: function(context) {
-                            const point = context.raw;
-                            return `${point.label}: ${point.y.toFixed(2)}`;
+                            return `${context.raw.label}: ${context.raw.y.toFixed(2)}`;
                         }
                     }
                 },
-                // THE FIX: Configure the datalabels plugin to show images
+                // Configure the datalabels plugin to show images
                 datalabels: {
+                    // Display the image above the data point
                     align: 'top',
-                    offset: 8,
-                    formatter: (value, context) => {
-                        return ''; // Hide the default text label
-                    },
-                    display: 'auto',
-                    listeners: {
-                       enter: function(context) {
-                         context.hover = true;
-                         return true;
-                       },
-                       leave: function(context) {
-                         context.hover = false;
-                         return true;
-                       }
-                    },
+                    offset: 12,
                     // Use the image array we created
-                    images: pointImages
+                    formatter: function(value, context) {
+                        return context.chart.options.plugins.datalabels.images[context.dataIndex];
+                    }
                 }
             },
             scales: {
                 y: { ticks: { color: 'white' }, grid: { color: '#282828' } },
                 x: {
-                    type: 'time', // Set x-axis to be a time scale
-                    time: { unit: 'year' }, // Display units in years
+                    type: 'time',
+                    time: { unit: 'year' },
                     ticks: { color: 'white' },
                     grid: { color: '#282828' }
                 }

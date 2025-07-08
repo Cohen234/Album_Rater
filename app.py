@@ -336,43 +336,36 @@ def artist_page_v2(artist_name):
             'datasets': [{
                 'label': 'Album Score',
                 'data': [
+                    # Ensure 'image': row['album_cover_url'] is included
                     {'x': row['release_date'], 'y': row['weighted_average_score'], 'label': row['album_name'],
                      'image': row['album_cover_url']}
                     for _, row in release_history_data.iterrows() if pd.notna(row.get('album_cover_url'))
                 ],
                 'backgroundColor': '#1DB954',
-                'pointRadius': 8,  # Make the dots bigger
+                'pointRadius': 8,
                 'pointHoverRadius': 10,
-                'showLine': True,  # Connect the dots with a line
-                'borderColor': 'rgba(29, 185, 84, 0.5)'  # Style for the connecting line
+                'showLine': True,  # Connect the dots
+                'borderColor': 'rgba(29, 185, 84, 0.5)'
             }]
         }
 
         # RANKING TIMELINE CHART (Line Chart with Auto-Zoom)
-        datasets = []
-        max_events = 0
+        timeline_events = []
         for _, row in artist_albums_df.iterrows():
-            history = json.loads(row.get('score_history', '[]'))
-            if len(history) > max_events:
-                max_events = len(history)
-            datasets.append({
-                'label': row['album_name'],
-                'data': history,
-                'tension': 0.1,
-                # You can add specific colors here later if you wish
-            })
+            history = json.loads(row.get('rerank_history', '[]'))
+            for event in history:
+                timeline_events.append({
+                    'date': event['date'],
+                    'score': event['score'],
+                    'placement': event.get('placement', 'N/A'),
+                    'album_name': row['album_name'],
+                    'album_cover_url': row.get('album_cover_url', ''),
+                    # Check if this event's score is different from original
+                    'is_rerank': row['original_weighted_score'] != event['score']
+                })
 
-        # Calculate min/max for the y-axis zoom
-        all_scores = [score for dataset in datasets for score in dataset['data']]
-        y_axis_min = max(0, min(all_scores) - 0.25) if all_scores else 0
-        y_axis_max = min(10, max(all_scores) + 0.25) if all_scores else 10
-
-        ranking_chart_data = {
-            'labels': [f"Event #{i + 1}" for i in range(max_events)],
-            'datasets': datasets,
-            'y_min': y_axis_min,
-            'y_max': y_axis_max
-        }
+        # Sort all events chronologically
+        timeline_data = sorted(timeline_events, key=lambda x: x['date'])
         artist_songs_df.sort_values(by='Ranking', ascending=False, inplace=True)
         artist_songs_df['Artist Rank'] = range(1, len(artist_songs_df) + 1)
 
@@ -393,7 +386,7 @@ def artist_page_v2(artist_name):
             # Pass chart data
             pie_chart_data=pie_chart_data,
             release_chart_data=release_chart_data,
-            ranking_chart_data=ranking_chart_data,
+            timeline_data = timeline_data,
             # Pass leaderboard data
             song_leaderboard=artist_songs_df.to_dict('records'),
             album_leaderboard=artist_albums_df.to_dict('records')
@@ -544,15 +537,12 @@ def submit_rankings():
             if is_rerank:
                 averages_df_before = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
                 if not averages_df_before.empty:
-                    averages_df_before['weighted_average_score'] = pd.to_numeric(
-                        averages_df_before['weighted_average_score'], errors='coerce')
-                    averages_df_before.dropna(subset=['weighted_average_score'], inplace=True)
-                    averages_df_before.sort_values(by='weighted_average_score', ascending=False, inplace=True)
-                    averages_df_before.reset_index(drop=True, inplace=True)
-
                     old_album_data = averages_df_before[averages_df_before['album_id'] == album_id]
                     if not old_album_data.empty:
                         old_score = old_album_data.iloc[0]['weighted_average_score']
+                        # Sort to find old placement
+                        averages_df_before.sort_values(by='weighted_average_score', ascending=False, inplace=True)
+                        averages_df_before.reset_index(drop=True, inplace=True)
                         old_placement_series = averages_df_before.index[averages_df_before['album_id'] == album_id]
                         old_placement = int(old_placement_series[0] + 1) if not old_placement_series.empty else 1
 
@@ -612,6 +602,9 @@ def submit_rankings():
                     group['Ranking'].mean()
 
                 weighted_averages = df_for_calc_no_interludes.groupby('Spotify Album ID').apply(weighted_avg).round(6)
+                sorted_scores = weighted_averages.sort_values(ascending=False)
+                new_placement = sorted_scores.index.get_loc(album_id) + 1
+                total_albums = len(sorted_scores)
 
                 album_averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
                 album_info_map = df_for_calc[['Spotify Album ID', 'Album Name', 'Artist Name']].drop_duplicates(
@@ -649,7 +642,9 @@ def submit_rankings():
                                     # Append the new score that was just calculated
                                     rerank_history.append({
                                         'date': datetime.now().strftime('%Y-%m-%d'),
-                                        'score': float(new_weighted_avg)
+                                        'score': float(new_weighted_avg),
+                                        # THE FIX: Add the placement at the time of the event
+                                        'placement': f"{new_placement}/{total_albums}"
                                     })
                                     album_averages_df.at[idx, 'rerank_history'] = json.dumps(rerank_history)
                                 except (json.JSONDecodeError, TypeError) as e:
@@ -665,6 +660,12 @@ def submit_rankings():
                         # Logic for adding a brand new album
                         info = album_info_map.get(album_id_to_update)
                         if info:
+                            # THE FIX: Create the initial history event without placement data,
+                            # as it's not available yet. It will be added on the first re-rank.
+                            initial_history = [{
+                                'date': datetime.now().strftime('%Y-%m-%d'),
+                                'score': float(new_weighted_avg)
+                            }]
                             new_row = pd.DataFrame([{
                                 'album_id': album_id_to_update, 'album_name': info['Album Name'],
                                 'artist_name': info['Artist Name'], 'average_score': new_simple_avg,
@@ -672,10 +673,10 @@ def submit_rankings():
                                 'original_weighted_score': new_weighted_avg,
                                 'previous_weighted_score': new_weighted_avg, 'times_ranked': 1,
                                 'last_ranked_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                                'rerank_history': '[]',
-                                'score_history': json.dumps([float(new_weighted_avg)]), 'album_cover_url': album_cover_url
+                                'rerank_history': json.dumps(initial_history),
+                                'score_history': json.dumps([float(new_weighted_avg)]),
+                                'album_cover_url': album_cover_url
                             }])
-
                             album_averages_df = pd.concat([album_averages_df, new_row], ignore_index=True)
 
                 set_with_dataframe(client.open_by_key(SPREADSHEET_ID).worksheet(album_averages_sheet_name),
