@@ -355,17 +355,19 @@ def artist_page_v2(artist_name):
             history = json.loads(row.get('rerank_history', '[]'))
             for event in history:
                 timeline_events.append({
-                    'date': event['date'],
-                    'score': event['score'],
+                    'date': pd.to_datetime(event.get('date'), errors='coerce'),  # Use coerce to handle errors
+                    'score': event.get('score'),
                     'placement': event.get('placement', 'N/A'),
                     'album_name': row['album_name'],
                     'album_cover_url': row.get('album_cover_url', ''),
-                    # Check if this event's score is different from original
-                    'is_rerank': row['original_weighted_score'] != event['score']
+                    'is_rerank': row['original_weighted_score'] != event.get('score')
                 })
 
-        # Sort all events chronologically
-        timeline_data = sorted(timeline_events, key=lambda x: x['date'])
+        # THE FIX: Filter out any events where the date could not be parsed
+        valid_timeline_events = [event for event in timeline_events if pd.notna(event['date'])]
+
+        # Sort all collected events by date to create a true timeline
+        timeline_data = sorted(valid_timeline_events, key=lambda x: x['date'])
         artist_songs_df.sort_values(by='Ranking', ascending=False, inplace=True)
         artist_songs_df['Artist Rank'] = range(1, len(artist_songs_df) + 1)
 
