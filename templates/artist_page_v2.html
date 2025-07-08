@@ -5,6 +5,7 @@
     <title>{{ artist_name }} - Artist Stats</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -59,6 +60,26 @@
             color: var(--spotify-green);
         }
         .chart-card h3 { margin-top: 0; }
+        .header-actions {
+            margin-top: 20px;
+        }
+        .action-button {
+            background-color: var(--spotify-green);
+            color: white;
+            padding: 12px 28px;
+            text-decoration: none;
+            border-radius: 500px;
+            font-weight: 600;
+            transition: transform 0.2s ease, background-color 0.2s ease;
+            text-transform: uppercase;
+            font-size: 0.9em;
+            letter-spacing: 1px;
+            display: inline-block;
+        }
+        .action-button:hover {
+            transform: scale(1.05);
+            background-color: #1ed760;
+        }
 
         /* Table styles for leaderboards */
         table { width: 100%; border-collapse: collapse; }
@@ -69,7 +90,12 @@
     </style>
 </head>
 <body>
-    <header><h1>{{ artist_name }}</h1></header>
+    <header>
+         <h1>{{ artist_name }}</h1>
+        <div class="header-actions">
+            <a href="{{ url_for('load_albums_by_artist_route', artist_name=artist_name) }}" class="action-button">Rank an Album</a>
+        </div>
+    </header>
 
     <main class="main-grid">
         <section class="section-grid-4">
@@ -162,20 +188,50 @@
     // --- 2. Release History (Bar Chart) ---
     const releaseCtx = document.getElementById('releaseHistoryChart').getContext('2d');
     const releaseChartData = {{ release_chart_data | tojson }};
+
+    // Create Image objects for each data point
+    const pointImages = releaseChartData.datasets[0].data.map(point => {
+        const img = new Image();
+        img.src = point.image;
+        img.width = 40; // Set desired width
+        img.height = 40; // Set desired height
+        return img;
+    });
+
     new Chart(releaseCtx, {
-        type: 'scatter', // Changed from 'bar' to 'scatter'
-        data: releaseChartData, // Use the new data structure directly
+        type: 'line', // Use 'line' type to easily connect dots
+        data: releaseChartData,
         options: {
             plugins: {
                 legend: { display: false },
                 tooltip: {
                     callbacks: {
-                        // Display 'Album Name: Score' in the tooltip
                         label: function(context) {
                             const point = context.raw;
                             return `${point.label}: ${point.y.toFixed(2)}`;
                         }
                     }
+                },
+                // THE FIX: Configure the datalabels plugin to show images
+                datalabels: {
+                    align: 'top',
+                    offset: 8,
+                    formatter: (value, context) => {
+                        return ''; // Hide the default text label
+                    },
+                    display: 'auto',
+                    listeners: {
+                       enter: function(context) {
+                         context.hover = true;
+                         return true;
+                       },
+                       leave: function(context) {
+                         context.hover = false;
+                         return true;
+                       }
+                    },
+                    // Use the image array we created
+                    images: pointImages
                 }
             },
             scales: {
@@ -191,19 +247,35 @@
     });
 
     // --- 3. Ranking Timeline (Line Chart with Auto-Zoom) ---
+    // In artist_page_v2.html -> <script>
+
+    // --- 3. Ranking Timeline (Line Chart with Auto-Zoom) ---
     const rankingCtx = document.getElementById('rankingHistoryChart').getContext('2d');
     const rankingChartData = {{ ranking_chart_data | tojson }};
+
+    // Assign a unique color to each album's line
+    const lineColors = ['#1DB954', '#179c47', '#117838', '#0c5b29', '#ffffff', '#b3b3b3'];
+    rankingChartData.datasets.forEach((dataset, index) => {
+        dataset.borderColor = lineColors[index % lineColors.length];
+        dataset.backgroundColor = lineColors[index % lineColors.length];
+    });
+
     new Chart(rankingCtx, {
         type: 'line',
         data: {
             labels: rankingChartData.labels,
-            datasets: [{ label: 'Score Over Time', data: rankingChartData.scores, borderColor: '#1DB954', tension: 0.1 }]
+            datasets: rankingChartData.datasets // Use the new datasets array
         },
         options: {
-             plugins: { legend: { display: false } },
+             plugins: {
+                // Display a legend now that there are multiple lines
+                legend: {
+                    position: 'top',
+                    labels: { color: 'white' }
+                }
+             },
              scales: {
                 y: {
-                    // THE FIX: Set min and max to auto-zoom the y-axis
                     min: rankingChartData.y_min,
                     max: rankingChartData.y_max,
                     ticks: { color: 'white' },

@@ -138,7 +138,7 @@ def get_album_averages_df(client_gspread, spreadsheet_id, sheet_name):
     # THE FIX: This list now contains all the columns your app uses.
     expected_cols = ['album_id', 'album_name', 'artist_name', 'average_score', 'weighted_average_score',
                      'original_weighted_score', 'previous_weighted_score', 'times_ranked',
-                     'last_ranked_date', 'rerank_history', 'score_history']
+                     'last_ranked_date', 'rerank_history', 'score_history', 'album_cover_url']
 
     # THE FIX: Add the if/else block to handle an empty sheet
     if df.empty:
@@ -331,39 +331,40 @@ def artist_page_v2(artist_name):
             'datasets': [{
                 'label': 'Album Score',
                 'data': [
-                    {'x': row['release_date'], 'y': row['weighted_average_score'], 'label': row['album_name']}
-                    for _, row in release_history_data.iterrows()
+                    {'x': row['release_date'], 'y': row['weighted_average_score'], 'label': row['album_name'],
+                     'image': row['album_cover_url']}
+                    for _, row in release_history_data.iterrows() if pd.notna(row.get('album_cover_url'))
                 ],
                 'backgroundColor': '#1DB954',
-                'pointRadius': 6,
-                'pointHoverRadius': 8
+                'pointRadius': 8,  # Make the dots bigger
+                'pointHoverRadius': 10,
+                'showLine': True,  # Connect the dots with a line
+                'borderColor': 'rgba(29, 185, 84, 0.5)'  # Style for the connecting line
             }]
         }
 
         # RANKING TIMELINE CHART (Line Chart with Auto-Zoom)
-        ranking_history_events = []
+        datasets = []
+        max_events = 0
         for _, row in artist_albums_df.iterrows():
             history = json.loads(row.get('score_history', '[]'))
-            # Use the full score history for this chart
-            for i, score in enumerate(history):
-                ranking_history_events.append({
-                    'event_num': i + 1,
-                    'score': score,
-                    'album_name': row['album_name']
-                })
+            if len(history) > max_events:
+                max_events = len(history)
+            datasets.append({
+                'label': row['album_name'],
+                'data': history,
+                'tension': 0.1,
+                # You can add specific colors here later if you wish
+            })
 
-        # THE FIX: Calculate min/max scores to automatically zoom the y-axis
-        all_scores = [event['score'] for event in ranking_history_events]
-        y_axis_min = 0
-        y_axis_max = 10
-        if all_scores:
-            # Add a small padding to the min and max scores for better visibility
-            y_axis_min = max(0, min(all_scores) - 0.25)
-            y_axis_max = min(10, max(all_scores) + 0.25)
+        # Calculate min/max for the y-axis zoom
+        all_scores = [score for dataset in datasets for score in dataset['data']]
+        y_axis_min = max(0, min(all_scores) - 0.25) if all_scores else 0
+        y_axis_max = min(10, max(all_scores) + 0.25) if all_scores else 10
 
         ranking_chart_data = {
-            'labels': [f"Ranking Event #{event['event_num']}" for event in ranking_history_events],
-            'scores': all_scores,
+            'labels': [f"Event #{i + 1}" for i in range(max_events)],
+            'datasets': datasets,
             'y_min': y_axis_min,
             'y_max': y_axis_max
         }
@@ -667,7 +668,7 @@ def submit_rankings():
                                 'previous_weighted_score': new_weighted_avg, 'times_ranked': 1,
                                 'last_ranked_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                                 'rerank_history': '[]',
-                                'score_history': json.dumps([float(new_weighted_avg)])
+                                'score_history': json.dumps([float(new_weighted_avg)]), 'album_cover_url': album_cover_url
                             }])
 
                             album_averages_df = pd.concat([album_averages_df, new_row], ignore_index=True)
