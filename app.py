@@ -154,7 +154,12 @@ def get_album_averages_df(client_gspread, spreadsheet_id, sheet_name):
         df[col] = pd.to_numeric(df[col], errors='coerce')
     df['times_ranked'] = pd.to_numeric(df['times_ranked'], errors='coerce').fillna(0).astype(int)
 
-    return df.fillna({'rerank_history': '[]'})
+    df = df.fillna({
+        'rerank_history': '[]',
+        'score_history': '[]',
+        'album_cover_url': ''
+    })
+    return df
 def group_ranked_songs(sheet_rows):
     group_bins = {round(x * 0.5, 1): [] for x in range(2, 21)}  # 1.0 to 10.0
     for row in sheet_rows:
