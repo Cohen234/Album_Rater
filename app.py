@@ -336,38 +336,39 @@ def artist_page_v2(artist_name):
             'datasets': [{
                 'label': 'Album Score',
                 'data': [
-                    # Ensure 'image': row['album_cover_url'] is included
                     {'x': row['release_date'], 'y': row['weighted_average_score'], 'label': row['album_name'],
                      'image': row['album_cover_url']}
-                    for _, row in release_history_data.iterrows() if pd.notna(row.get('album_cover_url'))
+                    for _, row in release_history_data.iterrows() if
+                    pd.notna(row.get('release_date')) and pd.notna(row.get('weighted_average_score'))
                 ],
-                'backgroundColor': '#1DB954',
-                'pointRadius': 8,
-                'pointHoverRadius': 10,
-                'showLine': True,  # Connect the dots
+                'backgroundColor': '#1DB954', 'pointRadius': 8, 'pointHoverRadius': 12, 'showLine': True,
                 'borderColor': 'rgba(29, 185, 84, 0.5)'
             }]
         }
 
-        # RANKING TIMELINE CHART (Line Chart with Auto-Zoom)
+        # NEW: RANKING TIMELINE (Vertical Timeline)
         timeline_events = []
         for _, row in artist_albums_df.iterrows():
-            history = json.loads(row.get('rerank_history', '[]'))
-            for event in history:
-                timeline_events.append({
-                    'date': pd.to_datetime(event.get('date'), errors='coerce'),  # Use coerce to handle errors
-                    'score': event.get('score'),
-                    'placement': event.get('placement', 'N/A'),
-                    'album_name': row['album_name'],
-                    'album_cover_url': row.get('album_cover_url', ''),
-                    'is_rerank': row['original_weighted_score'] != event.get('score')
-                })
+            try:
+                history = json.loads(row.get('rerank_history', '[]'))
+                for event in history:
+                    # Check if original_weighted_score exists and is not null
+                    is_rerank = pd.notna(row['original_weighted_score']) and row[
+                        'original_weighted_score'] != event.get('score')
+                    timeline_events.append({
+                        'date': pd.to_datetime(event.get('date'), errors='coerce'),
+                        'score': event.get('score'),
+                        'placement': event.get('placement', 'N/A'),
+                        'album_name': row['album_name'],
+                        'album_cover_url': row.get('album_cover_url', ''),
+                        'is_rerank': is_rerank
+                    })
+            except (json.JSONDecodeError, TypeError):
+                logging.warning(f"Could not parse rerank_history for album {row['album_id']}")
+                continue
 
-        # THE FIX: Filter out any events where the date could not be parsed
         valid_timeline_events = [event for event in timeline_events if pd.notna(event['date'])]
-
-        # Sort all collected events by date to create a true timeline
-        timeline_data = sorted(valid_timeline_events, key=lambda x: x['date'])
+        timeline_data = sorted(valid_timeline_events, key=lambda x: x['date'], reverse=True)
         artist_songs_df.sort_values(by='Ranking', ascending=False, inplace=True)
         artist_songs_df['Artist Rank'] = range(1, len(artist_songs_df) + 1)
 

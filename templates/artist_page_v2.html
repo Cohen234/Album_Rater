@@ -80,85 +80,40 @@
             transform: scale(1.05);
             background-color: #1ed760;
         }
-        .timeline-container {
-            position: relative;
-            padding: 20px 0;
-        }
+        .timeline-wrapper { max-height: 500px; overflow-y: auto; padding-right: 10px; }
+        .timeline-container { position: relative; padding: 20px 0; }
         .timeline-container::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 3px;
-            height: 100%;
-            background-color: #383838;
+            content: ''; position: absolute; top: 0; left: 40px; width: 4px; height: 100%;
+            background-color: #383838; border-radius: 2px;
         }
-        .timeline-event {
-            position: relative;
-            width: 50%;
-            padding: 10px 40px;
-            box-sizing: border-box;
-        }
-        .timeline-event:nth-child(odd) {
-            left: 0;
-        }
-        .timeline-event:nth-child(even) {
-            left: 50%;
-        }
+        .timeline-event { position: relative; padding-left: 80px; margin-bottom: 30px; }
         .timeline-event::after {
-            content: '';
-            position: absolute;
-            width: 20px;
-            height: 20px;
-            top: 20px;
-            background-color: var(--surface-color);
-            border: 4px solid var(--spotify-green);
-            border-radius: 50%;
-            z-index: 1;
+            content: ''; position: absolute; width: 20px; height: 20px; top: 24px; left: 32px;
+            background-color: var(--surface-color); border: 4px solid var(--spotify-green);
+            border-radius: 50%; z-index: 1;
         }
-        .timeline-event:nth-child(odd)::after {
-            right: -10px;
-        }
-        .timeline-event:nth-child(even)::after {
-            left: -10px;
-        }
-        .timeline-card {
-            background-color: #282828;
-            padding: 15px;
-            border-radius: 6px;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-        .timeline-card img {
-            width: 60px;
-            height: 60px;
-            border-radius: 4px;
-        }
-        .timeline-info h4 {
-            margin: 0 0 5px 0;
-            font-size: 1.1em;
-        }
-        .timeline-info p {
-            margin: 0;
-            font-size: 0.9em;
-            color: var(--secondary-text);
-        }
+        .timeline-card { background-color: #282828; padding: 15px; border-radius: 6px; display: flex; align-items: center; gap: 15px; }
+        .timeline-card img { width: 60px; height: 60px; border-radius: 4px; flex-shrink: 0; }
+        .timeline-info h4 { margin: 0 0 5px 0; font-size: 1.1em; }
+        .timeline-info p { margin: 0; font-size: 0.9em; color: var(--secondary-text); }
+        .timeline-info .rerank-note { color: var(--spotify-green); font-style: italic; font-weight: bold; }
+        .timeline-date { position: absolute; left: 80px; top: -5px; color: #aaa; font-size: 0.8em; }
+
+        /* NEW: Leaderboard Styles */
+        .leaderboard-card { overflow: hidden; }
+        .leaderboard-table-wrapper { max-height: 500px; overflow-y: auto; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid var(--border-color); }
+        th { color: var(--secondary-text); text-transform: uppercase; font-size: 0.8em; position: sticky; top: 0; background: var(--surface-color); }
+        td:first-child, th:first-child { width: 50px; text-align: center; color: var(--secondary-text); }
+        .global-rank { font-size: 0.8em; color: var(--secondary-text); }
         .hidden-row { display: none; }
         #see-more-btn {
             background: none; border: 1px solid var(--secondary-text); color: var(--secondary-text);
-            padding: 8px 16px; border-radius: 500px; cursor: pointer; margin-top: 15px;
-            transition: all 0.2s ease;
+            padding: 8px 16px; border-radius: 500px; cursor: pointer; margin: 15px auto 0 auto;
+            display: block; transition: all 0.2s ease;
         }
         #see-more-btn:hover { background-color: var(--border-color); color: var(--primary-text); }
-
-        /* Table styles for leaderboards */
-        table { width: 100%; border-collapse: collapse; }
-        th, td { text-align: left; padding: 12px; border-bottom: 1px solid var(--border-color); }
-        th { color: var(--secondary-text); text-transform: uppercase; font-size: 0.8em; }
-        td:first-child, th:first-child { width: 50px; text-align: center; color: var(--secondary-text); }
-        .global-rank { font-size: 0.8em; color: var(--secondary-text); }
     </style>
 </head>
 <body>
@@ -256,127 +211,90 @@
     </main>
 
 <script>
-    // --- Chart Config ---
-    const chartOptions = {
-        plugins: { legend: { display: false } },
-        scales: {
-            y: { ticks: { color: 'white' }, grid: { color: '#282828' } },
-            x: { ticks: { color: 'white' }, grid: { color: '#282828' } }
-        }
-    };
-    const seeMoreBtn = document.getElementById('see-more-btn');
-    if (seeMoreBtn) {
-        seeMoreBtn.addEventListener('click', () => {
-            document.querySelectorAll('.hidden-row').forEach(row => {
-                row.style.display = 'table-row';
+    document.addEventListener('DOMContentLoaded', function () {
+        // See More button functionality
+        const seeMoreBtn = document.getElementById('see-more-btn');
+        if (seeMoreBtn) {
+            seeMoreBtn.addEventListener('click', () => {
+                document.querySelectorAll('.hidden-row').forEach(row => {
+                    row.style.display = 'table-row';
+                });
+                seeMoreBtn.style.display = 'none';
             });
-            seeMoreBtn.style.display = 'none'; // Hide the button after clicking
+        }
+
+        // --- 1. Rank Distribution (Pie Chart) ---
+        const pieCtx = document.getElementById('rankGroupPieChart').getContext('2d');
+        const pieChartData = {{ pie_chart_data | tojson }};
+        new Chart(pieCtx, {
+            type: 'doughnut',
+            data: {
+                labels: pieChartData.labels,
+                datasets: [{ data: pieChartData.data, backgroundColor: ['#1DB954', '#179c47', '#117838', '#0c5b29', '#083f1d', '#b3b3b3', '#ffffff'] }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { position: 'right', labels: { color: 'white' } } }
+            }
         });
-    }
 
-    // --- 1. Rank Distribution (Pie Chart) ---
-    const pieCtx = document.getElementById('rankGroupPieChart').getContext('2d');
-    const pieChartData = {{ pie_chart_data | tojson }};
-    new Chart(pieCtx, {
-        type: 'doughnut',
-        data: {
-            labels: pieChartData.labels,
-            datasets: [{ data: pieChartData.data, backgroundColor: ['#1DB954', '#179c47', '#117838', '#0c5b29', '#b3b3b3', '#ffffff'] }]
-        },
-        options: { plugins: { legend: { position: 'right', labels: { color: 'white' } } } }
-    });
+        // --- 2. Release Era Scores (Chart with Images) ---
+        const releaseCtx = document.getElementById('releaseHistoryChart').getContext('2d');
+        const releaseChartData = {{ release_chart_data | tojson }};
 
+        // Register the datalabels plugin globally
+        Chart.register(ChartDataLabels);
 
-    // --- 2. Release Era Scores (Scatter Chart with Images) ---
-    const releaseCtx = document.getElementById('releaseHistoryChart').getContext('2d');
-    const releaseChartData = {{ release_chart_data | tojson }};
+        // Preload all the images for the data points
+        const releasePointImages = releaseChartData.datasets[0].data.map(point => {
+            const img = new Image();
+            img.src = point.image;
+            img.width = 35;  // Define the display size of the image
+            img.height = 35;
+            return img;
+        });
 
-    // Create Image objects for each data point before creating the chart
-    const pointImages = releaseChartData.datasets[0].data.map(point => {
-        const img = new Image();
-        img.src = point.image;
-        img.width = 40;
-        img.height = 40;
-        return img;
-    });
-
-    // Register the plugin globally for all charts
-    Chart.register(ChartDataLabels);
-
-    new Chart(releaseCtx, {
-        type: 'line', // Using 'line' makes connecting the dots easy
-        data: releaseChartData,
-        options: {
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return `${context.raw.label}: ${context.raw.y.toFixed(2)}`;
+        new Chart(releaseCtx, {
+            type: 'line',
+            data: releaseChartData,
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `${context.raw.label}: ${context.raw.y.toFixed(2)}`;
+                            }
+                        }
+                    },
+                    // Configure the datalabels plugin to show our images
+                    datalabels: {
+                        align: 'end',
+                        offset: 8,
+                        formatter: function(value, context) {
+                            // Use the preloaded image that corresponds to this data point
+                            return releasePointImages[context.dataIndex];
                         }
                     }
                 },
-                // Configure the datalabels plugin to show images
-                datalabels: {
-                    // Display the image above the data point
-                    align: 'top',
-                    offset: 12,
-                    // Use the image array we created
-                    formatter: function(value, context) {
-                        return context.chart.options.plugins.datalabels.images[context.dataIndex];
+                scales: {
+                    y: { ticks: { color: 'white' }, grid: { color: '#282828' } },
+                    x: {
+                        type: 'time',
+                        time: { unit: 'year' },
+                        ticks: { color: 'white' },
+                        grid: { color: '#282828' }
+                    }
+                },
+                layout: {
+                    // Add padding at the top to make sure the images don't get cut off
+                    padding: {
+                        top: 50
                     }
                 }
-            },
-            scales: {
-                y: { ticks: { color: 'white' }, grid: { color: '#282828' } },
-                x: {
-                    type: 'time',
-                    time: { unit: 'year' },
-                    ticks: { color: 'white' },
-                    grid: { color: '#282828' }
-                }
             }
-        }
-    });
-
-    // --- 3. Ranking Timeline (Line Chart with Auto-Zoom) ---
-    // In artist_page_v2.html -> <script>
-
-    // --- 3. Ranking Timeline (Line Chart with Auto-Zoom) ---
-    const rankingCtx = document.getElementById('rankingHistoryChart').getContext('2d');
-    const rankingChartData = {{ ranking_chart_data | tojson }};
-
-    // Assign a unique color to each album's line
-    const lineColors = ['#1DB954', '#179c47', '#117838', '#0c5b29', '#ffffff', '#b3b3b3'];
-    rankingChartData.datasets.forEach((dataset, index) => {
-        dataset.borderColor = lineColors[index % lineColors.length];
-        dataset.backgroundColor = lineColors[index % lineColors.length];
-    });
-
-    new Chart(rankingCtx, {
-        type: 'line',
-        data: {
-            labels: rankingChartData.labels,
-            datasets: rankingChartData.datasets // Use the new datasets array
-        },
-        options: {
-             plugins: {
-                // Display a legend now that there are multiple lines
-                legend: {
-                    position: 'top',
-                    labels: { color: 'white' }
-                }
-             },
-             scales: {
-                y: {
-                    min: rankingChartData.y_min,
-                    max: rankingChartData.y_max,
-                    ticks: { color: 'white' },
-                    grid: { color: '#282828' }
-                },
-                x: { ticks: { color: 'white' }, grid: { color: '#282828' } }
-             }
-        }
+        });
     });
 </script>
 </body>
