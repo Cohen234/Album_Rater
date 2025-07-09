@@ -80,24 +80,60 @@
             transform: scale(1.05);
             background-color: #1ed760;
         }
-        .timeline-wrapper { max-height: 500px; overflow-y: auto; padding-right: 10px; }
-        .timeline-container { position: relative; padding: 20px 0; }
+        .timeline-wrapper {
+            overflow-x: auto;
+            overflow-y: hidden;
+            padding: 20px 0;
+            white-space: nowrap;
+        }
+        .timeline-container {
+            display: inline-flex;
+            position: relative;
+            padding: 80px 0;
+        }
         .timeline-container::before {
-            content: ''; position: absolute; top: 0; left: 40px; width: 4px; height: 100%;
-            background-color: #383838; border-radius: 2px;
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background-color: #383838;
+            transform: translateY(-50%);
+            z-index: 0;
         }
-        .timeline-event { position: relative; padding-left: 80px; margin-bottom: 30px; }
+        .timeline-event {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            padding: 0 20px;
+            width: 180px;
+        }
+        .timeline-event:nth-child(odd) .timeline-card { transform: translateY(-85px); }
+        .timeline-event:nth-child(even) .timeline-card { transform: translateY(5px); }
+        .timeline-event:nth-child(odd)::after { box-shadow: 0 0 0 4px var(--surface-color); }
+        .timeline-event:nth-child(even)::after { box-shadow: 0 0 0 4px var(--surface-color); }
         .timeline-event::after {
-            content: ''; position: absolute; width: 20px; height: 20px; top: 24px; left: 32px;
-            background-color: var(--surface-color); border: 4px solid var(--spotify-green);
-            border-radius: 50%; z-index: 1;
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            background-color: var(--spotify-green);
+            border-radius: 50%;
+            z-index: 1;
+            transform: translate(-50%, -50%);
         }
-        .timeline-card { background-color: #282828; padding: 15px; border-radius: 6px; display: flex; align-items: center; gap: 15px; }
-        .timeline-card img { width: 60px; height: 60px; border-radius: 4px; flex-shrink: 0; }
-        .timeline-info h4 { margin: 0 0 5px 0; font-size: 1.1em; }
-        .timeline-info p { margin: 0; font-size: 0.9em; color: var(--secondary-text); }
+        .timeline-card { text-align: center; white-space: normal; }
+        .timeline-card img { width: 80px; height: 80px; border-radius: 4px; margin-bottom: 10px; }
+        .timeline-info h4 { margin: 0 0 5px 0; font-size: 1em; }
+        .timeline-info p { margin: 0; font-size: 0.8em; color: var(--secondary-text); }
         .timeline-info .rerank-note { color: var(--spotify-green); font-style: italic; font-weight: bold; }
-        .timeline-date { position: absolute; left: 80px; top: -5px; color: #aaa; font-size: 0.8em; }
+        .timeline-date { position: absolute; left: 50%; transform: translateX(-50%); color: #aaa; font-size: 0.8em; }
+        .timeline-event:nth-child(odd) .timeline-date { bottom: -10px; }
+        .timeline-event:nth-child(even) .timeline-date { top: -10px; }
 
         /* NEW: Leaderboard Styles */
         .leaderboard-card { overflow: hidden; }
@@ -159,8 +195,9 @@
                             <img src="{{ event.album_cover_url }}" alt="{{ event.album_name }}">
                             <div class="timeline-info">
                                 <h4>{{ event.album_name }}</h4>
-                                <p>Score: {{ "%.2f"|format(event.score) }} | Placement: {{ event.placement }}</p>
-                                {% if event.is_rerank %}<p><em>*Re-rank*</em></p>{% endif %}
+                                <p>Score: {{ "%.2f"|format(event.score) }}</p>
+                                <p>Placement: {{ event.placement }}</p>
+                                {% if event.is_rerank %}<p class="rerank-note">*Re-rank*</p>{% endif %}
                             </div>
                         </div>
                     </div>
@@ -242,15 +279,11 @@
         const releaseCtx = document.getElementById('releaseHistoryChart').getContext('2d');
         const releaseChartData = {{ release_chart_data | tojson }};
 
-        // Register the datalabels plugin globally
         Chart.register(ChartDataLabels);
 
-        // Preload all the images for the data points
         const releasePointImages = releaseChartData.datasets[0].data.map(point => {
             const img = new Image();
             img.src = point.image;
-            img.width = 35;  // Define the display size of the image
-            img.height = 35;
             return img;
         });
 
@@ -263,35 +296,37 @@
                     legend: { display: false },
                     tooltip: {
                         callbacks: {
-                            label: function(context) {
-                                return `${context.raw.label}: ${context.raw.y.toFixed(2)}`;
-                            }
+                            label: function(context) { return `${context.raw.label}: ${context.raw.y.toFixed(2)}`; }
                         }
                     },
-                    // Configure the datalabels plugin to show our images
                     datalabels: {
-                        align: 'end',
-                        offset: 8,
-                        formatter: function(value, context) {
-                            // Use the preloaded image that corresponds to this data point
-                            return releasePointImages[context.dataIndex];
+                        display: true,
+                        // Use an object to define different labels for the same point
+                        labels: {
+                            // The album art image
+                            image: {
+                                align: 'top',
+                                offset: 20,
+                                formatter: (value, context) => releasePointImages[context.dataIndex],
+                                font: { size: 0 } // Hide the default text label for the image
+                            },
+                            // The album title text
+                            title: {
+                                align: 'top',
+                                offset: 4,
+                                formatter: (value, context) => context.chart.data.datasets[0].data[context.dataIndex].label,
+                                color: '#fff',
+                                font: { weight: 'bold', size: 10 }
+                            }
                         }
                     }
                 },
                 scales: {
                     y: { ticks: { color: 'white' }, grid: { color: '#282828' } },
-                    x: {
-                        type: 'time',
-                        time: { unit: 'year' },
-                        ticks: { color: 'white' },
-                        grid: { color: '#282828' }
-                    }
+                    x: { type: 'time', time: { unit: 'year' }, ticks: { color: 'white' }, grid: { color: '#282828' } }
                 },
                 layout: {
-                    // Add padding at the top to make sure the images don't get cut off
-                    padding: {
-                        top: 50
-                    }
+                    padding: { top: 60 } // Increased padding to ensure labels and images don't get cut off
                 }
             }
         });
