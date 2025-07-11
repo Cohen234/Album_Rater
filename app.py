@@ -389,6 +389,8 @@ def artist_page_v2(artist_name):
         return render_template(
             "artist_page_v2.html",
             artist_name=artist_name,
+            artist_mastery = mastery_percentage,
+            leaderboard_points = total_leaderboard_points,
             artist_average_score=artist_average_score,
             ranking_era_data=ranking_era_data,
             ranking_timeline_data=ranking_timeline_data,
