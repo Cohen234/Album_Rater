@@ -383,8 +383,19 @@ def artist_page_v2(artist_name):
 
         artist_average_score = artist_albums_df['weighted_average_score'].mean() if not artist_albums_df.empty else 0
 
-        pie_data = artist_songs_df['Rank Group'].astype(str).value_counts().reset_index()
-        pie_chart_data = {'labels': pie_data.iloc[:, 0].tolist(), 'data': pie_data.iloc[:, 1].tolist()}
+        all_rank_groups = [f"{i / 2:.1f}" for i in range(2, 21)]  # Creates ['1.0', '1.5', ..., '10.0']
+        artist_songs_df['Rank Group Str'] = artist_songs_df['Rank Group'].astype(str)
+        song_counts = artist_songs_df['Rank Group Str'].value_counts()
+
+        polar_data_series = pd.Series(index=all_rank_groups, dtype=int).fillna(0)
+        polar_data_series.update(song_counts)
+        # Sort by numeric value of the index (1.0, 1.5, etc.)
+        polar_data_series = polar_data_series.sort_index(key=lambda x: pd.to_numeric(x))
+
+        polar_chart_data = {
+            'labels': polar_data_series.index.tolist(),
+            'data': polar_data_series.values.tolist()
+        }
 
         return render_template(
             "artist_page_v2.html",
@@ -394,7 +405,7 @@ def artist_page_v2(artist_name):
             artist_average_score=artist_average_score,
             ranking_era_data=ranking_era_data,
             ranking_timeline_data=ranking_timeline_data,
-            pie_chart_data=pie_chart_data,
+            polar_chart_data=polar_chart_data,
             song_leaderboard=artist_songs_df.to_dict('records'),
             album_leaderboard=artist_albums_df.to_dict('records'),
             artist_score = artist_score

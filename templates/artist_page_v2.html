@@ -198,8 +198,11 @@
                 <p class="value">{{ "{:,}".format(leaderboard_points|int) }}</p>
             </div>
             <div class="chart-card">
-                <canvas id="rankGroupPieChart"></canvas>
-            </div>
+                    <h3>Rank Distribution</h3>
+                    <div class="chart-container">
+                        <canvas id="rankPolarAreaChart"></canvas>
+                    </div>
+                </div>
         </section>
 
         <section class="section-grid-2">
@@ -286,19 +289,65 @@
         }
 
         // --- 1. Rank Distribution (Pie Chart) ---
-        const pieCtx = document.getElementById('rankGroupPieChart').getContext('2d');
-        const pieChartData = {{ pie_chart_data | tojson }};
-        new Chart(pieCtx, {
-            type: 'doughnut',
-            data: {
-                labels: pieChartData.labels,
-                datasets: [{ data: pieChartData.data, backgroundColor: ['#1DB954', '#179c47', '#117838', '#0c5b29', '#083f1d', '#b3b3b3', '#ffffff'] }]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                plugins: { legend: { position: 'right', labels: { color: 'white' } } }
-            }
-        });
+        const polarCtx = document.getElementById('rankPolarAreaChart').getContext('2d');
+        const polarChartData = {{ polar_chart_data | tojson }};
+
+        if (polarChartData && polarChartData.data.length > 0) {
+            // Generate a gradient of colors for the polar chart
+            const polarColors = polarChartData.data.map((_, i) => {
+                const green = Math.floor(255 - (i * (200 / polarChartData.data.length)));
+                return `rgba(29, ${green}, 84, 0.7)`;
+            });
+
+            new Chart(polarCtx, {
+                type: 'polarArea',
+                data: {
+                    labels: polarChartData.labels,
+                    datasets: [{
+                        label: 'Number of Songs',
+                        data: polarChartData.data,
+                        backgroundColor: polarColors,
+                        borderColor: '#181818',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: { color: chartTextColor }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return ` ${context.dataset.label}: ${context.raw}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        r: { // Radial axis
+                            grid: { color: gridColor },
+                            ticks: {
+                                color: chartTextColor,
+                                backdropColor: 'rgba(0,0,0,0.5)',
+                                z: 1
+                            },
+                            pointLabels: {
+                                display: true,
+                                centerPointLabels: true,
+                                color: chartTextColor,
+                                font: { size: 12, weight: 'bold' }
+                            }
+                        }
+                    },
+                    // Start the chart at the top (90 degrees)
+                    startAngle: -90
+                }
+            });
+        }
 
         // --- 2. Release Era Scores (Chart with Images) ---
         const chartTextColor = '#b3b3b3';
