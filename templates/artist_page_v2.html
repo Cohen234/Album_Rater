@@ -247,37 +247,48 @@
 
         // --- 2. Release Era Scores (Chart with Images) ---
         const releaseCtx = document.getElementById('releaseHistoryChart');
-    if (releaseCtx) {
-        const releaseChartData = {{ release_chart_data | tojson }};
+        if (releaseCtx) {
+            const releaseChartData = {{ release_chart_data | tojson }};
 
-        // This simplified chart should now render correctly without errors.
-        // It shows the trend line with album titles above the points.
-        new Chart(releaseCtx, {
-            type: 'line',
-            plugins: [ChartDataLabels], // Only register the datalabels plugin
-            data: releaseChartData,
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: { callbacks: { label: (context) => `${context.raw.label}: ${context.raw.y.toFixed(2)}` } },
-                    datalabels: {
-                        align: 'top',
-                        offset: 8,
-                        color: '#fff',
-                        font: { size: 10, weight: 'bold' },
-                        formatter: (value, context) => context.chart.data.datasets[0].data[context.dataIndex].label
+            // FIXED: Only try to render the chart if there is data to prevent errors
+            if(releaseChartData && releaseChartData.datasets[0] && releaseChartData.datasets[0].data.length > 0) {
+                new Chart(releaseCtx, {
+                    type: 'line',
+                    plugins: [ChartDataLabels],
+                    data: releaseChartData,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false, // This is key
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: { callbacks: { label: (context) => `${context.raw.label}: ${context.raw.y.toFixed(2)}` } },
+                            datalabels: {
+                                align: 'top',
+                                offset: 8,
+                                color: '#fff',
+                                font: { size: 10, weight: 'bold' },
+                                formatter: (value, context) => context.chart.data.datasets[0].data[context.dataIndex].label
+                            }
+                        },
+                        scales: {
+                            y: { ticks: { color: 'white' }, grid: { color: '#282828' } },
+                            x: { type: 'time', time: { unit: 'year' }, ticks: { color: 'white' }, grid: { color: '#282828' } }
+                        },
+                        layout: { padding: { top: 30 } }
                     }
-                },
-                scales: {
-                    y: { ticks: { color: 'white' }, grid: { color: '#282828' } },
-                    x: { type: 'time', time: { unit: 'year' }, ticks: { color: 'white' }, grid: { color: '#282828' } }
-                },
-                layout: { padding: { top: 30 } } // Padding to prevent labels from being cut off
+                });
+            } else {
+                // If there's no data, display a message instead of a broken chart
+                const noDataMessage = document.createElement('p');
+                noDataMessage.textContent = 'No release data to display.';
+                noDataMessage.style.textAlign = 'center';
+                noDataMessage.style.color = 'var(--secondary-text)';
+                noDataMessage.style.paddingTop = '50px';
+                releaseCtx.parentElement.appendChild(noDataMessage);
+                releaseCtx.remove(); // Remove the unused canvas
             }
-        });
-    }
-});
+        }
+    });
 </script>
 </body>
 </html>
