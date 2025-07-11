@@ -82,59 +82,72 @@
         }
         .timeline-wrapper {
             overflow-x: auto;
-            overflow-y: hidden;
-            padding: 20px 0;
-            white-space: nowrap;
+            padding-bottom: 20px; /* Space for scrollbar */
+            flex-grow: 1;
         }
         .timeline-container {
             display: inline-flex;
             position: relative;
-            padding: 80px 0;
+            padding-top: 20px;
+            min-height: 250px;
         }
         .timeline-container::before {
             content: '';
             position: absolute;
-            top: 50%;
-            left: 0;
-            width: 100%;
+            top: 0;
+            left: 20px;
+            width: calc(100% - 40px);
             height: 4px;
             background-color: #383838;
-            transform: translateY(-50%);
-            z-index: 0;
         }
         .timeline-event {
-            display: inline-flex;
+            display: flex;
             flex-direction: column;
             align-items: center;
             position: relative;
-            padding: 0 20px;
-            width: 180px;
+            padding: 0 25px;
+            min-width: 150px;
         }
-
-        .timeline-event:nth-child(odd) .timeline-card { transform: translateY(-85px); }
-        .timeline-event:nth-child(even) .timeline-card { transform: translateY(5px); }
-        .timeline-event:nth-child(odd)::after { box-shadow: 0 0 0 4px var(--surface-color); }
-        .timeline-event:nth-child(even)::after { box-shadow: 0 0 0 4px var(--surface-color); }
-        .timeline-event::after {
+        .timeline-event::after { /* The dot on the timeline */
             content: '';
             position: absolute;
-            top: 50%;
+            top: 0;
             left: 50%;
-            width: 20px;
-            height: 20px;
+            width: 18px;
+            height: 18px;
             background-color: var(--spotify-green);
             border-radius: 50%;
-            z-index: 1;
             transform: translate(-50%, -50%);
+            border: 4px solid var(--surface-color);
+            z-index: 1;
         }
-        .timeline-card { text-align: center; white-space: normal; }
-        .timeline-card img { width: 80px; height: 80px; border-radius: 4px; margin-bottom: 10px; }
-        .timeline-info h4 { margin: 0 0 5px 0; font-size: 1em; }
-        .timeline-info p { margin: 0; font-size: 0.8em; color: var(--secondary-text); }
-        .timeline-info .rerank-note { color: var(--spotify-green); font-style: italic; font-weight: bold; }
-        .timeline-date { position: absolute; left: 50%; transform: translateX(-50%); color: #aaa; font-size: 0.8em; }
-        .timeline-event:nth-child(odd) .timeline-date { bottom: -10px; }
-        .timeline-event:nth-child(even) .timeline-date { top: -10px; }
+        .timeline-card {
+            text-align: center;
+            white-space: normal;
+            margin-top: 30px; /* Pushes the card below the timeline axis */
+        }
+        .timeline-card img {
+            width: 100px;
+            height: 100px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+        .timeline-info h4 {
+            margin: 0 0 5px 0;
+            font-size: 1em;
+            font-weight: 600;
+        }
+        .timeline-info p {
+            margin: 0 0 8px 0;
+            font-size: 0.85em;
+            color: var(--secondary-text);
+        }
+        .timeline-date {
+            color: #aaa;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
 
         /* NEW: Leaderboard Styles */
         .leaderboard-card { overflow: hidden; }
@@ -182,31 +195,32 @@
 
         <section class="section-grid-2">
             <div class="chart-card">
-                <h3>Release Era Scores</h3>
-                <canvas id="releaseHistoryChart"></canvas>
-            </div>
-            <div class="chart-card">
-                <h3>Ranking Timeline</h3>
-                 <div class="chart-card">
-                <h3>Ranking Timeline</h3>
-                <div class="timeline-container">
-                    {% for event in timeline_data %}
-                    <div class="timeline-event">
-                        <div class="timeline-card">
-                            <img src="{{ event.album_cover_url }}" alt="{{ event.album_name }}">
-                            <div class="timeline-info">
-                                <h4>{{ event.album_name }}</h4>
-                                <p>Score: {{ "%.2f"|format(event.score) }}</p>
-                                <p>Placement: {{ event.placement }}</p>
-                                {% if event.is_rerank %}<p class="rerank-note">*Re-rank*</p>{% endif %}
-
+                    <h3>Ranking Era</h3>
+                    <div class="chart-container">
+                        <canvas id="rankingEraChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-card">
+                    <h3>Ranking Timeline</h3>
+                    <div class="timeline-wrapper">
+                        <div class="timeline-container">
+                            {% for event in ranking_timeline_data %}
+                            <div class="timeline-event">
+                                <div class="timeline-card">
+                                    <img src="{{ event.album_cover_url or 'https://placehold.co/100x100/181818/FFF?text=?' }}" alt="{{ event.album_name }}">
+                                    <div class="timeline-info">
+                                        <h4>{{ event.album_name }}</h4>
+                                        <p>Score: {{ "%.2f"|format(event.score) }}<br>Placement: {{ event.placement }}</p>
+                                        <p class="timeline-date">{{ event.ranking_date_str }}</p>
+                                    </div>
+                                </div>
                             </div>
+                            {% else %}
+                            <p style="text-align: center; width: 100%; color: var(--secondary-text);">No ranking history available.</p>
+                            {% endfor %}
                         </div>
                     </div>
-                    {% endfor %}
                 </div>
-            </div>
-            </div>
         </section>
 
         <section class="section-grid-2">
@@ -278,61 +292,80 @@
         });
 
         // --- 2. Release Era Scores (Chart with Images) ---
-        const releaseCtx = document.getElementById('releaseHistoryChart').getContext('2d');
-        const releaseChartData = {{ release_chart_data | tojson }};
+        const chartTextColor = '#b3b3b3';
+        const gridColor = '#282828';
 
-        Chart.register(ChartDataLabels);
+        // --- Ranking Era Chart ---
+        const eraCtx = document.getElementById('rankingEraChart').getContext('2d');
+        const eraChartData = {{ ranking_era_data | tojson }};
 
-        const releasePointImages = releaseChartData.datasets[0].data.map(point => {
-            const img = new Image();
-            img.src = point.image;
-            return img;
-        });
+        if (eraChartData && eraChartData.datasets[0] && eraChartData.datasets[0].data.length > 0) {
+            // Create a gradient fill for the area under the line
+            const gradient = eraCtx.createLinearGradient(0, 0, 0, 400);
+            gradient.addColorStop(0, 'rgba(29, 185, 84, 0.5)'); // More opaque at the top
+            gradient.addColorStop(1, 'rgba(29, 185, 84, 0)');   // Fully transparent at the bottom
 
-        new Chart(releaseCtx, {
-            type: 'line',
-            data: releaseChartData,
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) { return `${context.raw.label}: ${context.raw.y.toFixed(2)}`; }
-                        }
-                    },
-                    datalabels: {
-                        // ... (datalabels logic from previous version is correct) ...
-                        display: true,
-                        // Use an object to define different labels for the same point
-                        labels: {
-                            // The album art image
-                            image: {
-                                align: 'top',
-                                offset: 20,
-                                formatter: (value, context) => releasePointImages[context.dataIndex],
-                                font: { size: 0 } // Hide the default text label for the image
-                            },
-                            // The album title text
-                            title: {
-                                align: 'top',
-                                offset: 4,
-                                formatter: (value, context) => context.chart.data.datasets[0].data[context.dataIndex].label,
-                                color: '#fff',
-                                font: { weight: 'bold', size: 10 }
+            eraChartData.datasets[0].backgroundColor = gradient;
+            eraChartData.datasets[0].fill = true;
+
+            // Pre-load images to use as data points
+            const pointImages = eraChartData.datasets[0].data.map(point => {
+                const img = new Image();
+                img.src = point.image || 'https://placehold.co/32x32/181818/FFF?text=?';
+                img.width = 32;
+                img.height = 32;
+                return img;
+            });
+            eraChartData.datasets[0].pointStyle = pointImages;
+            eraChartData.datasets[0].pointRadius = 16; // Hit area for the image
+            eraChartData.datasets[0].pointHoverRadius = 20;
+            eraChartData.datasets[0].pointBorderWidth = 2;
+            eraChartData.datasets[0].pointHoverBorderWidth = 3;
+            eraChartData.datasets[0].pointBorderColor = 'rgba(29, 185, 84, 1)';
+            eraChartData.datasets[0].pointHoverBorderColor = '#FFF';
+
+            new Chart(eraCtx, {
+                type: 'line',
+                data: eraChartData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            enabled: true,
+                            backgroundColor: '#000',
+                            titleFont: { size: 14, weight: 'bold' },
+                            bodyFont: { size: 12 },
+                            padding: 12,
+                            displayColors: false,
+                            callbacks: {
+                                title: function(context) {
+                                    return context[0].raw.label;
+                                },
+                                label: function(context) {
+                                    const score = `Score: ${context.raw.y.toFixed(2)}`;
+                                    const date = `Released: ${new Date(context.raw.x).toLocaleDateString()}`;
+                                    return [score, date];
+                                }
                             }
                         }
+                    },
+                    scales: {
+                        y: {
+                            ticks: { color: chartTextColor, padding: 10 },
+                            grid: { color: gridColor }
+                        },
+                        x: {
+                            type: 'time',
+                            time: { unit: 'year', tooltipFormat: 'MMM d, yyyy' },
+                            ticks: { color: chartTextColor, maxRotation: 0, minRotation: 0, autoSkip: true, maxTicksLimit: 10 },
+                            grid: { color: gridColor }
+                        }
                     }
-                },
-                scales: {
-                    y: { ticks: { color: 'white' }, grid: { color: '#282828' } },
-                    x: { type: 'time', time: { unit: 'year' }, ticks: { color: 'white' }, grid: { color: '#282828' } }
-                },
-                layout: {
-                    padding: { top: 60 } // Increased padding to ensure labels and images don't get cut off
                 }
-            }
-        });
+            });
+        }
     });
 </script>
 </body>

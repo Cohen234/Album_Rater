@@ -330,72 +330,72 @@ def artist_page_v2(artist_name):
         ranked_album_ids = artist_albums_df['album_id'].tolist()
         release_dates = get_album_release_dates(sp, ranked_album_ids)
         artist_albums_df['release_date'] = artist_albums_df['album_id'].map(release_dates)
-        release_history_data = artist_albums_df.sort_values(by='release_date')
+        era_history_data = artist_albums_df.sort_values(by='release_date')
 
-        # THE FIX: Format data as {x, y} points for a time-series scatter plot
-        release_chart_data = {
+        ranking_era_data = {
             'datasets': [{
                 'label': 'Album Score',
                 'data': [
-                    {'x': row['release_date'], 'y': row['weighted_average_score'], 'label': row['album_name'],
-                     'image': row['album_cover_url']}
-                    for _, row in release_history_data.iterrows() if
+                    {
+                        'x': row['release_date'],
+                        'y': row['weighted_average_score'],
+                        'label': row['album_name'],
+                        'image': row.get('album_cover_url', '')
+                    }
+                    for _, row in era_history_data.iterrows() if
                     pd.notna(row.get('release_date')) and pd.notna(row.get('weighted_average_score'))
                 ],
-                'backgroundColor': '#1DB954', 'pointRadius': 8, 'pointHoverRadius': 12, 'showLine': True,
-                'borderColor': 'rgba(29, 185, 84, 0.5)'
+                'borderColor': 'rgba(29, 185, 84, 1)',
+                'tension': 0.4,  # Smoother curve
             }]
         }
 
-        # NEW: RANKING TIMELINE (Vertical Timeline)
+        # --- Prepare Data for "Ranking Timeline" ---
         timeline_events = []
         for _, row in artist_albums_df.iterrows():
             try:
                 history = json.loads(row.get('rerank_history', '[]'))
-                for event in history:
-                    # Check if original_weighted_score exists and is not null
-                    is_rerank = pd.notna(row['original_weighted_score']) and row[
-                        'original_weighted_score'] != event.get('score')
+                for i, event in enumerate(history):
+                    rerank_note = f" (Rerank {i})" if i > 0 else ""
+                    dt = pd.to_datetime(event.get('date'), errors='coerce')
+
                     timeline_events.append({
-                        'date': pd.to_datetime(event.get('date'), errors='coerce'),
+                        'date_obj': dt,
+                        'ranking_date_str': dt.strftime('%b %d, %Y') if not pd.isnull(dt) else 'N/A',
                         'score': event.get('score'),
                         'placement': event.get('placement', 'N/A'),
-                        'album_name': row['album_name'],
-                        'album_cover_url': row.get('album_cover_url', ''),
-                        'is_rerank': is_rerank
+                        'album_name': row['album_name'] + rerank_note,
+                        'album_cover_url': row.get('album_cover_url', '')
                     })
             except (json.JSONDecodeError, TypeError):
                 logging.warning(f"Could not parse rerank_history for album {row['album_id']}")
                 continue
 
-        valid_timeline_events = [event for event in timeline_events if pd.notna(event['date'])]
-        timeline_data = sorted(valid_timeline_events, key=lambda x: x['date'], reverse=True)
+        valid_timeline_events = [event for event in timeline_events if not pd.isnull(event['date_obj'])]
+        ranking_timeline_data = sorted(valid_timeline_events, key=lambda x: x['date_obj'])
 
+        # --- Prepare Leaderboard and other stats ---
         artist_songs_df.sort_values(by='Ranking', ascending=False, inplace=True)
         artist_songs_df['Artist Rank'] = range(1, len(artist_songs_df) + 1)
 
         artist_albums_df.sort_values(by='weighted_average_score', ascending=False, inplace=True)
         artist_albums_df['Artist Rank'] = range(1, len(artist_albums_df) + 1)
 
-        # Rank Distribution (Pie Chart)
+        artist_average_score = artist_albums_df['weighted_average_score'].mean() if not artist_albums_df.empty else 0
+
         pie_data = artist_songs_df['Rank Group'].astype(str).value_counts().reset_index()
         pie_chart_data = {'labels': pie_data.iloc[:, 0].tolist(), 'data': pie_data.iloc[:, 1].tolist()}
 
         return render_template(
-            "artist_page_v2.html",  # We'll use a new template
+            "artist_page_v2.html",
             artist_name=artist_name,
-            # Pass all the new stats
-            artist_mastery=mastery_percentage,
-            leaderboard_points=total_leaderboard_points,
-            artist_score=artist_score,
-            # Pass chart data
+            artist_average_score=artist_average_score,
+            ranking_era_data=ranking_era_data,
+            ranking_timeline_data=ranking_timeline_data,
             pie_chart_data=pie_chart_data,
-            release_chart_data=release_chart_data,
-            timeline_data = timeline_data,
-
-            # Pass leaderboard data
             song_leaderboard=artist_songs_df.to_dict('records'),
-            album_leaderboard=artist_albums_df.to_dict('records')
+            album_leaderboard=artist_albums_df.to_dict('records'),
+            artist_score = artist_score
         )
 
     except Exception as e:
