@@ -80,52 +80,14 @@
             transform: scale(1.05);
             background-color: #1ed760;
         }
-        .timeline-wrapper {
-            overflow-x: auto;
-            overflow-y: hidden;
-            padding: 20px 0;
-            white-space: nowrap;
-        }
-        .timeline-container {
-            display: inline-flex;
-            position: relative;
-            padding: 80px 0;
-        }
-        .timeline-container::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 0;
-            width: 100%;
-            height: 4px;
-            background-color: #383838;
-            transform: translateY(-50%);
-            z-index: 0;
-        }
-        .timeline-event {
-            display: inline-flex;
-            flex-direction: column;
-            align-items: center;
-            position: relative;
-            padding: 0 20px;
-            width: 180px;
-        }
+        .timeline-wrapper { overflow-x: auto; overflow-y: hidden; padding: 20px 0; white-space: nowrap; }
+        .timeline-container { display: inline-flex; position: relative; padding: 80px 0; }
+        .timeline-container::before { content: ''; position: absolute; top: 50%; left: 0; width: 100%; height: 4px; background-color: #383838; transform: translateY(-50%); z-index: 0; }
+        .timeline-event { display: inline-flex; flex-direction: column; align-items: center; position: relative; padding: 0 20px; width: 180px; }
         .timeline-event:nth-child(odd) .timeline-card { transform: translateY(-85px); }
         .timeline-event:nth-child(even) .timeline-card { transform: translateY(5px); }
-        .timeline-event:nth-child(odd)::after { box-shadow: 0 0 0 4px var(--surface-color); }
-        .timeline-event:nth-child(even)::after { box-shadow: 0 0 0 4px var(--surface-color); }
-        .timeline-event::after {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 20px;
-            height: 20px;
-            background-color: var(--spotify-green);
-            border-radius: 50%;
-            z-index: 1;
-            transform: translate(-50%, -50%);
-        }
+        .timeline-event:nth-child(odd)::after, .timeline-event:nth-child(even)::after { box-shadow: 0 0 0 4px var(--surface-color); }
+        .timeline-event::after { content: ''; position: absolute; top: 50%; left: 50%; width: 20px; height: 20px; background-color: var(--spotify-green); border-radius: 50%; z-index: 1; transform: translate(-50%, -50%); }
         .timeline-card { text-align: center; white-space: normal; }
         .timeline-card img { width: 80px; height: 80px; border-radius: 4px; margin-bottom: 10px; }
         .timeline-info h4 { margin: 0 0 5px 0; font-size: 1em; }
@@ -135,7 +97,6 @@
         .timeline-event:nth-child(odd) .timeline-date { bottom: -10px; }
         .timeline-event:nth-child(even) .timeline-date { top: -10px; }
 
-        /* NEW: Leaderboard Styles */
         .leaderboard-card { overflow: hidden; }
         .leaderboard-table-wrapper { max-height: 500px; overflow-y: auto; }
         table { width: 100%; border-collapse: collapse; }
@@ -144,11 +105,7 @@
         td:first-child, th:first-child { width: 50px; text-align: center; color: var(--secondary-text); }
         .global-rank { font-size: 0.8em; color: var(--secondary-text); }
         .hidden-row { display: none; }
-        #see-more-btn {
-            background: none; border: 1px solid var(--secondary-text); color: var(--secondary-text);
-            padding: 8px 16px; border-radius: 500px; cursor: pointer; margin: 15px auto 0 auto;
-            display: block; transition: all 0.2s ease;
-        }
+        #see-more-btn { background: none; border: 1px solid var(--secondary-text); color: var(--secondary-text); padding: 8px 16px; border-radius: 500px; cursor: pointer; margin: 15px auto 0 auto; display: block; transition: all 0.2s ease; }
         #see-more-btn:hover { background-color: var(--border-color); color: var(--primary-text); }
     </style>
 </head>
@@ -186,24 +143,26 @@
             </div>
             <div class="chart-card">
                 <h3>Ranking Timeline</h3>
-                 <div class="chart-card">
-                <h3>Ranking Timeline</h3>
-                <div class="timeline-container">
-                    {% for event in timeline_data %}
-                    <div class="timeline-event">
-                        <div class="timeline-card">
-                            <img src="{{ event.album_cover_url }}" alt="{{ event.album_name }}">
-                            <div class="timeline-info">
-                                <h4>{{ event.album_name }}</h4>
-                                <p>Score: {{ "%.2f"|format(event.score) }}</p>
-                                <p>Placement: {{ event.placement }}</p>
-                                {% if event.is_rerank %}<p class="rerank-note">*Re-rank*</p>{% endif %}
+                <div class="timeline-wrapper">
+                    <div class="timeline-container">
+                        {% for event in timeline_data %}
+                        <div class="timeline-event">
+                            <div class="timeline-date">{{ event.date.strftime('%b %d, %Y') }}</div>
+                            <div class="timeline-card">
+                                <img src="{{ event.album_cover_url }}" alt="{{ event.album_name }}">
+                                <div class="timeline-info">
+                                    <h4>{{ event.album_name }}</h4>
+                                    <p>Score: {{ "%.2f"|format(event.score) }}</p>
+                                    <p>Placement: {{ event.placement }}</p>
+                                    {% if event.is_rerank %}<p class="rerank-note">*Re-rank*</p>{% endif %}
+                                </div>
                             </div>
                         </div>
+                        {% else %}
+                        <p style="text-align:center; color: var(--secondary-text); padding: 50px 0;">No ranking events yet.</p>
+                        {% endfor %}
                     </div>
-                    {% endfor %}
                 </div>
-            </div>
             </div>
         </section>
 
@@ -278,8 +237,9 @@
         // --- 2. Release Era Scores (Chart with Images) ---
         const releaseCtx = document.getElementById('releaseHistoryChart').getContext('2d');
         const releaseChartData = {{ release_chart_data | tojson }};
+        const artistAverageScore = {{ artist_average_score or 'null' }};
 
-        Chart.register(ChartDataLabels);
+        Chart.register(ChartDataLabels, ChartJsPluginAnnotation); // Register both plugins
 
         const releasePointImages = releaseChartData.datasets[0].data.map(point => {
             const img = new Image();
@@ -300,23 +260,31 @@
                         }
                     },
                     datalabels: {
+                        // ... (datalabels logic from previous version is correct) ...
                         display: true,
-                        // Use an object to define different labels for the same point
                         labels: {
-                            // The album art image
-                            image: {
-                                align: 'top',
-                                offset: 20,
-                                formatter: (value, context) => releasePointImages[context.dataIndex],
-                                font: { size: 0 } // Hide the default text label for the image
-                            },
-                            // The album title text
-                            title: {
-                                align: 'top',
-                                offset: 4,
-                                formatter: (value, context) => context.chart.data.datasets[0].data[context.dataIndex].label,
-                                color: '#fff',
-                                font: { weight: 'bold', size: 10 }
+                            image: { align: 'top', offset: 20, formatter: (value, context) => releasePointImages[context.dataIndex], font: { size: 0 } },
+                            title: { align: 'top', offset: 4, formatter: (value, context) => context.chart.data.datasets[0].data[context.dataIndex].label, color: '#fff', font: { weight: 'bold', size: 10 } }
+                        }
+                    },
+                    // --- NEW: Annotation plugin for the average line ---
+                    annotation: {
+                        annotations: {
+                            line1: {
+                                type: 'line',
+                                yMin: artistAverageScore,
+                                yMax: artistAverageScore,
+                                borderColor: 'rgba(255, 255, 255, 0.5)',
+                                borderWidth: 2,
+                                borderDash: [6, 6],
+                                label: {
+                                    content: `Artist Avg: ${artistAverageScore.toFixed(2)}`,
+                                    position: 'end',
+                                    backgroundColor: 'rgba(40, 40, 40, 0.8)',
+                                    font: { size: 10 },
+                                    color: '#ccc',
+                                    yAdjust: -10,
+                                }
                             }
                         }
                     }
@@ -326,7 +294,7 @@
                     x: { type: 'time', time: { unit: 'year' }, ticks: { color: 'white' }, grid: { color: '#282828' } }
                 },
                 layout: {
-                    padding: { top: 60 } // Increased padding to ensure labels and images don't get cut off
+                    padding: { top: 60 }
                 }
             }
         });

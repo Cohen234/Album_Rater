@@ -323,6 +323,9 @@ def artist_page_v2(artist_name):
             'Universal Rank'].mean()) / total_songs) * 100 if total_songs > 0 else 0
         artist_score = (album_percentile * 0.6) + (song_percentile * 0.4) if ranked_albums_count > 0 else 0
 
+        artist_average_score = artist_albums_df['weighted_average_score'].mean() if not artist_albums_df.empty else 0
+
+
         # 3. --- Prepare Data for Histograms ---
 
         # RELEASE HISTORY HISTOGRAM
@@ -368,7 +371,7 @@ def artist_page_v2(artist_name):
                 continue
 
         valid_timeline_events = [event for event in timeline_events if pd.notna(event['date'])]
-        timeline_data = sorted(valid_timeline_events, key=lambda x: x['date'], reverse=True)
+        timeline_data = sorted(valid_timeline_events, key=lambda x: x['date'])
         artist_songs_df.sort_values(by='Ranking', ascending=False, inplace=True)
         artist_songs_df['Artist Rank'] = range(1, len(artist_songs_df) + 1)
 
@@ -390,6 +393,7 @@ def artist_page_v2(artist_name):
             pie_chart_data=pie_chart_data,
             release_chart_data=release_chart_data,
             timeline_data = timeline_data,
+            artist_average_score=artist_average_score,
             # Pass leaderboard data
             song_leaderboard=artist_songs_df.to_dict('records'),
             album_leaderboard=artist_albums_df.to_dict('records')
@@ -534,7 +538,8 @@ def submit_rankings():
 
             # --- FINAL SUBMISSION LOGIC (existing logic, now in an 'else' block) ---
         else:
-
+            new_placement = 'N/A'
+            total_albums_ranked = 'N/A'
             old_score = 0
             old_placement = 0
             if is_rerank:
@@ -606,7 +611,8 @@ def submit_rankings():
 
                 weighted_averages = df_for_calc_no_interludes.groupby('Spotify Album ID').apply(weighted_avg).round(6)
                 sorted_scores = weighted_averages.sort_values(ascending=False)
-                new_placement = sorted_scores.index.get_loc(album_id) + 1
+                if album_id in sorted_scores.index:
+                    new_placement = sorted_scores.index.get_loc(album_id) + 1
                 total_albums = len(sorted_scores)
 
                 album_averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
