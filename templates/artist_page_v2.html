@@ -64,12 +64,17 @@
             border-radius: 8px;
             padding: 25px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-            position: relative; /* Added */
-            min-height: 400px;  /* Added */
-            display: flex;
-            flex-direction: column;
+            display: flex; /* Use flexbox for layout */
+            flex-direction: column; /* Stack title and chart vertically */
+            height: 450px; /* Give all cards in this class a consistent height */
         }
-        .chart-card h3 { margin-top: 0; text-align: center; color: var(--secondary-text); text-transform: uppercase; font-size: 1rem; flex-shrink: 0; }
+
+        /* ADD this new rule for the div that will wrap your canvas */
+        .chart-canvas-container {
+            position: relative; /* Required by Chart.js for responsiveness */
+            flex-grow: 1;    /* Allows the chart container to fill the available space */
+            min-height: 0;   /* Prevents flexbox from overflowing */
+        }
 
         .header-actions {
             margin-top: 20px;
@@ -249,26 +254,13 @@
         const releaseCtx = document.getElementById('releaseHistoryChart');
         if (releaseCtx) {
             const releaseChartData = {{ release_chart_data | tojson }};
-
-            // FIXED: Only try to render the chart if there is data to prevent errors
-            if(releaseChartData && releaseChartData.datasets[0] && releaseChartData.datasets[0].data.length > 0) {
+            if (releaseChartData && releaseChartData.datasets[0].data.length > 0) {
                 new Chart(releaseCtx, {
                     type: 'line',
-                    plugins: [ChartDataLabels],
                     data: releaseChartData,
                     options: {
-                        responsive: true,
-                        maintainAspectRatio: false, // This is key
                         plugins: {
-                            legend: { display: false },
-                            tooltip: { callbacks: { label: (context) => `${context.raw.label}: ${context.raw.y.toFixed(2)}` } },
-                            datalabels: {
-                                align: 'top',
-                                offset: 8,
-                                color: '#fff',
-                                font: { size: 10, weight: 'bold' },
-                                formatter: (value, context) => context.chart.data.datasets[0].data[context.dataIndex].label
-                            }
+                            legend: { display: false }
                         },
                         scales: {
                             y: { ticks: { color: 'white' }, grid: { color: '#282828' } },

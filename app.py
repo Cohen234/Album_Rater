@@ -335,16 +335,31 @@ def artist_page_v2(artist_name):
         release_history_data = artist_albums_df.sort_values(by='release_date')
 
         # THE FIX: Format data as {x, y} points for a time-series scatter plot
+        release_era_points = []
+        for _, row in release_history_data.iterrows():
+            try:
+                history = json.loads(row.get('rerank_history', '[]'))
+                if history and pd.notna(row.get('release_date')):
+                    first_event = history[0]
+                    score = first_event.get('score')
+                    if score is not None:
+                        release_era_points.append({
+                            'x': row['release_date'],
+                            'y': score,
+                            'label': row['album_name'],
+                            'image': row['album_cover_url']
+                        })
+            except (json.JSONDecodeError, TypeError):
+                continue
+
         release_chart_data = {
             'datasets': [{
-                'label': 'Album Score',
-                'data': [
-                    {'x': row['release_date'], 'y': row['weighted_average_score'], 'label': row['album_name'],
-                     'image': row['album_cover_url']}
-                    for _, row in release_history_data.iterrows() if
-                    pd.notna(row.get('release_date')) and pd.notna(row.get('weighted_average_score'))
-                ],
-                'backgroundColor': '#1DB954', 'pointRadius': 8, 'pointHoverRadius': 12, 'showLine': True,
+                'label': 'Album Score at First Ranking',
+                'data': release_era_points,
+                'backgroundColor': '#1DB954',
+                'pointRadius': 8,
+                'pointHoverRadius': 12,
+                'showLine': True,
                 'borderColor': 'rgba(29, 185, 84, 0.5)'
             }]
         }
@@ -354,17 +369,16 @@ def artist_page_v2(artist_name):
         for _, row in artist_albums_df.iterrows():
             try:
                 history = json.loads(row.get('rerank_history', '[]'))
-                for event in history:
-                    # Check if original_weighted_score exists and is not null
-                    is_rerank = pd.notna(row['original_weighted_score']) and row[
-                        'original_weighted_score'] != event.get('score')
+                for i, event in enumerate(history):
+                    # event must have: date, score, placement_at_time
                     timeline_events.append({
                         'date': pd.to_datetime(event.get('date'), errors='coerce'),
                         'score': event.get('score'),
-                        'placement': event.get('placement', 'N/A'),
+                        'placement': event.get('placement_at_time', event.get('placement', 'N/A')),
                         'album_name': row['album_name'],
                         'album_cover_url': row.get('album_cover_url', ''),
-                        'is_rerank': is_rerank
+                        'is_rerank': i > 0,
+                        'rerank_number': i if i > 0 else None
                     })
             except (json.JSONDecodeError, TypeError):
                 logging.warning(f"Could not parse rerank_history for album {row['album_id']}")
@@ -477,11 +491,6 @@ def get_album_stats(album_id):
         logging.error(f"Error in get_album_stats for {album_id}: {e}", exc_info=True)
         return jsonify({'error': f'An error occurred: {e}'}), 500
 
-
-# In your app.py file...
-# NOTE: Only the `submit_rankings` function has changed.
-# You can copy/paste this whole function to replace your old one.
-# All other functions, including artist_page_v2, can remain as they were in the last update.
 
 @app.route("/submit_rankings", methods=["POST"])
 def submit_rankings():
