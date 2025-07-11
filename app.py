@@ -383,9 +383,10 @@ def artist_page_v2(artist_name):
             try:
                 history = json.loads(row.get('rerank_history', '[]'))
                 for i, event in enumerate(history):
-                    # event must have: date, score, placement_at_time
+                    dt = pd.to_datetime(event.get('date'), errors='coerce')
+                    formatted_date = dt.strftime('%Y-%m-%d') if not pd.isnull(dt) else ''
                     timeline_events.append({
-                        'date': pd.to_datetime(event.get('date'), errors='coerce'),
+                        'date': formatted_date,
                         'score': event.get('score'),
                         'placement': event.get('placement_at_time', event.get('placement', 'N/A')),
                         'album_name': row['album_name'],
