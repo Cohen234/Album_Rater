@@ -299,7 +299,7 @@ def artist_page_v2(artist_name):
         artist_albums_df = all_albums_df[
             all_albums_df['artist_name'].astype(str).str.lower() == artist_name.lower()].copy()
 
-        # 2. --- Calculate New Stats ---
+        # 2. --- Calculate New Stats ----
 
         # ARTIST MASTERY
         total_spotify_albums = len(get_albums_by_artist(artist_name))
