@@ -80,22 +80,22 @@
             transform: scale(1.05);
             background-color: #1ed760;
         }
-        .timeline-wrapper { overflow-x: auto; overflow-y: hidden; padding: 20px 0; white-space: nowrap; }
-        .timeline-container { display: inline-flex; position: relative; padding: 80px 0; }
-        .timeline-container::before { content: ''; position: absolute; top: 50%; left: 0; width: 100%; height: 4px; background-color: #383838; transform: translateY(-50%); z-index: 0; }
-        .timeline-event { display: inline-flex; flex-direction: column; align-items: center; position: relative; padding: 0 20px; width: 180px; }
-        .timeline-event:nth-child(odd) .timeline-card { transform: translateY(-85px); }
-        .timeline-event:nth-child(even) .timeline-card { transform: translateY(5px); }
-        .timeline-event:nth-child(odd)::after, .timeline-event:nth-child(even)::after { box-shadow: 0 0 0 4px var(--surface-color); }
-        .timeline-event::after { content: ''; position: absolute; top: 50%; left: 50%; width: 20px; height: 20px; background-color: var(--spotify-green); border-radius: 50%; z-index: 1; transform: translate(-50%, -50%); }
-        .timeline-card { text-align: center; white-space: normal; }
-        .timeline-card img { width: 80px; height: 80px; border-radius: 4px; margin-bottom: 10px; }
-        .timeline-info h4 { margin: 0 0 5px 0; font-size: 1em; }
+        .timeline-wrapper { overflow-x: auto; overflow-y: hidden; padding-bottom: 20px; border: 1px solid var(--border-color); border-radius: 8px; }
+        .timeline-container { display: inline-flex; position: relative; padding: 90px 40px; min-width: 100%; box-sizing: border-box; }
+        .timeline-container::before { content: ''; position: absolute; top: 50%; left: 0; width: 100%; height: 4px; background-color: #383838; transform: translateY(-50%); }
+        .timeline-event { display: flex; flex-direction: column; align-items: center; position: relative; padding: 0 30px; min-width: 180px; flex-shrink: 0; }
+        .timeline-event .timeline-card { display: flex; flex-direction: column; text-align: center; white-space: normal; position: absolute; width: 100%; }
+        .timeline-event:nth-child(odd) .timeline-card { bottom: 55%; }
+        .timeline-event:nth-child(even) .timeline-card { top: 55%; }
+        .timeline-event::after { content: ''; position: absolute; top: 50%; left: 50%; width: 20px; height: 20px; background-color: var(--spotify-green); border-radius: 50%; z-index: 1; transform: translate(-50%, -50%); border: 4px solid var(--surface-color); }
+        .timeline-card img { width: 80px; height: 80px; border-radius: 4px; margin: 0 auto 10px auto; }
+        .timeline-info h4 { margin: 0 0 5px 0; font-size: 0.9em; }
         .timeline-info p { margin: 0; font-size: 0.8em; color: var(--secondary-text); }
         .timeline-info .rerank-note { color: var(--spotify-green); font-style: italic; font-weight: bold; }
-        .timeline-date { position: absolute; left: 50%; transform: translateX(-50%); color: #aaa; font-size: 0.8em; }
-        .timeline-event:nth-child(odd) .timeline-date { bottom: -10px; }
-        .timeline-event:nth-child(even) .timeline-date { top: -10px; }
+        .timeline-date { color: #aaa; font-size: 0.8em; position: absolute; left: 50%; transform: translateX(-50%); }
+        .timeline-event:nth-child(odd) .timeline-date { top: calc(50% + 20px); }
+        .timeline-event:nth-child(even) .timeline-date { bottom: calc(50% + 20px); }
+
 
         .leaderboard-card { overflow: hidden; }
         .leaderboard-table-wrapper { max-height: 500px; overflow-y: auto; }
@@ -235,70 +235,38 @@
         });
 
         // --- 2. Release Era Scores (Chart with Images) ---
-        const releaseCtx = document.getElementById('releaseHistoryChart').getContext('2d');
+        const releaseCtx = document.getElementById('releaseHistoryChart');
+    if (releaseCtx) {
         const releaseChartData = {{ release_chart_data | tojson }};
-        const artistAverageScore = {{ artist_average_score or 'null' }};
 
-        Chart.register(ChartDataLabels, ChartJsPluginAnnotation); // Register both plugins
-
-        const releasePointImages = releaseChartData.datasets[0].data.map(point => {
-            const img = new Image();
-            img.src = point.image;
-            return img;
-        });
-
+        // This simplified chart should now render correctly without errors.
+        // It shows the trend line with album titles above the points.
         new Chart(releaseCtx, {
             type: 'line',
+            plugins: [ChartDataLabels], // Only register the datalabels plugin
             data: releaseChartData,
             options: {
                 responsive: true, maintainAspectRatio: false,
                 plugins: {
                     legend: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) { return `${context.raw.label}: ${context.raw.y.toFixed(2)}`; }
-                        }
-                    },
+                    tooltip: { callbacks: { label: (context) => `${context.raw.label}: ${context.raw.y.toFixed(2)}` } },
                     datalabels: {
-                        // ... (datalabels logic from previous version is correct) ...
-                        display: true,
-                        labels: {
-                            image: { align: 'top', offset: 20, formatter: (value, context) => releasePointImages[context.dataIndex], font: { size: 0 } },
-                            title: { align: 'top', offset: 4, formatter: (value, context) => context.chart.data.datasets[0].data[context.dataIndex].label, color: '#fff', font: { weight: 'bold', size: 10 } }
-                        }
-                    },
-                    // --- NEW: Annotation plugin for the average line ---
-                    annotation: {
-                        annotations: {
-                            line1: {
-                                type: 'line',
-                                yMin: artistAverageScore,
-                                yMax: artistAverageScore,
-                                borderColor: 'rgba(255, 255, 255, 0.5)',
-                                borderWidth: 2,
-                                borderDash: [6, 6],
-                                label: {
-                                    content: `Artist Avg: ${artistAverageScore.toFixed(2)}`,
-                                    position: 'end',
-                                    backgroundColor: 'rgba(40, 40, 40, 0.8)',
-                                    font: { size: 10 },
-                                    color: '#ccc',
-                                    yAdjust: -10,
-                                }
-                            }
-                        }
+                        align: 'top',
+                        offset: 8,
+                        color: '#fff',
+                        font: { size: 10, weight: 'bold' },
+                        formatter: (value, context) => context.chart.data.datasets[0].data[context.dataIndex].label
                     }
                 },
                 scales: {
                     y: { ticks: { color: 'white' }, grid: { color: '#282828' } },
                     x: { type: 'time', time: { unit: 'year' }, ticks: { color: 'white' }, grid: { color: '#282828' } }
                 },
-                layout: {
-                    padding: { top: 60 }
-                }
+                layout: { padding: { top: 30 } } // Padding to prevent labels from being cut off
             }
         });
-    });
+    }
+});
 </script>
 </body>
 </html>
