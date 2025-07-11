@@ -342,13 +342,26 @@ def artist_page_v2(artist_name):
                 if history and pd.notna(row.get('release_date')):
                     first_event = history[0]
                     score = first_event.get('score')
-                    if score is not None:
-                        release_era_points.append({
-                            'x': row['release_date'],
-                            'y': score,
-                            'label': row['album_name'],
-                            'image': row['album_cover_url']
-                        })
+                    placement = first_event.get('placement_at_time', 'N/A')
+                    release_era_points.append({
+                        'x': row['release_date'],
+                        'y': score,
+                        'label': row['album_name'],
+                        'original_rank': row.get('original_rank', 'N/A'),
+                        # ensure you capture this in your ranking logic!
+                        'placement': placement,
+                        'image': row['album_cover_url']
+                    })
+                elif pd.notna(row.get('release_date')):
+                    # If no ranking history, show as "unranked"
+                    release_era_points.append({
+                        'x': row['release_date'],
+                        'y': None,
+                        'label': row['album_name'],
+                        'original_rank': None,
+                        'placement': None,
+                        'image': row['album_cover_url']
+                    })
             except (json.JSONDecodeError, TypeError):
                 continue
 
@@ -357,8 +370,8 @@ def artist_page_v2(artist_name):
                 'label': 'Album Score at First Ranking',
                 'data': release_era_points,
                 'backgroundColor': '#1DB954',
-                'pointRadius': 8,
-                'pointHoverRadius': 12,
+                'pointRadius': 10,
+                'pointHoverRadius': 16,
                 'showLine': True,
                 'borderColor': 'rgba(29, 185, 84, 0.5)'
             }]

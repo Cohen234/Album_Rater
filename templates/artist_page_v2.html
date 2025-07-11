@@ -67,6 +67,7 @@
             display: flex; /* Use flexbox for layout */
             flex-direction: column; /* Stack title and chart vertically */
             height: 450px; /* Give all cards in this class a consistent height */
+            min-height: 350px;
         }
 
         /* ADD this new rule for the div that will wrap your canvas */
@@ -74,6 +75,11 @@
             position: relative; /* Required by Chart.js for responsiveness */
             flex-grow: 1;    /* Allows the chart container to fill the available space */
             min-height: 0;   /* Prevents flexbox from overflowing */
+        }
+        #releaseHistoryChart {
+            width: 100% !important;
+            height: 100% !important;
+            min-height: 320px;
         }
 
         .header-actions {
@@ -96,7 +102,12 @@
             transform: scale(1.05);
             background-color: #1ed760;
         }
-        .timeline-wrapper { overflow-x: auto; overflow-y: hidden; padding-bottom: 20px; border: 1px solid var(--border-color); border-radius: 8px; }
+        .timeline-wrapper {
+            height: 340px; /* or higher if space allows */
+            min-height: 250px;
+            display: flex;
+            align-items: stretch;
+        }
         .timeline-container { display: inline-flex; position: relative; padding: 90px 40px; min-width: 100%; box-sizing: border-box; }
         .timeline-container::before { content: ''; position: absolute; top: 50%; left: 0; width: 100%; height: 4px; background-color: #383838; transform: translateY(-50%); }
         .timeline-event { display: flex; flex-direction: column; align-items: center; position: relative; padding: 0 30px; min-width: 180px; flex-shrink: 0; }
@@ -153,33 +164,37 @@
         </section>
 
         <section class="section-grid-2">
-            <div class="chart-card">
-                <h3>Release Era Scores</h3>
+          <div class="chart-card">
+              <h3>Release Era Scores</h3>
+              <div class="chart-canvas-container">
                 <canvas id="releaseHistoryChart"></canvas>
+              </div>
             </div>
-            <div class="chart-card">
-                <h3>Ranking Timeline</h3>
-                <div class="timeline-wrapper">
-                    <div class="timeline-container">
-                        {% for event in timeline_data %}
-                        <div class="timeline-event">
-                            <div class="timeline-date">{{ event.date.strftime('%b %d, %Y') }}</div>
-                            <div class="timeline-card">
-                                <img src="{{ event.album_cover_url }}" alt="{{ event.album_name }}">
-                                <div class="timeline-info">
-                                    <h4>{{ event.album_name }}</h4>
-                                    <p>Score: {{ "%.2f"|format(event.score) }}</p>
-                                    <p>Placement: {{ event.placement }}</p>
-                                    {% if event.is_rerank %}<p class="rerank-note">*Re-rank*</p>{% endif %}
-                                </div>
-                            </div>
-                        </div>
-                        {% else %}
-                        <p style="text-align:center; color: var(--secondary-text); padding: 50px 0;">No ranking events yet.</p>
-                        {% endfor %}
+          <div class="chart-card timeline-chart-full">
+            <h3>Ranking Timeline</h3>
+            <div class="timeline-wrapper">
+              <div class="timeline-container">
+                {% for event in timeline_data %}
+                <div class="timeline-event">
+                  <div class="timeline-date timeline-date-up">{{ event.date[:10] }}</div>
+                  <div class="timeline-card">
+                    <img src="{{ event.album_cover_url }}" alt="{{ event.album_name }}">
+                    <div class="timeline-info timeline-info-up">
+                      <h4>{{ event.album_name }}</h4>
+                      <p>Score: {{ "%.2f"|format(event.score) }}</p>
+                      <p>Placement: {{ event.placement }}</p>
+                      {% if event.is_rerank %}
+                      <p class="rerank-note">*Re-rank {{ event.rerank_number }}*</p>
+                      {% endif %}
                     </div>
+                  </div>
                 </div>
+                {% else %}
+                <p style="text-align:center; color: var(--secondary-text); padding: 50px 0;">No ranking events yet.</p>
+                {% endfor %}
+              </div>
             </div>
+          </div>
         </section>
 
         <section class="section-grid-2">
