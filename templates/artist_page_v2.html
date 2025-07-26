@@ -362,7 +362,7 @@
                     <div class="vs-separator">vs</div>
                     <div class="global-comp-score">
                         <div class="score-num user">{{ "%.2f"|format(average_song_score) }}</div>
-                        <div class="score-caption">Your Avg</div>
+                        <div class="score-caption">Artist Avg</div>
                     </div>
                 </div>
             </div>
@@ -370,33 +370,11 @@
 
         <!-- Quick Stat Cards Grid -->
         <section class="section-grid-4">
-            <!-- Highest-Ranked Song -->
-            <div class="quick-stat-card">
-                <div class="quick-stat-header">Highest-Ranked Album</div>
+    <!-- Highest-Ranked Album -->
+            <div class="quick-stat-card stat-card-centered">
+                <div class="quick-stat-header">HIGHEST-RANKED ALBUM</div>
                 <img class="quick-stat-img" src="{{ top_album_cover or 'https://placehold.co/60x60' }}" alt="" />
                 <div class="quick-stat-info">
-                    <div class="quick-stat-value">
-                        <a href="{{ top_album_link }}" style="color:var(--spotify-green);text-decoration:none;">{{ top_album_name }}</a>
-                    </div>
-                    <div class="stat-caption">Score: {{ "%.2f"|format(top_album_score) }}</div>
-                </div>
-            </div>
-            <!-- Lowest-Ranked Song -->
-            <div class="quick-stat-card">
-                <img class="quick-stat-img" src="{{ low_song_cover or 'https://placehold.co/60x60' }}" alt="" />
-                <div class="quick-stat-info">
-                    <div class="quick-stat-title">Lowest-Ranked Song</div>
-                    <div class="quick-stat-value">
-                        <a href="{{ low_song_link }}" style="color:var(--spotify-green);text-decoration:none;">{{ low_song_name }}</a>
-                    </div>
-                    <div class="stat-caption">Score: {{ "%.2f"|format(low_song_score) }}</div>
-                </div>
-            </div>
-            <!-- Highest-Ranked Album -->
-            <div class="quick-stat-card">
-                <img class="quick-stat-img" src="{{ top_album_cover or 'https://placehold.co/60x60' }}" alt="" />
-                <div class="quick-stat-info">
-                    <div class="quick-stat-title">Highest-Ranked Album</div>
                     <div class="quick-stat-value">
                         <a href="{{ top_album_link }}" style="color:var(--spotify-green);text-decoration:none;">{{ top_album_name }}</a>
                     </div>
@@ -404,43 +382,72 @@
                 </div>
             </div>
             <!-- Lowest-Ranked Album -->
-            <div class="quick-stat-card">
+            <div class="quick-stat-card stat-card-centered">
+                <div class="quick-stat-header">LOWEST-RANKED ALBUM</div>
                 <img class="quick-stat-img" src="{{ low_album_cover or 'https://placehold.co/60x60' }}" alt="" />
                 <div class="quick-stat-info">
-                    <div class="quick-stat-title">Lowest-Ranked Album</div>
                     <div class="quick-stat-value">
                         <a href="{{ low_album_link }}" style="color:var(--spotify-green);text-decoration:none;">{{ low_album_name }}</a>
                     </div>
                     <div class="stat-caption">Score: {{ "%.2f"|format(low_album_score) }}</div>
                 </div>
             </div>
-        </section>
-        <!-- Song/Album Distribution/Stats -->
-        <section class="section-grid-4">
-            <div class="stat-card">
-                <h3>Median Song Score</h3>
-                <p class="value">{{ "%.2f"|format(median_song_score) }}</p>
-            </div>
-            <div class="stat-card">
-                <h3>Std. Dev. of Song Scores</h3>
-                <p class="value">{{ "%.2f"|format(std_song_score) }}</p>
-            </div>
-            <div class="stat-card">
-                <h3>Most Improved Song</h3>
-                <p class="value">{{ most_improved_song_name }}</p>
-                <span class="stat-caption">+{{ "%.2f"|format(most_improved_song_delta) }}</span>
-            </div>
-            <div class="stat-card">
-                <h3>Ranking Activity</h3>
-                <span class="stat-caption">First Song Ranked:</span>
-                <div style="font-weight:600;">
-                    {{ first_song_ranked_name }}<br>
-                    <span style="color:var(--secondary-text);">{{ first_song_ranked_date }}</span>
+            <!-- Highest-Ranked Song -->
+            <div class="quick-stat-card stat-card-centered">
+                <div class="quick-stat-header">HIGHEST-RANKED SONG</div>
+                <img class="quick-stat-img" src="{{ top_song_cover or 'https://placehold.co/60x60' }}" alt="" />
+                <div class="quick-stat-info">
+                    <div class="quick-stat-value">
+                        <a href="{{ top_song_link }}" style="color:var(--spotify-green);text-decoration:none;">{{ top_song_name }}</a>
+                    </div>
+                    <div class="stat-caption">Score: {{ "%.2f"|format(top_song_score) }}</div>
                 </div>
-                <span class="stat-caption" style="margin-top:12px;">Most Recent Song Ranked:</span>
-                <div style="font-weight:600;">
-                    {{ last_song_ranked_name }}<br>
-                    <span style="color:var(--secondary-text);">{{ last_song_ranked_date }}</span>
+            </div>
+            <!-- Lowest-Ranked Song -->
+            <div class="quick-stat-card stat-card-centered">
+                <div class="quick-stat-header">LOWEST-RANKED SONG</div>
+                <img class="quick-stat-img" src="{{ low_song_cover or 'https://placehold.co/60x60' }}" alt="" />
+                <div class="quick-stat-info">
+                    <div class="quick-stat-value">
+                        <a href="{{ low_song_link }}" style="color:var(--spotify-green);text-decoration:none;">{{ low_song_name }}</a>
+                    </div>
+                    <div class="stat-caption">Score: {{ "%.2f"|format(low_song_score) }}</div>
+                </div>
+            </div>
+        </section>
+        <section class="section-grid-4">
+            <!-- Median Song Score -->
+            <div class="quick-stat-card stat-card-centered">
+                <div class="quick-stat-header">MEDIAN SONG SCORE</div>
+                <div class="quick-stat-info">
+                    <div class="quick-stat-value">{{ "%.2f"|format(median_song_score) }}</div>
+                </div>
+            </div>
+            <!-- Std. Dev. of Song Scores -->
+            <div class="quick-stat-card stat-card-centered">
+                <div class="quick-stat-header">STD. DEV. OF SONG SCORES</div>
+                <div class="quick-stat-info">
+                    <div class="quick-stat-value">{{ "%.2f"|format(std_song_score) }}</div>
+                </div>
+            </div>
+            <!-- Most Improved Song -->
+            <div class="quick-stat-card stat-card-centered">
+                <div class="quick-stat-header">MOST IMPROVED SONG</div>
+                <div class="quick-stat-info">
+                    <div class="quick-stat-value">{{ most_improved_song_name or "" }}</div>
+                    <div class="stat-caption">+{{ "%.2f"|format(most_improved_song_delta) }}</div>
+                </div>
+            </div>
+            <!-- Ranking Activity -->
+            <div class="quick-stat-card stat-card-centered">
+                <div class="quick-stat-header">RANKING ACTIVITY</div>
+                <div class="quick-stat-info">
+                    <div class="stat-caption">First Song Ranked:</div>
+                    <div class="quick-stat-value" style="font-size:1.15em;">{{ first_song_ranked_name }}</div>
+                    <div class="stat-caption" style="margin-bottom:5px;">{{ first_song_ranked_date }}</div>
+                    <div class="stat-caption" style="margin-top:12px;">Most Recent Song Ranked:</div>
+                    <div class="quick-stat-value" style="font-size:1.15em;">{{ last_song_ranked_name }}</div>
+                    <div class="stat-caption">{{ last_song_ranked_date }}</div>
                 </div>
             </div>
         </section>
