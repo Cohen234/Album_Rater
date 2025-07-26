@@ -15,6 +15,9 @@
             --secondary-text: #b3b3b3;
             --border-color: #282828;
             --spotify-green: #1DB954;
+            --gold: #ffd700;
+            --silver: #c0c0c0;
+            --bronze: #cd7f32;
         }
         body {
             font-family: 'Montserrat', sans-serif;
@@ -28,40 +31,21 @@
             grid-template-columns: 1fr;
             gap: 25px;
         }
-        header { text-align: center; margin-bottom: 25px; }
-        header h1 { font-size: 4em; margin: 0; }
-
-        .section-grid-4 {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 25px;
+        header { text-align: center; margin-bottom: 25px; position:relative;}
+        header h1 { font-size: 4em; margin: 0; z-index:2; position:relative;}
+        .banner-hero {
+            width:100%;
+            height:220px;
+            background:linear-gradient(90deg, rgba(18,18,18,0.9) 70%, rgba(29,185,84,0.15)), url('{{ artist_banner_url or "" }}') center/cover no-repeat;
+            border-radius: 12px;
+            margin-bottom: -120px;
+            position:relative;
+            box-shadow: 0 6px 36px rgba(0,0,0,0.2);
         }
-        .section-grid-2 {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-            gap: 25px;
-        }
-
-        .stat-card, .chart-card {
-            background-color: var(--surface-color);
-            border-radius: 8px;
-            padding: 25px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-        }
-        .stat-card h3 {
-            margin: 0 0 10px 0;
-            font-size: 1rem;
-            color: var(--secondary-text);
-            text-transform: uppercase;
-        }
-        .stat-card .value {
-            font-size: 3rem;
-            font-weight: 700;
-            color: var(--spotify-green);
-        }
-        .chart-card h3 { margin-top: 0; }
         .header-actions {
             margin-top: 20px;
+            z-index:3;
+            position:relative;
         }
         .action-button {
             background-color: var(--spotify-green);
@@ -80,6 +64,63 @@
             transform: scale(1.05);
             background-color: #1ed760;
         }
+        .section-grid-4 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 25px;
+        }
+        .section-grid-2 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 25px;
+        }
+        .stat-card, .chart-card, .quick-stat-card {
+            background-color: var(--surface-color);
+            border-radius: 8px;
+            padding: 25px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            margin-bottom: 0;
+            position:relative;
+        }
+        .quick-stat-card {
+            display:flex;
+            align-items:center;
+            gap:15px;
+        }
+        .quick-stat-img {
+            width:60px; height:60px; border-radius:8px; object-fit:cover; box-shadow:0 2px 8px rgba(0,0,0,0.14);
+            flex-shrink:0;
+        }
+        .quick-stat-info { flex:1;}
+        .quick-stat-title { font-size:1.1em; color:var(--secondary-text); margin:0;}
+        .quick-stat-value { font-size:1.65em; font-weight:700; color:var(--spotify-green); margin:0;}
+        .stat-caption { margin:0; font-size:0.95em; color:var(--secondary-text); }
+        .progress-bar-bg {
+            background:var(--border-color);
+            border-radius:12px;
+            height:10px;
+            width:100%;
+            margin-top:8px;
+        }
+        .progress-bar-fill {
+            background:var(--spotify-green);
+            height:10px;
+            border-radius:12px;
+            transition:width 0.6s cubic-bezier(.4,0,.2,1);
+        }
+        .stat-card h3, .chart-card h3, .quick-stat-title {
+            margin:0 0 10px 0;
+            font-size:1rem;
+            color:var(--secondary-text);
+            text-transform:uppercase;
+        }
+        .stat-card .value {
+            font-size: 3rem;
+            font-weight: 700;
+            color: var(--spotify-green);
+            margin-bottom: 0;
+        }
+        .chart-card h3 { margin-top: 0; }
         .timeline-wrapper {
             overflow-x: auto;
             padding: 20px 0;
@@ -88,14 +129,14 @@
         .timeline-container {
             display: inline-flex;
             position: relative;
-            align-items: flex-start; /* Align items to the top */
-            min-height: 280px; /* Adjusted height */
+            align-items: flex-start;
+            min-height: 280px;
             padding: 40px;
         }
-        .timeline-container::before { /* The horizontal line */
+        .timeline-container::before {
             content: '';
             position: absolute;
-            top: 0; /* Position line at the top */
+            top: 0;
             left: 40px;
             width: calc(100% - 80px);
             height: 4px;
@@ -109,7 +150,7 @@
             padding: 0 30px;
             min-width: 160px;
         }
-        .timeline-event::after { /* The dot on the timeline */
+        .timeline-event::after {
             content: '';
             position: absolute;
             top: 0;
@@ -132,9 +173,8 @@
             position: relative;
             width: 100%;
             transition: transform 0.3s ease;
-            margin-top: 35px; /* Consistent margin for all cards */
+            margin-top: 35px;
         }
-
         .timeline-card img {
             width: 100px;
             height: 100px;
@@ -157,13 +197,11 @@
             font-size: 0.8em;
             font-weight: 600;
         }
-
-        /* NEW: Leaderboard Styles */
         .leaderboard-card { overflow: hidden; }
         .leaderboard-table-wrapper { max-height: 500px; overflow-y: auto; }
         table { width: 100%; border-collapse: collapse; }
         th, td { text-align: left; padding: 12px; border-bottom: 1px solid var(--border-color); }
-        th { color: var(--secondary-text); text-transform: uppercase; font-size: 0.8em; position: sticky; top: 0; background: var(--surface-color); }
+        th { color: var(--secondary-text); text-transform: uppercase; font-size: 0.8em; position: sticky; top: 0; background: var(--surface-color); z-index:2;}
         td:first-child, th:first-child { width: 50px; text-align: center; color: var(--secondary-text); }
         .global-rank { font-size: 0.8em; color: var(--secondary-text); }
         .hidden-row { display: none; }
@@ -173,108 +211,260 @@
             display: block; transition: all 0.2s ease;
         }
         #see-more-btn:hover { background-color: var(--border-color); color: var(--primary-text); }
+        /* Table Upgrades */
+        .lb-table-album-img, .lb-table-song-img {
+            width: 32px; height: 32px; border-radius: 6px; object-fit:cover; vertical-align:middle; margin-right:7px; box-shadow:0 1px 4px rgba(0,0,0,0.18);
+        }
+        .lb-medal {
+            font-size: 1.3em;
+            vertical-align: middle;
+            margin-right: 2px;
+        }
+        .lb-medal.gold {color:var(--gold);}
+        .lb-medal.silver {color:var(--silver);}
+        .lb-medal.bronze {color:var(--bronze);}
+        tr:hover { background-color: #202020; cursor:pointer;}
+        @media (max-width: 900px) {
+            .section-grid-4, .section-grid-2 { grid-template-columns: 1fr; }
+            .timeline-container { padding:10px; }
+            .timeline-card img { width:60px; height:60px;}
+        }
+        /* Responsive scroll for tables */
+        .chart-card table {display: block; overflow-x: auto;}
+        .chart-card table thead, .chart-card table tbody, .chart-card table tr {display:table; width:100%; table-layout:fixed;}
+        .progress-bar-bg {height:8px;}
+        .progress-bar-fill {height:8px;}
     </style>
 </head>
 <body>
+    <div class="banner-hero"></div>
     <header>
-         <h1>{{ artist_name }}</h1>
+        <h1>{{ artist_name }}</h1>
         <div class="header-actions">
             <a href="{{ url_for('load_albums_by_artist_route', artist_name=artist_name) }}" class="action-button">Rank an Album</a>
         </div>
     </header>
 
     <main class="main-grid">
+        <!-- Main Stat Cards + Quick Stats -->
         <section class="section-grid-4">
             <div class="stat-card">
                 <h3>Artist Score</h3>
-                <p class="value">{{ "%.1f"|format(artist_score) }}</p>
+                <p class="value" id="animated-artist-score">{{ "%.1f"|format(artist_score) }}</p>
             </div>
             <div class="stat-card">
                 <h3>Artist Mastery</h3>
                 <p class="value">{{ "%.1f"|format(artist_mastery) }}%</p>
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill" style="width:{{ artist_mastery|float }}%;"></div>
+                </div>
             </div>
             <div class="stat-card">
                 <h3>Leaderboard Points</h3>
-                <p class="value">{{ "{:,}".format(leaderboard_points|int) }}</p>
+                <p class="value" id="animated-leaderboard-points">{{ "{:,}".format(leaderboard_points|int) }}</p>
             </div>
+            <div class="stat-card">
+                <h3>Global Comparison</h3>
+                <p class="value">
+                    {% if global_avg_song_score %}
+                        <span title="Global average song score">{{ "%.2f"|format(global_avg_song_score) }}</span>
+                        <span style="color:var(--secondary-text);font-size:1.2em; margin:0 4px;">vs</span>
+                    {% endif %}
+                    {{ "%.2f"|format(average_song_score) }}
+                </p>
+                <span class="stat-caption">Your Avg Song Score</span>
+            </div>
+        </section>
+
+        <!-- Quick Stat Cards Grid -->
+        <section class="section-grid-4">
+            <!-- Highest-Ranked Song -->
+            <div class="quick-stat-card">
+                <img class="quick-stat-img" src="{{ top_song_cover or 'https://placehold.co/60x60' }}" alt="" />
+                <div class="quick-stat-info">
+                    <div class="quick-stat-title">Highest-Ranked Song</div>
+                    <div class="quick-stat-value">
+                        <a href="{{ top_song_link }}" style="color:var(--spotify-green);text-decoration:none;">{{ top_song_name }}</a>
+                    </div>
+                    <div class="stat-caption">Score: {{ "%.2f"|format(top_song_score) }}</div>
+                </div>
+            </div>
+            <!-- Lowest-Ranked Song -->
+            <div class="quick-stat-card">
+                <img class="quick-stat-img" src="{{ low_song_cover or 'https://placehold.co/60x60' }}" alt="" />
+                <div class="quick-stat-info">
+                    <div class="quick-stat-title">Lowest-Ranked Song</div>
+                    <div class="quick-stat-value">
+                        <a href="{{ low_song_link }}" style="color:var(--spotify-green);text-decoration:none;">{{ low_song_name }}</a>
+                    </div>
+                    <div class="stat-caption">Score: {{ "%.2f"|format(low_song_score) }}</div>
+                </div>
+            </div>
+            <!-- Highest-Ranked Album -->
+            <div class="quick-stat-card">
+                <img class="quick-stat-img" src="{{ top_album_cover or 'https://placehold.co/60x60' }}" alt="" />
+                <div class="quick-stat-info">
+                    <div class="quick-stat-title">Highest-Ranked Album</div>
+                    <div class="quick-stat-value">
+                        <a href="{{ top_album_link }}" style="color:var(--spotify-green);text-decoration:none;">{{ top_album_name }}</a>
+                    </div>
+                    <div class="stat-caption">Score: {{ "%.2f"|format(top_album_score) }}</div>
+                </div>
+            </div>
+            <!-- Lowest-Ranked Album -->
+            <div class="quick-stat-card">
+                <img class="quick-stat-img" src="{{ low_album_cover or 'https://placehold.co/60x60' }}" alt="" />
+                <div class="quick-stat-info">
+                    <div class="quick-stat-title">Lowest-Ranked Album</div>
+                    <div class="quick-stat-value">
+                        <a href="{{ low_album_link }}" style="color:var(--spotify-green);text-decoration:none;">{{ low_album_name }}</a>
+                    </div>
+                    <div class="stat-caption">Score: {{ "%.2f"|format(low_album_score) }}</div>
+                </div>
+            </div>
+        </section>
+        <!-- Song/Album Distribution/Stats -->
+        <section class="section-grid-4">
+            <div class="stat-card">
+                <h3>Median Song Score</h3>
+                <p class="value">{{ "%.2f"|format(median_song_score) }}</p>
+            </div>
+            <div class="stat-card">
+                <h3>Std. Dev. of Song Scores</h3>
+                <p class="value">{{ "%.2f"|format(std_song_score) }}</p>
+            </div>
+            <div class="stat-card">
+                <h3>Most Improved Song</h3>
+                <p class="value">{{ most_improved_song_name }}</p>
+                <span class="stat-caption">+{{ "%.2f"|format(most_improved_song_delta) }}</span>
+            </div>
+            <div class="stat-card">
+                <h3>Ranking Activity</h3>
+                <span class="stat-caption">First Song Ranked:</span>
+                <div style="font-weight:600;">
+                    {{ first_song_ranked_name }}<br>
+                    <span style="color:var(--secondary-text);">{{ first_song_ranked_date }}</span>
+                </div>
+                <span class="stat-caption" style="margin-top:12px;">Most Recent Song Ranked:</span>
+                <div style="font-weight:600;">
+                    {{ last_song_ranked_name }}<br>
+                    <span style="color:var(--secondary-text);">{{ last_song_ranked_date }}</span>
+                </div>
+            </div>
+        </section>
+        <section class="section-grid-2">
             <div class="chart-card">
                 <h3>Rank Distribution</h3>
                 <div class="chart-container">
                     <canvas id="rankPolarAreaChart"></canvas>
                 </div>
             </div>
+            <div class="chart-card">
+                <h3>Ranking Trajectory (Avg Song Score Over Time)</h3>
+                <div class="chart-container">
+                    <canvas id="rankingTrajectoryChart"></canvas>
+                </div>
+            </div>
         </section>
-
         <section class="section-grid-2">
             <div class="chart-card">
-                    <h3>Ranking Era</h3>
-                    <div class="chart-container">
-                        <canvas id="rankingEraChart"></canvas>
-                    </div>
+                <h3>Ranking Era</h3>
+                <div class="chart-container">
+                    <canvas id="rankingEraChart"></canvas>
                 </div>
-                <div class="chart-card">
-                    <h3>Ranking Timeline</h3>
-                    <div class="timeline-wrapper">
-                        <div class="timeline-container">
-                            {% for event in ranking_timeline_data %}
-                            <div class="timeline-event">
-                                <div class="timeline-card">
-                                    <img src="{{ event.album_cover_url or 'https://placehold.co/100x100/181818/FFF?text=?' }}" alt="{{ event.album_name }}">
-                                    <div class="timeline-info">
-                                        <h4>{{ event.album_name }}</h4>
-                                        <p>Score: {{ "%.2f"|format(event.score) }}<br>Placement: {{ event.placement }}</p>
-                                    </div>
+            </div>
+            <div class="chart-card">
+                <h3>Ranking Timeline</h3>
+                <div class="timeline-wrapper">
+                    <div class="timeline-container">
+                        {% for event in ranking_timeline_data %}
+                        <div class="timeline-event">
+                            <div class="timeline-card">
+                                <img src="{{ event.album_cover_url or 'https://placehold.co/100x100/181818/FFF?text=?' }}" alt="{{ event.album_name }}">
+                                <div class="timeline-info">
+                                    <h4>{{ event.album_name }}</h4>
+                                    <p>Score: {{ "%.2f"|format(event.score) }}<br>Placement: {{ event.placement }}</p>
                                 </div>
-                                <p class="timeline-date">{{ event.ranking_date_str }}</p>
                             </div>
-                            {% else %}
-                            <p style="text-align: center; width: 100%; color: var(--secondary-text);">No ranking history available.</p>
-                            {% endfor %}
+                            <p class="timeline-date">{{ event.ranking_date_str }}</p>
                         </div>
+                        {% else %}
+                        <p style="text-align: center; width: 100%; color: var(--secondary-text);">No ranking history available.</p>
+                        {% endfor %}
                     </div>
                 </div>
+            </div>
         </section>
-
         <section class="section-grid-2">
-            <div class="chart-card">
+            <div class="chart-card leaderboard-card">
                 <h3>Album Leaderboard</h3>
+                <div class="leaderboard-table-wrapper">
                 <table>
-                    <thead><tr><th>#</th><th>Album</th><th>Score</th><th>Global</th></tr></thead>
+                    <thead>
+                        <tr><th>#</th><th>Album</th><th>Score</th><th>Global</th></tr>
+                    </thead>
                     <tbody>
                         {% for album in album_leaderboard %}
-                        <tr>
-                            <td>{{ album['Artist Rank'] }}</td>
-                            <td>{{ album['album_name'] }}</td>
+                        <tr title="Released: {{ album.release_date or 'unknown' }}">
+                            <td>
+                                {% if album['Artist Rank'] == 1 %}
+                                    <span class="lb-medal gold">&#x1F947;</span>
+                                {% elif album['Artist Rank'] == 2 %}
+                                    <span class="lb-medal silver">&#x1F948;</span>
+                                {% elif album['Artist Rank'] == 3 %}
+                                    <span class="lb-medal bronze">&#x1F949;</span>
+                                {% else %}
+                                    {{ album['Artist Rank'] }}
+                                {% endif %}
+                            </td>
+                            <td>
+                                <img class="lb-table-album-img" src="{{ album['album_cover_url'] or 'https://placehold.co/32x32' }}" alt="" />
+                                {{ album['album_name'] }}
+                            </td>
                             <td>{{ "%.2f"|format(album['weighted_average_score']) }}</td>
                             <td class="global-rank">#{{ album['Global Rank'] }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
+                </div>
             </div>
-            <div class="chart-card">
+            <div class="chart-card leaderboard-card">
                 <h3>Song Leaderboard</h3>
+                <div class="leaderboard-table-wrapper">
                 <table>
+                    <thead><tr><th>#</th><th>Song</th><th>Score</th><th>Global</th></tr></thead>
                     <tbody>
                         {% for song in song_leaderboard %}
-                        {# Add a class to rows after 50 #}
-                        <tr class="{{ 'hidden-row' if loop.index > 50 else '' }}">
-                            <td>{{ song['Artist Rank'] }}</td>
-                            <td>{{ song['Song Name'] }}</td>
+                        <tr class="{{ 'hidden-row' if loop.index > 50 else '' }}" title="Album: {{ song['Album Name'] }}">
+                            <td>
+                                {% if song['Artist Rank'] == 1 %}
+                                    <span class="lb-medal gold">&#x1F947;</span>
+                                {% elif song['Artist Rank'] == 2 %}
+                                    <span class="lb-medal silver">&#x1F948;</span>
+                                {% elif song['Artist Rank'] == 3 %}
+                                    <span class="lb-medal bronze">&#x1F949;</span>
+                                {% else %}
+                                    {{ song['Artist Rank'] }}
+                                {% endif %}
+                            </td>
+                            <td>
+                                <img class="lb-table-song-img" src="{{ song['album_cover_url'] or 'https://placehold.co/32x32' }}" alt="" />
+                                {{ song['Song Name'] }}
+                            </td>
                             <td>{{ "%.2f"|format(song['Ranking']) }}</td>
                             <td class="global-rank">#{{ song['Universal Rank'] }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
-                {# Add the button if there are more than 50 songs #}
                 {% if song_leaderboard | length > 50 %}
                 <button id="see-more-btn">See More</button>
                 {% endif %}
+                </div>
             </div>
         </section>
     </main>
-
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         // See More button functionality
@@ -289,17 +479,31 @@
                 seeMoreBtn.style.display = 'none';
             });
         }
+        // Animate Leaderboard Points & Artist Score
+        function animateValue(id, start, end, duration, decimals=0) {
+            let range = end - start;
+            let startTime = null;
+            const element = document.getElementById(id);
+            function step(timestamp) {
+                if (!startTime) startTime = timestamp;
+                let progress = Math.min((timestamp - startTime) / duration, 1);
+                let value = start + range * progress;
+                element.textContent = decimals ? value.toFixed(decimals) : Math.floor(value).toLocaleString();
+                if (progress < 1) requestAnimationFrame(step);
+            }
+            if (element) requestAnimationFrame(step);
+        }
+        animateValue('animated-leaderboard-points', 0, {{ leaderboard_points|int }}, 1200);
+        animateValue('animated-artist-score', 0, {{ artist_score|float }}, 1200, 1);
 
         // --- 1. Rank Distribution (Pie Chart) ---
         const polarCtx = document.getElementById('rankPolarAreaChart').getContext('2d');
         const polarChartData = {{ polar_chart_data | tojson }};
-
         if (polarChartData && polarChartData.data.length > 0) {
             const polarColors = polarChartData.data.map((_, i) => {
                 const green = Math.floor(255 - (i * (200 / polarChartData.data.length)));
                 return `rgba(29, ${green}, 84, 0.7)`;
             });
-
             new Chart(polarCtx, {
                 type: 'polarArea',
                 data: {
@@ -318,55 +522,33 @@
                     plugins: {
                         legend: { display: false },
                         tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return ` ${context.dataset.label}: ${context.raw}`;
-                                }
-                            }
+                            callbacks: { label: function(context) { return ` ${context.dataset.label}: ${context.raw}`; } }
                         }
                     },
                     scales: {
                         r: {
                             grid: { color: gridColor },
-                            ticks: {
-                                display: false,
-                                backdropColor: 'rgba(0,0,0,0)',
-                                z: 1,
-                                stepSize: 1
-                            },
-                            pointLabels: {
-                                display: true,
-                                centerPointLabels: true,
-                                color: chartTextColor,
-                                font: { size: 12, weight: 'bold' }
-                            }
+                            ticks: { display: false, backdropColor: 'rgba(0,0,0,0)', z: 1, stepSize: 1 },
+                            pointLabels: { display: true, centerPointLabels: true, color: chartTextColor, font: { size: 12, weight: 'bold' } }
                         }
                     },
                     startAngle: -90
                 }
             });
         }
-
-        // --- 2. Release Era Scores (Chart with Images) ---
-
-
         // --- Ranking Era Chart ---
         const eraCtx = document.getElementById('rankingEraChart').getContext('2d');
         const eraChartData = {{ ranking_era_data | tojson }};
-
         if (eraChartData && eraChartData.datasets[0] && eraChartData.datasets[0].data.length > 0) {
             const gradient = eraCtx.createLinearGradient(0, 0, 0, eraCtx.canvas.height);
             gradient.addColorStop(0, 'rgba(29, 185, 84, 0.5)');
             gradient.addColorStop(1, 'rgba(29, 185, 84, 0)');
-
             eraChartData.datasets[0].backgroundColor = gradient;
             eraChartData.datasets[0].fill = true;
-
             const pointImages = eraChartData.datasets[0].data.map(point => {
                 const img = new Image();
                 img.src = point.image || 'https://placehold.co/32x32/181818/FFF?text=?';
-                img.width = 32;
-                img.height = 32;
+                img.width = 32; img.height = 32;
                 return img;
             });
             eraChartData.datasets[0].pointStyle = pointImages;
@@ -376,12 +558,9 @@
             eraChartData.datasets[0].pointHoverBorderWidth = 3;
             eraChartData.datasets[0].pointBorderColor = 'rgba(29, 185, 84, 1)';
             eraChartData.datasets[0].pointHoverBorderColor = '#FFF';
-
-            // --- DYNAMIC Y-AXIS SCALING ---
             const scores = eraChartData.datasets[0].data.map(d => d.y);
             const minScore = Math.min(...scores);
             const maxScore = Math.max(...scores);
-
             new Chart(eraCtx, {
                 type: 'line',
                 data: eraChartData,
@@ -398,9 +577,7 @@
                             padding: 12,
                             displayColors: false,
                             callbacks: {
-                                title: function(context) {
-                                    return context[0].raw.label;
-                                },
+                                title: function(context) { return context[0].raw.label; },
                                 label: function(context) {
                                     const score = `Score: ${context.raw.y.toFixed(2)}`;
                                     const date = `Released: ${new Date(context.raw.x).toLocaleDateString()}`;
@@ -413,7 +590,6 @@
                         y: {
                             ticks: { color: chartTextColor, padding: 10 },
                             grid: { color: gridColor },
-                            // Set min/max to give the chart some breathing room
                             suggestedMin: Math.max(0, Math.floor(minScore - 1)),
                             suggestedMax: Math.min(10, Math.ceil(maxScore + 1))
                         },
@@ -427,6 +603,41 @@
                 }
             });
         }
+        // --- Ranking Trajectory Chart ---
+        const trajCtx = document.getElementById('rankingTrajectoryChart').getContext('2d');
+        const trajChartData = {{ ranking_trajectory_data | tojson }};
+        if (trajChartData && trajChartData.labels.length > 1) {
+            new Chart(trajCtx, {
+                type: 'line',
+                data: trajChartData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    elements: { line: { tension: 0.4 } },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) { return `Avg Song Score: ${context.raw.toFixed(2)}`; }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            ticks: { color: chartTextColor, padding: 10 },
+                            grid: { color: gridColor },
+                            suggestedMin: Math.max(0, Math.floor(Math.min(...trajChartData.datasets[0].data) - 1)),
+                            suggestedMax: Math.min(10, Math.ceil(Math.max(...trajChartData.datasets[0].data) + 1))
+                        },
+                        x: {
+                            ticks: { color: chartTextColor, maxRotation: 0, minRotation: 0, autoSkip: true },
+                            grid: { color: gridColor }
+                        }
+                    }
+                }
+            });
+        }
     });
 </script>
 </body>
+</html>

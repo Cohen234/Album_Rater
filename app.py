@@ -342,25 +342,8 @@ def artist_page_v2(artist_name):
         total_songs = len(all_songs_df)
         total_albums = len(all_albums_df)
         song_points = artist_songs_df['Universal Rank'].apply(lambda x: total_songs - x + 1).sum()
-        print("Kanye West's albums:")
-        print(artist_albums_df[['album_name', 'Global Rank']])
-        print("Total albums in all_albums_df:", len(all_albums_df))
-        print("Global Ranks in artist_albums_df:", artist_albums_df['Global Rank'].tolist())
-        print("Album Points Calculation:", ((total_albums - artist_albums_df['Global Rank'] + 1) * 10).tolist())
-        print("Sum Album Points:", ((total_albums - artist_albums_df['Global Rank'] + 1) * 10).sum())
         album_points = ((total_albums - artist_albums_df['Global Rank'] + 1) * 10).sum()
         total_leaderboard_points = song_points + album_points
-
-        print("Kanye West's Universal Ranks:")
-        print(artist_songs_df[['Song Name', 'Universal Rank']])
-        print("Sum of (total_songs - Universal Rank + 1):")
-        print((total_songs - artist_songs_df['Universal Rank'] + 1).sum())
-        print("Max possible with 130 songs:")
-        print((total_songs - np.arange(1, 131) + 1).sum())
-
-        print("Song points:", song_points)
-        print("Album points:", album_points)
-        print("Total leaderboard points:", total_leaderboard_points)
 
         # ARTIST SCORE (My suggested implementation)
         # Average percentile of albums and songs, weighted 60/40
