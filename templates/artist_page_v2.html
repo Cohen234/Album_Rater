@@ -293,6 +293,15 @@
             text-transform: uppercase;
             margin-bottom: 18px;
         }
+        .ranking-activity-value {
+            font-size: 1.18em;
+            font-weight: 700;
+            color: var(--spotify-green);
+            margin-bottom: 1px;
+            margin-top: 1px;
+            text-align: center;
+            word-break: break-word;
+        }
         .quick-stat-header {
             width: 100%;
             text-align: center;
@@ -455,11 +464,11 @@
             <div class="quick-stat-card stat-card-centered">
                 <div class="quick-stat-header">RANKING ACTIVITY</div>
                 <div class="quick-stat-info">
-                    <div class="stat-caption">First Album Ranked:</div>
-                    <div class="quick-stat-value" style="font-size:1.15em;">{{ first_album_ranked_name }}</div>
-                    <div class="stat-caption" style="margin-bottom:5px;">{{ first_album_ranked_date }}</div>
-                    <div class="stat-caption" style="margin-top:12px;">Most Recent Album Ranked:</div>
-                    <div class="quick-stat-value" style="font-size:1.15em;">{{ last_album_ranked_name }}</div>
+                    <div class="stat-caption" style="margin-bottom:2px;">First Album Ranked</div>
+                    <div class="quick-stat-value ranking-activity-value">{{ first_album_ranked_name }}</div>
+                    <div class="stat-caption" style="margin-bottom:10px;">{{ first_album_ranked_date }}</div>
+                    <div class="stat-caption" style="margin-bottom:2px; margin-top:12px;">Most Recent Album Ranked</div>
+                    <div class="quick-stat-value ranking-activity-value">{{ last_album_ranked_name }}</div>
                     <div class="stat-caption">{{ last_album_ranked_date }}</div>
                 </div>
             </div>
