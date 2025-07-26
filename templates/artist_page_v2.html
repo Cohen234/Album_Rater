@@ -312,6 +312,19 @@
             text-transform: uppercase;
             margin-bottom: 10px;
         }
+        .stat-card-centered {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+        .stat-card-centered .value {
+            width: 100%;
+            text-align: center;
+            justify-content: center;
+            display: flex;
+        }
         .quick-stat-card {
             flex-direction: column;
             align-items: center;
@@ -359,7 +372,7 @@
     <main class="main-grid">
         <!-- Main Stat Cards + Quick Stats -->
         <section class="section-grid-4">
-            <div class="stat-card">
+            <div class="stat-card stat-card-centered">
                 <h3>Artist Score</h3>
                 <p class="value" id="animated-artist-score">{{ "%.1f"|format(artist_score) }}</p>
             </div>
@@ -370,7 +383,7 @@
                     <div class="progress-bar-fill" style="width:{{ artist_mastery|float }}%;"></div>
                 </div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card stat-card-centered">
                 <h3>Leaderboard Points</h3>
                 <p class="value" id="animated-leaderboard-points">{{ "{:,}".format(leaderboard_points|int) }}</p>
             </div>
