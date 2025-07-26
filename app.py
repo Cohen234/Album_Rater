@@ -274,6 +274,7 @@ def load_google_sheet_data():
 
 @app.route("/artist/<string:artist_name>")
 def artist_page_v2(artist_name):
+    import numpy as np
     try:
         logging.info(f"--- Loading Artist Stats Page for: {artist_name} ---")
 
@@ -338,6 +339,13 @@ def artist_page_v2(artist_name):
         song_points = artist_songs_df['Universal Rank'].apply(lambda x: total_songs - x + 1).sum()
         album_points = ((total_albums - artist_albums_df['Global Rank'] + 1) * 10).sum()
         total_leaderboard_points = song_points + album_points
+
+        print("Kanye West's Universal Ranks:")
+        print(artist_songs_df[['Song Name', 'Universal Rank']])
+        print("Sum of (total_songs - Universal Rank + 1):")
+        print((total_songs - artist_songs_df['Universal Rank'] + 1).sum())
+        print("Max possible with 130 songs:")
+        print((total_songs - np.arange(1, 131) + 1).sum())
 
         # ARTIST SCORE (My suggested implementation)
         # Average percentile of albums and songs, weighted 60/40
