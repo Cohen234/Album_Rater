@@ -470,6 +470,24 @@ def artist_page_v2(artist_name):
             top_album_name = top_album_score = top_album_cover = top_album_link = ''
             low_album_name = low_album_score = low_album_cover = low_album_link = ''
         global_avg_song_score = all_songs_df['Ranking'].mean() if not all_songs_df.empty else 0
+        most_improved_song_name = ""
+        most_improved_song_delta = 0
+
+        if not artist_songs_df.empty and 'Song Name' in artist_songs_df.columns and 'Ranking' in artist_songs_df.columns:
+            # Group by song, get earliest and latest ranks
+            improvement_data = []
+            for song_name, group in artist_songs_df.groupby('Song Name'):
+                group_sorted = group.sort_values('Ranked Date')
+                if len(group_sorted) > 1:
+                    first_rank = group_sorted.iloc[0]['Ranking']
+                    last_rank = group_sorted.iloc[-1]['Ranking']
+                    delta = last_rank - first_rank
+                    improvement_data.append((song_name, delta, last_rank))
+            if improvement_data:
+                # Get song with the largest positive delta
+                most_improved = max(improvement_data, key=lambda x: x[1])
+                most_improved_song_name = most_improved[0]
+                most_improved_song_delta = most_improved[1]
 
         return render_template(
             "artist_page_v2.html",
@@ -502,6 +520,8 @@ def artist_page_v2(artist_name):
             low_song_score=low_song_score,
             low_song_cover=low_song_cover,
             low_song_link=low_song_link,
+            most_improved_song_name=most_improved_song_name,
+            most_improved_song_delta=most_improved_song_delta,
             global_avg_song_score=global_avg_song_score,
         )
 
