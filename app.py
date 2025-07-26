@@ -535,16 +535,18 @@ def artist_page_v2(artist_name):
             }
 
         # Assuming artist_albums_df contains album rankings with columns 'album_name' and 'ranked_date'
-        if not artist_albums_df.empty:
+        if not artist_albums_df.empty and 'Ranked Date' in artist_albums_df.columns:
             artist_albums_df['Ranked Date'] = pd.to_datetime(artist_albums_df['Ranked Date'], errors='coerce')
             sorted_albums = artist_albums_df.sort_values('Ranked Date')
             first_album_row = sorted_albums.iloc[0]
             last_album_row = sorted_albums.iloc[-1]
 
             first_album_ranked_name = first_album_row['album_name']
-            first_album_ranked_date = first_album_row['ranked_date'].strftime('%b %d, %Y')
+            first_album_ranked_date = first_album_row['Ranked Date'].strftime('%b %d, %Y') if pd.notnull(
+                first_album_row['Ranked Date']) else ""
             last_album_ranked_name = last_album_row['album_name']
-            last_album_ranked_date = last_album_row['ranked_date'].strftime('%b %d, %Y')
+            last_album_ranked_date = last_album_row['Ranked Date'].strftime('%b %d, %Y') if pd.notnull(
+                last_album_row['Ranked Date']) else ""
         else:
             first_album_ranked_name = ""
             first_album_ranked_date = ""
