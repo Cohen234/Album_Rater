@@ -534,6 +534,23 @@ def artist_page_v2(artist_name):
                 }]
             }
 
+        # Assuming artist_albums_df contains album rankings with columns 'album_name' and 'ranked_date'
+        if not artist_albums_df.empty:
+            artist_albums_df['ranked_date'] = pd.to_datetime(artist_albums_df['ranked_date'], errors='coerce')
+            sorted_albums = artist_albums_df.sort_values('ranked_date')
+            first_album_row = sorted_albums.iloc[0]
+            last_album_row = sorted_albums.iloc[-1]
+
+            first_album_ranked_name = first_album_row['album_name']
+            first_album_ranked_date = first_album_row['ranked_date'].strftime('%b %d, %Y')
+            last_album_ranked_name = last_album_row['album_name']
+            last_album_ranked_date = last_album_row['ranked_date'].strftime('%b %d, %Y')
+        else:
+            first_album_ranked_name = ""
+            first_album_ranked_date = ""
+            last_album_ranked_name = ""
+            last_album_ranked_date = ""
+
         return render_template(
             "artist_page_v2.html",
             artist_name=artist_name,
@@ -546,6 +563,10 @@ def artist_page_v2(artist_name):
             song_leaderboard=artist_songs_df.to_dict('records'),
             album_leaderboard=artist_albums_df.to_dict('records'),
             artist_score = artist_score,
+            first_album_ranked_name= first_album_ranked_name,
+            first_album_ranked_date = first_album_ranked_date,
+            last_album_ranked_name = last_album_ranked_name,
+            last_album_ranked_date = last_album_ranked_date,
             average_song_score=average_song_score,
             median_song_score=median_song_score,
             ranking_trajectory_data=ranking_trajectory_data,
