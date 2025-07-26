@@ -301,7 +301,11 @@ def artist_page_v2(artist_name):
             (all_songs_df['Ranking'].notnull())
             ]
 
-        all_albums_df = all_albums_df[all_albums_df['weighted_average_score'].astype(str).str.strip() != ""]
+        all_albums_df = all_albums_df[
+            (all_albums_df['album_name'].astype(str).str.strip() != "") &
+            (all_albums_df['artist_name'].astype(str).str.strip() != "") &
+            (all_albums_df['weighted_average_score'].notnull())
+            ]
 
         # --- Assign Universal Rank *after* deduplication ---
         all_songs_df = all_songs_df.sort_values(by='Ranking', ascending=False)
