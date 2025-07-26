@@ -488,6 +488,51 @@ def artist_page_v2(artist_name):
                 most_improved = max(improvement_data, key=lambda x: x[1])
                 most_improved_song_name = most_improved[0]
                 most_improved_song_delta = most_improved[1]
+        import math
+
+        def safe_float(val):
+            """Convert to float or return 0.0 if not a valid number"""
+            try:
+                if isinstance(val, float) and math.isnan(val):
+                    return 0.0
+                return float(val)
+            except Exception:
+                return 0.0
+
+        # Build ranking_trajectory_data (example: a line chart of avg song score over time)
+        ranking_trajectory_data = {
+            "labels": [],
+            "datasets": [{
+                "label": "Avg Song Score",
+                "data": [],
+                "borderColor": "rgba(29, 185, 84, 1)",
+                "backgroundColor": "rgba(29, 185, 84, 0.2)",
+            }]
+        }
+
+        # Example: Compute average over time (adjust as needed for your data model)
+        if not artist_songs_df.empty and "Ranked Date" in artist_songs_df.columns:
+            # Ensure dates
+            artist_songs_df['Ranked Date'] = pd.to_datetime(artist_songs_df['Ranked Date'], errors='coerce')
+            # Group by month/year or whatever interval you want
+            grouped = artist_songs_df.groupby(artist_songs_df['Ranked Date'].dt.to_period('M'))
+            for period, group in grouped:
+                label = str(period)
+                avg_score = safe_float(group['Ranking'].mean())
+                ranking_trajectory_data['labels'].append(label)
+                ranking_trajectory_data['datasets'][0]['data'].append(avg_score)
+
+        # If no data, don't leave as Undefined!
+        if not ranking_trajectory_data["labels"]:
+            ranking_trajectory_data = {
+                "labels": [],
+                "datasets": [{
+                    "label": "Avg Song Score",
+                    "data": [],
+                    "borderColor": "rgba(29, 185, 84, 1)",
+                    "backgroundColor": "rgba(29, 185, 84, 0.2)",
+                }]
+            }
 
         return render_template(
             "artist_page_v2.html",
@@ -503,6 +548,7 @@ def artist_page_v2(artist_name):
             artist_score = artist_score,
             average_song_score=average_song_score,
             median_song_score=median_song_score,
+            ranking_trajectory_data=ranking_trajectory_data,
             std_song_score=std_song_score,
             top_album_name=top_album_name,
             top_album_score=top_album_score,
