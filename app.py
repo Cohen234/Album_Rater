@@ -433,23 +433,23 @@ def artist_page_v2(artist_name):
         median_song_score = artist_songs_df['Ranking'].median() if not artist_songs_df.empty else 0
         std_song_score = artist_songs_df['Ranking'].std() if not artist_songs_df.empty else 0
 
-        # Highest and lowest ranked songs
-        if not artist_songs_df.empty:
-            top_song_row = artist_songs_df.loc[artist_songs_df['Ranking'].idxmax()]
-            low_song_row = artist_songs_df.loc[artist_songs_df['Ranking'].idxmin()]
-            top_song_name = top_song_row['Song Name']
-            top_song_score = top_song_row['Ranking']
-            top_song_cover = top_song_row.get('album_cover_url', '')
-            top_song_link = url_for('view_album', album_id=top_song_row['Spotify Album ID']) if top_song_row.get(
-                'Spotify Album ID') else "#"
-            low_song_name = low_song_row['Song Name']
-            low_song_score = low_song_row['Ranking']
-            low_song_cover = low_song_row.get('album_cover_url', '')
-            low_song_link = url_for('view_album', album_id=low_song_row['Spotify Album ID']) if low_song_row.get(
-                'Spotify Album ID') else "#"
+        # Highest and lowest ranked albums
+        if not artist_albums_df.empty:
+            top_album_row = artist_albums_df.loc[artist_albums_df['weighted_average_score'].idxmax()]
+            low_album_row = artist_albums_df.loc[artist_albums_df['weighted_average_score'].idxmin()]
+            top_album_name = top_album_row['album_name']
+            top_album_score = top_album_row['weighted_average_score']
+            top_album_cover = top_album_row.get('album_cover_url', '')
+            top_album_link = url_for('view_album', album_id=top_album_row.get('album_id', '')) if top_album_row.get(
+                'album_id') else "#"
+            low_album_name = low_album_row['album_name']
+            low_album_score = low_album_row['weighted_average_score']
+            low_album_cover = low_album_row.get('album_cover_url', '')
+            low_album_link = url_for('view_album', album_id=low_album_row.get('album_id', '')) if low_album_row.get(
+                'album_id') else "#"
         else:
-            top_song_name = top_song_score = top_song_cover = top_song_link = ''
-            low_song_name = low_song_score = low_song_cover = low_song_link = ''
+            top_album_name = top_album_score = top_album_cover = top_album_link = ''
+            low_album_name = low_album_score = low_album_cover = low_album_link = ''
         global_avg_song_score = all_songs_df['Ranking'].mean() if not all_songs_df.empty else 0
 
         return render_template(
@@ -467,14 +467,14 @@ def artist_page_v2(artist_name):
             average_song_score=average_song_score,
             median_song_score=median_song_score,
             std_song_score=std_song_score,
-            top_song_name=top_song_name,
-            top_song_score=top_song_score,
-            top_song_cover=top_song_cover,
-            top_song_link=top_song_link,
-            low_song_name=low_song_name,
-            low_song_score=low_song_score,
-            low_song_cover=low_song_cover,
-            low_song_link=low_song_link,
+            top_album_name=top_album_name,
+            top_album_score=top_album_score,
+            top_album_cover=top_album_cover,
+            top_album_link=top_album_link,
+            low_album_name=low_album_name,
+            low_album_score=low_album_score,
+            low_album_cover=low_album_cover,
+            low_album_link=low_album_link,
             global_avg_song_score=global_avg_song_score,
         )
 
