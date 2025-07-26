@@ -283,8 +283,17 @@ def artist_page_v2(artist_name):
         all_albums_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
 
         all_songs_df['Ranking'] = pd.to_numeric(all_songs_df['Ranking'], errors='coerce')
-        all_albums_df['weighted_average_score'] = pd.to_numeric(all_albums_df['weighted_average_score'],errors='coerce')
+        all_albums_df['weighted_average_score'] = pd.to_numeric(all_albums_df['weighted_average_score'],
+                                                                errors='coerce')
 
+        # --- Keep only FINAL rows ---
+        all_songs_df = all_songs_df[all_songs_df['Ranking Status'].astype(str).str.lower() == 'final']
+
+        # --- Remove duplicates: keep only the latest by Ranked Date ---
+        all_songs_df = all_songs_df.sort_values('Ranked Date').drop_duplicates(['Song Name', 'Artist Name'],
+                                                                               keep='last')
+
+        # --- Filter for valid song/artist/ranking ---
         all_songs_df = all_songs_df[
             (all_songs_df['Song Name'].astype(str).str.strip() != "") &
             (all_songs_df['Artist Name'].astype(str).str.strip() != "") &
@@ -293,19 +302,26 @@ def artist_page_v2(artist_name):
 
         all_albums_df = all_albums_df[all_albums_df['weighted_average_score'].astype(str).str.strip() != ""]
 
-
-        # Create global leaderboards with rank columns
-        all_songs_df.sort_values(by='Ranking', ascending=False, inplace=True)
+        # --- Assign Universal Rank *after* deduplication ---
+        all_songs_df = all_songs_df.sort_values(by='Ranking', ascending=False)
         all_songs_df['Universal Rank'] = range(1, len(all_songs_df) + 1)
 
-        all_albums_df.sort_values(by='weighted_average_score', ascending=False, inplace=True)
+        # --- Duplicate check for debugging ---
+        dupes = all_songs_df[all_songs_df.duplicated(subset=['Song Name', 'Artist Name'], keep=False)]
+        print("Duplicates:\n", dupes[['Song Name', 'Artist Name', 'Ranking Status', 'Ranked Date']])
+        print("Num duplicates:", len(dupes))
+
+        # --- Sort albums and assign Global Rank ---
+        all_albums_df = all_albums_df.sort_values(by='weighted_average_score', ascending=False)
         all_albums_df['Global Rank'] = range(1, len(all_albums_df) + 1)
 
-        # Filter for the current artist
+        # --- Filter for the current artist ---
         artist_songs_df = all_songs_df[
-            all_songs_df['Artist Name'].astype(str).str.lower() == artist_name.lower()].copy()
+            all_songs_df['Artist Name'].astype(str).str.lower() == artist_name.lower()
+            ].copy()
         artist_albums_df = all_albums_df[
-            all_albums_df['artist_name'].astype(str).str.lower() == artist_name.lower()].copy()
+            all_albums_df['artist_name'].astype(str).str.lower() == artist_name.lower()
+            ].copy()
 
         # 2. --- Calculate New Stats ----
 
