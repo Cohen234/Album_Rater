@@ -155,6 +155,52 @@
             z-index: 1;
             transition: transform 0.2s ease;
         }
+        .global-comparison-card {
+            text-align: center;
+            padding-top: 32px;
+            padding-bottom: 32px;
+        }
+        .global-comp-label {
+            font-size: 1em;
+            color: var(--secondary-text);
+            font-weight: 700;
+            letter-spacing: 1px;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+        }
+        .global-comp-scores {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 32px;
+        }
+        .global-comp-score {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .score-num {
+            font-size: 2.8em;
+            font-weight: 800;
+            line-height: 1;
+        }
+        .score-num.global { color: #b3b3b3; }
+        .score-num.user { color: var(--spotify-green); }
+        .score-caption {
+            font-size: 1em;
+            color: var(--secondary-text);
+            margin-top: 4px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .vs-separator {
+            font-size: 1.7em;
+            font-weight: 700;
+            color: #888;
+            opacity: 0.7;
+            margin: 0 10px;
+        }
         .timeline-event:hover::after {
             transform: translate(-50%, -50%) scale(1.2);
         }
@@ -237,6 +283,32 @@
             vertical-align: middle;
             margin-right: 2px;
         }
+        .stat-card h3 {
+            `width: 100%;
+            text-align: center;
+            font-size: 1.08em;
+            color: var(--secondary-text);
+            font-weight: 700;
+            letter-spacing: 1.2px;
+            text-transform: uppercase;
+            margin-bottom: 18px;
+        }
+        .quick-stat-header {
+            width: 100%;
+            text-align: center;
+            font-size: 1.08em;
+            color: var(--secondary-text);
+            font-weight: 700;
+            letter-spacing: 1.2px;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+        .quick-stat-card {
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            gap: 10px;
+        }
         .lb-medal.gold {color:var(--gold);}
         .lb-medal.silver {color:var(--silver);}
         .lb-medal.bronze {color:var(--bronze);}
@@ -280,16 +352,19 @@
                 <h3>Leaderboard Points</h3>
                 <p class="value" id="animated-leaderboard-points">{{ "{:,}".format(leaderboard_points|int) }}</p>
             </div>
-            <div class="stat-card">
-                <h3>Global Comparison</h3>
-                <p class="value">
-                    {% if global_avg_song_score %}
-                        <span title="Global average song score">{{ "%.2f"|format(global_avg_song_score) }}</span>
-                        <span style="color:var(--secondary-text);font-size:1.2em; margin:0 4px;">vs</span>
-                    {% endif %}
-                    {{ "%.2f"|format(average_song_score) }}
-                </p>
-                <span class="stat-caption">Your Avg Song Score</span>
+            <div class="stat-card global-comparison-card">
+                <div class="global-comp-label">GLOBAL COMPARISON</div>
+                <div class="global-comp-scores">
+                    <div class="global-comp-score">
+                        <div class="score-num global">{{ "%.2f"|format(global_avg_song_score) }}</div>
+                        <div class="score-caption">Global Avg</div>
+                    </div>
+                    <div class="vs-separator">vs</div>
+                    <div class="global-comp-score">
+                        <div class="score-num user">{{ "%.2f"|format(average_song_score) }}</div>
+                        <div class="score-caption">Your Avg</div>
+                    </div>
+                </div>
             </div>
         </section>
 
@@ -297,13 +372,13 @@
         <section class="section-grid-4">
             <!-- Highest-Ranked Song -->
             <div class="quick-stat-card">
-                <img class="quick-stat-img" src="{{ top_song_cover or 'https://placehold.co/60x60' }}" alt="" />
+                <div class="quick-stat-header">Highest-Ranked Album</div>
+                <img class="quick-stat-img" src="{{ top_album_cover or 'https://placehold.co/60x60' }}" alt="" />
                 <div class="quick-stat-info">
-                    <div class="quick-stat-title">Highest-Ranked Song</div>
                     <div class="quick-stat-value">
-                        <a href="{{ top_song_link }}" style="color:var(--spotify-green);text-decoration:none;">{{ top_song_name }}</a>
+                        <a href="{{ top_album_link }}" style="color:var(--spotify-green);text-decoration:none;">{{ top_album_name }}</a>
                     </div>
-                    <div class="stat-caption">Score: {{ "%.2f"|format(top_song_score) }}</div>
+                    <div class="stat-caption">Score: {{ "%.2f"|format(top_album_score) }}</div>
                 </div>
             </div>
             <!-- Lowest-Ranked Song -->
