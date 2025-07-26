@@ -309,6 +309,19 @@
             text-align: center;
             gap: 10px;
         }
+        .stat-score {
+            margin-top: 12px;
+            font-size: 1.23em;
+            font-weight: 600;
+            color: #b3b3b3;
+            letter-spacing: 0.03em;
+        }
+        .stat-score span {
+            color: var(--spotify-green);
+            font-size: 1.15em;
+            font-weight: 800;
+            margin-left: 4px;
+        }
         .lb-medal.gold {color:var(--gold);}
         .lb-medal.silver {color:var(--silver);}
         .lb-medal.bronze {color:var(--bronze);}
@@ -378,7 +391,7 @@
                     <div class="quick-stat-value">
                         <a href="{{ top_album_link }}" style="color:var(--spotify-green);text-decoration:none;">{{ top_album_name }}</a>
                     </div>
-                    <div class="stat-caption">Score: {{ "%.2f"|format(top_album_score) }}</div>
+                    <div class="stat-score">Score: <span>{{ "%.2f"|format(top_album_score) }}</span></div>
                 </div>
             </div>
             <!-- Lowest-Ranked Album -->
@@ -389,7 +402,7 @@
                     <div class="quick-stat-value">
                         <a href="{{ low_album_link }}" style="color:var(--spotify-green);text-decoration:none;">{{ low_album_name }}</a>
                     </div>
-                    <div class="stat-caption">Score: {{ "%.2f"|format(low_album_score) }}</div>
+                    <div class="stat-score">Score: {{ "%.2f"|format(low_album_score) }}</div>
                 </div>
             </div>
             <!-- Highest-Ranked Song -->
@@ -400,7 +413,7 @@
                     <div class="quick-stat-value">
                         <a href="{{ top_song_link }}" style="color:var(--spotify-green);text-decoration:none;">{{ top_song_name }}</a>
                     </div>
-                    <div class="stat-caption">Score: {{ "%.2f"|format(top_song_score) }}</div>
+                    <div class="stat-score">Score: {{ "%.2f"|format(top_song_score) }}</div>
                 </div>
             </div>
             <!-- Lowest-Ranked Song -->
@@ -411,7 +424,7 @@
                     <div class="quick-stat-value">
                         <a href="{{ low_song_link }}" style="color:var(--spotify-green);text-decoration:none;">{{ low_song_name }}</a>
                     </div>
-                    <div class="stat-caption">Score: {{ "%.2f"|format(low_song_score) }}</div>
+                    <div class="stat-score">Score: {{ "%.2f"|format(low_song_score) }}</div>
                 </div>
             </div>
         </section>
@@ -435,7 +448,7 @@
                 <div class="quick-stat-header">MOST IMPROVED SONG</div>
                 <div class="quick-stat-info">
                     <div class="quick-stat-value">{{ most_improved_song_name or "" }}</div>
-                    <div class="stat-caption">+{{ "%.2f"|format(most_improved_song_delta) }}</div>
+                    <div class="stat-score">+{{ "%.2f"|format(most_improved_song_delta) }}</div>
                 </div>
             </div>
             <!-- Ranking Activity -->
@@ -447,7 +460,7 @@
                     <div class="stat-caption" style="margin-bottom:5px;">{{ first_song_ranked_date }}</div>
                     <div class="stat-caption" style="margin-top:12px;">Most Recent Song Ranked:</div>
                     <div class="quick-stat-value" style="font-size:1.15em;">{{ last_song_ranked_name }}</div>
-                    <div class="stat-caption">{{ last_song_ranked_date }}</div>
+                    <div class="stat-score">{{ last_song_ranked_date }}</div>
                 </div>
             </div>
         </section>
