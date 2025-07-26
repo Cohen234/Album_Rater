@@ -283,8 +283,11 @@ def artist_page_v2(artist_name):
         all_albums_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
 
         all_songs_df['Ranking'] = pd.to_numeric(all_songs_df['Ranking'], errors='coerce')
-        all_albums_df['weighted_average_score'] = pd.to_numeric(all_albums_df['weighted_average_score'],
-                                                                errors='coerce')
+        all_albums_df['weighted_average_score'] = pd.to_numeric(all_albums_df['weighted_average_score'],errors='coerce')
+
+        all_songs_df = all_songs_df[all_songs_df['Ranking'].astype(str).str.strip() != ""]
+        all_albums_df = all_albums_df[all_albums_df['weighted_average_score'].astype(str).str.strip() != ""]
+
 
         # Create global leaderboards with rank columns
         all_songs_df.sort_values(by='Ranking', ascending=False, inplace=True)
