@@ -34,13 +34,11 @@
         header { text-align: center; margin-bottom: 25px; position:relative;}
         header h1 { font-size: 4em; margin: 0; z-index:2; position:relative;}
         .banner-hero {
-            width:100%;
-            height:220px;
-            background:linear-gradient(90deg, rgba(18,18,18,0.9) 70%, rgba(29,185,84,0.15)), url('{{ artist_banner_url or "" }}') center/cover no-repeat;
-            border-radius: 12px;
-            margin-bottom: -120px;
-            position:relative;
-            box-shadow: 0 6px 36px rgba(0,0,0,0.2);
+            background:
+                linear-gradient(90deg, rgba(18,18,18,0.92) 60%, rgba(29,185,84,0.15)),
+                url('{{ artist_banner_url }}') center/cover no-repeat;
+            filter: blur(0px); /* optional: try 2-4px for extra softness */
+            position: relative;
         }
         .header-actions {
             margin-top: 20px;
@@ -197,6 +195,25 @@
             font-size: 0.8em;
             font-weight: 600;
         }
+        .banner-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            gap: 18px;
+            padding: 60px 0;
+        }
+        .artist-subtext {
+            color: #b3b3b3;
+            font-size: 1.1em;
+            margin-bottom: 4px;
+            font-weight: 500;
+        }
+        .action-button {
+            margin-top: 0; /* Remove extra margin if inside .banner-content */
+            box-shadow: 0 2px 8px rgba(29,185,84,0.25);
+        }
         .leaderboard-card { overflow: hidden; }
         .leaderboard-table-wrapper { max-height: 500px; overflow-y: auto; }
         table { width: 100%; border-collapse: collapse; }
@@ -237,7 +254,17 @@
     </style>
 </head>
 <body>
-    <div class="banner-hero"></div>
+    <div class="banner-hero">
+        <div class="banner-content">
+            <h1>Kanye West</h1>
+            <a href="#" class="action-button">Rank an Album</a>
+        </div>
+    </div>
+    <div class="banner-content">
+        <h1>Kanye West</h1>
+        <span class="artist-subtext">Hip-Hop Legend • 32M Monthly Listeners</span>
+        <a href="#" class="action-button">Rank an Album</a>
+    </div>
     <header>
         <h1>{{ artist_name }}</h1>
         <div class="header-actions">
