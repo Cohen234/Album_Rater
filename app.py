@@ -285,7 +285,12 @@ def artist_page_v2(artist_name):
         all_songs_df['Ranking'] = pd.to_numeric(all_songs_df['Ranking'], errors='coerce')
         all_albums_df['weighted_average_score'] = pd.to_numeric(all_albums_df['weighted_average_score'],errors='coerce')
 
-        all_songs_df = all_songs_df[all_songs_df['Ranking'].astype(str).str.strip() != ""]
+        all_songs_df = all_songs_df[
+            (all_songs_df['Song Name'].astype(str).str.strip() != "") &
+            (all_songs_df['Artist Name'].astype(str).str.strip() != "") &
+            (all_songs_df['Ranking'].notnull())
+            ]
+
         all_albums_df = all_albums_df[all_albums_df['weighted_average_score'].astype(str).str.strip() != ""]
 
 
@@ -314,7 +319,7 @@ def artist_page_v2(artist_name):
         # LEADERBOARD POINTS
         total_songs = len(all_songs_df)
         total_albums = len(all_albums_df)
-        song_points = (total_songs - artist_songs_df['Universal Rank'] + 1).sum()
+        song_points = artist_songs_df['Universal Rank'].apply(lambda x: total_songs - x + 1).sum()
         album_points = ((total_albums - artist_albums_df['Global Rank'] + 1) * 10).sum()
         total_leaderboard_points = song_points + album_points
 
@@ -399,6 +404,9 @@ def artist_page_v2(artist_name):
             'labels': polar_data_series.index.tolist(),
             'data': polar_data_series.values.tolist()
         }
+        print("Filtered all_songs_df shape:", all_songs_df.shape)
+        print("First 5 rows:\n", all_songs_df.head())
+        print("Filtered artist_songs_df shape:", artist_songs_df.shape)
 
         return render_template(
             "artist_page_v2.html",
