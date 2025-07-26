@@ -429,6 +429,28 @@ def artist_page_v2(artist_name):
         print("Filtered all_songs_df shape:", all_songs_df.shape)
         print("First 5 rows:\n", all_songs_df.head())
         print("Filtered artist_songs_df shape:", artist_songs_df.shape)
+        average_song_score = artist_songs_df['Ranking'].mean() if not artist_songs_df.empty else 0
+        median_song_score = artist_songs_df['Ranking'].median() if not artist_songs_df.empty else 0
+        std_song_score = artist_songs_df['Ranking'].std() if not artist_songs_df.empty else 0
+
+        # Highest and lowest ranked songs
+        if not artist_songs_df.empty:
+            top_song_row = artist_songs_df.loc[artist_songs_df['Ranking'].idxmax()]
+            low_song_row = artist_songs_df.loc[artist_songs_df['Ranking'].idxmin()]
+            top_song_name = top_song_row['Song Name']
+            top_song_score = top_song_row['Ranking']
+            top_song_cover = top_song_row.get('album_cover_url', '')
+            top_song_link = url_for('view_album', album_id=top_song_row['Spotify Album ID']) if top_song_row.get(
+                'Spotify Album ID') else "#"
+            low_song_name = low_song_row['Song Name']
+            low_song_score = low_song_row['Ranking']
+            low_song_cover = low_song_row.get('album_cover_url', '')
+            low_song_link = url_for('view_album', album_id=low_song_row['Spotify Album ID']) if low_song_row.get(
+                'Spotify Album ID') else "#"
+        else:
+            top_song_name = top_song_score = top_song_cover = top_song_link = ''
+            low_song_name = low_song_score = low_song_cover = low_song_link = ''
+        global_avg_song_score = all_songs_df['Ranking'].mean() if not all_songs_df.empty else 0
 
         return render_template(
             "artist_page_v2.html",
@@ -441,7 +463,19 @@ def artist_page_v2(artist_name):
             polar_chart_data=polar_chart_data,
             song_leaderboard=artist_songs_df.to_dict('records'),
             album_leaderboard=artist_albums_df.to_dict('records'),
-            artist_score = artist_score
+            artist_score = artist_score,
+            average_song_score=average_song_score,
+            median_song_score=median_song_score,
+            std_song_score=std_song_score,
+            top_song_name=top_song_name,
+            top_song_score=top_song_score,
+            top_song_cover=top_song_cover,
+            top_song_link=top_song_link,
+            low_song_name=low_song_name,
+            low_song_score=low_song_score,
+            low_song_cover=low_song_cover,
+            low_song_link=low_song_link,
+            global_avg_song_score=global_avg_song_score,
         )
 
     except Exception as e:
