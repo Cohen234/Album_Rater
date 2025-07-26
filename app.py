@@ -347,6 +347,10 @@ def artist_page_v2(artist_name):
         print("Max possible with 130 songs:")
         print((total_songs - np.arange(1, 131) + 1).sum())
 
+        print("Song points:", song_points)
+        print("Album points:", album_points)
+        print("Total leaderboard points:", total_leaderboard_points)
+
         # ARTIST SCORE (My suggested implementation)
         # Average percentile of albums and songs, weighted 60/40
         album_percentile = ((total_albums - artist_albums_df[
