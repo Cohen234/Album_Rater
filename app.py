@@ -333,10 +333,17 @@ def artist_page_v2(artist_name):
         max_mastery_points = total_spotify_albums * 3
         mastery_percentage = (mastery_points / max_mastery_points) * 100 if max_mastery_points > 0 else 0
 
+
         # LEADERBOARD POINTS
         total_songs = len(all_songs_df)
         total_albums = len(all_albums_df)
         song_points = artist_songs_df['Universal Rank'].apply(lambda x: total_songs - x + 1).sum()
+        print("Kanye West's albums:")
+        print(artist_albums_df[['album_name', 'Global Rank']])
+        print("Total albums in all_albums_df:", len(all_albums_df))
+        print("Global Ranks in artist_albums_df:", artist_albums_df['Global Rank'].tolist())
+        print("Album Points Calculation:", ((total_albums - artist_albums_df['Global Rank'] + 1) * 10).tolist())
+        print("Sum Album Points:", ((total_albums - artist_albums_df['Global Rank'] + 1) * 10).sum())
         album_points = ((total_albums - artist_albums_df['Global Rank'] + 1) * 10).sum()
         total_leaderboard_points = song_points + album_points
 
