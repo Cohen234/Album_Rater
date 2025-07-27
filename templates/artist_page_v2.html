@@ -438,6 +438,44 @@
             font-weight: 800;
             margin-left: 4px;
         }
+        .lb-table-album-name,
+        .lb-table-song-name {
+            display: inline-block;
+            max-width: 200px; /* Adjust as needed for your layout */
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            vertical-align: middle;
+            position: relative;
+            cursor: pointer;
+        }
+
+        /* Optional: Tooltip style on hover */
+        .lb-table-album-name:hover::after,
+        .lb-table-song-name:hover::after {
+            content: attr(data-full-title);
+            position: absolute;
+            left: 0;
+            top: 110%;
+            z-index: 10;
+            background: #232323;
+            color: #fff;
+            padding: 6px 14px;
+            border-radius: 7px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.23);
+            font-size: 1em;
+            white-space: normal;
+            min-width: 180px;
+            max-width: 340px;
+            pointer-events: none;
+        }
+
+        /* Make the leaderboard image and name fit in a flex row for better alignment */
+        .lb-table-album-cell, .lb-table-song-cell {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
         .lb-medal.gold {color:var(--gold);}
         .lb-medal.silver {color:var(--silver);}
         .lb-medal.bronze {color:var(--bronze);}
@@ -644,9 +682,9 @@
                                     {{ album['Artist Rank'] }}
                                 {% endif %}
                             </td>
-                            <td>
+                            <td class="lb-table-album-cell">
                                 <img class="lb-table-album-img" src="{{ album['album_cover_url'] or 'https://placehold.co/32x32' }}" alt="" />
-                                {{ album['album_name'] }}
+                                <span class="lb-table-album-name" data-full-title="{{ album['album_name'] }}">{{ album['album_name'] }}</span>
                             </td>
                             <td>{{ "%.2f"|format(album['weighted_average_score']) }}</td>
                             <td class="global-rank">#{{ album['Global Rank'] }}</td>
@@ -675,9 +713,9 @@
                                     {{ song['Artist Rank'] }}
                                 {% endif %}
                             </td>
-                            <td>
+                            <td class="lb-table-song-cell">
                                 <img class="lb-table-song-img" src="{{ song['album_cover_url'] or 'https://placehold.co/32x32' }}" alt="" />
-                                {{ song['Song Name'] }}
+                                <span class="lb-table-song-name" data-full-title="{{ song['Song Name'] }}">{{ song['Song Name'] }}</span>
                             </td>
                             <td>{{ "%.2f"|format(song['Ranking']) }}</td>
                             <td class="global-rank">#{{ song['Universal Rank'] }}</td>
