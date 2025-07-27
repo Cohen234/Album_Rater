@@ -222,7 +222,7 @@
         .timeline-horizontal-bar {
             position: absolute;
             left: 0; right: 0;
-            top: 64px; /* Now aligns with dot center */
+            top: 75px; /* Set to match dot center */
             height: 4px;
             background: #383838;
             border-radius: 2px;
@@ -251,27 +251,22 @@
             align-items: center;
             min-width: 165px;
             max-width: 200px;
-            position: relative;
+            position: relative; /* Needed for absolute dot */
             background: none;
         }
 
         .timeline-dot {
+            position: absolute;
+            left: 50%;
+            top: 75px; /* Same as .timeline-horizontal-bar top */
+            transform: translate(-50%, -50%);
             width: 24px;
             height: 24px;
             border-radius: 50%;
             background: var(--spotify-green);
             border: 3px solid var(--surface-color);
             box-shadow: 0 0 0 2px #232323;
-            position: relative;
             z-index: 3;
-            top: 0;
-            margin-bottom: 0px;
-        }
-
-        .timeline-spacer {
-            height: 30px;
-            width: 1px;
-            display: block;
         }
 
         .timeline-img {
@@ -279,7 +274,7 @@
             height: 110px;
             border-radius: 12px;
             margin-bottom: 12px;
-            margin-top: 0px;
+            margin-top: 60px; /* Pushes image below the dot/line */
             box-shadow: 0 2px 8px rgba(0,0,0,0.18);
         }
 
