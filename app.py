@@ -272,16 +272,21 @@ def load_google_sheet_data():
 
 def clean_title(title):
     """
-    Removes edition/descriptive tags from album/song titles for display.
-    Examples removed: (Remastered), - Remastered, - 2009 Mix, (Deluxe Edition), etc.
+    Clean a song or album title for display:
+    - Remove years (e.g. 2009, 2015), 'Remastered', 'Mix', 'Edition', etc.
+    - Remove anything in parentheses.
+    - Remove dashes and descriptors at the end.
     """
     # Remove anything in parentheses, e.g. (Remastered 2009), (Deluxe Edition)
     title = re.sub(r'\s*\([^)]*\)', '', title)
-    # Remove dashes and descriptors like "- Remastered", "- 2009 Mix", "- Extended Edition", etc.
-    title = re.sub(r'\s*-\s*(Remastered|[0-9]{4} Mix|Mix|Extended Edition|Bonus Track|Deluxe Edition|Mono Version|Stereo Version|Edit|Version|Live|Single Version|From .*|Remaster(ed)? ?[0-9]*)', '', title, flags=re.IGNORECASE)
-    # Remove "Remastered YYYY" at the end
+    # Remove dashes and common descriptors at end of string (and years), e.g. " - 2009 Mix", " - Remastered 2015"
+    title = re.sub(r'\s*-\s*(Remastered|Remaster(ed)?|[0-9]{4} Mix|Mix|Extended Edition|Bonus Track|Deluxe Edition|Mono Version|Stereo Version|Edit|Version|Live|Single Version|From [^,\.]*|[0-9]{4})\s*$', '', title, flags=re.IGNORECASE)
+    # Remove "Remastered YYYY" or "YYYY Remaster" at end
     title = re.sub(r'\s*Remaster(ed)? ?[0-9]*$', '', title, flags=re.IGNORECASE)
-    # Remove extra whitespace
+    # Remove years at end or in middle of string
+    title = re.sub(r'\s*\b(19|20)\d{2}\b', '', title)
+    # Remove extra whitespace and stray dashes
+    title = re.sub(r'\s*-\s*$', '', title)
     title = re.sub(r'\s+', ' ', title)
     return title.strip()
 # In app.py
@@ -396,6 +401,8 @@ def artist_page_v2(artist_name):
                 'tension': 0.4,  # Smoother curve
             }]
         }
+        for d in ranking_era_data['datasets'][0]['data']:
+            d['label'] = clean_title(d['label'])
 
         # --- Prepare Data for "Ranking Timeline" ---
         timeline_events = []
@@ -417,8 +424,10 @@ def artist_page_v2(artist_name):
             except (json.JSONDecodeError, TypeError):
                 logging.warning(f"Could not parse rerank_history for album {row['album_id']}")
                 continue
-
+        for event in timeline_events:
+            event['album_name'] = clean_title(event['album_name'])
         valid_timeline_events = [event for event in timeline_events if not pd.isnull(event['date_obj'])]
+
         ranking_timeline_data = sorted(valid_timeline_events, key=lambda x: x['date_obj'])
 
         # --- Prepare Leaderboard and other stats ---
@@ -550,6 +559,17 @@ def artist_page_v2(artist_name):
                     "backgroundColor": "rgba(29, 185, 84, 0.2)",
                 }]
             }
+        # For song leaderboard
+        song_leaderboard_clean = []
+        for row in artist_songs_df.to_dict('records'):
+            row['Song Name'] = clean_title(row['Song Name'])
+            song_leaderboard_clean.append(row)
+
+        # For album leaderboard
+        album_leaderboard_clean = []
+        for row in artist_albums_df.to_dict('records'):
+            row['album_name'] = clean_title(row['album_name'])
+            album_leaderboard_clean.append(row)
 
         # Assuming artist_albums_df contains album rankings with columns 'album_name' and 'ranked_date'
         if not artist_albums_df.empty and 'Ranked Date' in artist_albums_df.columns:
@@ -585,8 +605,8 @@ def artist_page_v2(artist_name):
             ranking_era_data=ranking_era_data,
             ranking_timeline_data=ranking_timeline_data,
             polar_chart_data=polar_chart_data,
-            song_leaderboard=artist_songs_df.to_dict('records'),
-            album_leaderboard=artist_albums_df.to_dict('records'),
+            song_leaderboard=song_leaderboard_clean,
+            album_leaderboard=album_leaderboard_clean,
             artist_score = artist_score,
             first_album_ranked_name= first_album_ranked_name_display,
             first_album_ranked_date = first_album_ranked_date,
