@@ -327,6 +327,9 @@ def artist_page_v2(artist_name):
         artist_albums_df = all_albums_df[
             all_albums_df['artist_name'].astype(str).str.lower() == artist_name.lower()
             ].copy()
+        if artist_songs_df.empty and artist_albums_df.empty:
+            # No ranked albums or songs for this artist yet, redirect to album select page
+            return redirect(url_for('load_albums_by_artist_route', artist_name=artist_name))
 
         # 2. --- Calculate New Stats ----
 
