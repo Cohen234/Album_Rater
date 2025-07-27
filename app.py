@@ -538,15 +538,23 @@ def artist_page_v2(artist_name):
 
         # Example: Compute average over time (adjust as needed for your data model)
         if not artist_songs_df.empty and "Ranked Date" in artist_songs_df.columns:
-            # Ensure dates
             artist_songs_df['Ranked Date'] = pd.to_datetime(artist_songs_df['Ranked Date'], errors='coerce')
-            # Group by month/year or whatever interval you want
-            grouped = artist_songs_df.groupby(artist_songs_df['Ranked Date'].dt.to_period('M'))
-            for period, group in grouped:
-                label = str(period)
-                avg_score = safe_float(group['Ranking'].mean())
-                ranking_trajectory_data['labels'].append(label)
-                ranking_trajectory_data['datasets'][0]['data'].append(avg_score)
+            # If enough rankings, group by month, else just plot by date
+            if artist_songs_df['Ranked Date'].nunique() > 2:
+                grouped = artist_songs_df.groupby(artist_songs_df['Ranked Date'].dt.to_period('M'))
+                for period, group in grouped:
+                    label = str(period)
+                    avg_score = safe_float(group['Ranking'].mean())
+                    ranking_trajectory_data['labels'].append(label)
+                    ranking_trajectory_data['datasets'][0]['data'].append(avg_score)
+            else:
+                # Just plot each ranking as a separate point
+                sorted_rows = artist_songs_df.sort_values('Ranked Date')
+                for _, row in sorted_rows.iterrows():
+                    label = row['Ranked Date'].strftime('%b %d, %Y') if pd.notnull(row['Ranked Date']) else ""
+                    avg_score = safe_float(row['Ranking'])
+                    ranking_trajectory_data['labels'].append(label)
+                    ranking_trajectory_data['datasets'][0]['data'].append(avg_score)
 
         # If no data, don't leave as Undefined!
         if not ranking_trajectory_data["labels"]:
@@ -572,18 +580,17 @@ def artist_page_v2(artist_name):
             album_leaderboard_clean.append(row)
 
         # Assuming artist_albums_df contains album rankings with columns 'album_name' and 'ranked_date'
-        if not artist_albums_df.empty and 'Ranked Date' in artist_albums_df.columns:
-            artist_albums_df['Ranked Date'] = pd.to_datetime(artist_albums_df['Ranked Date'], errors='coerce')
-            sorted_albums = artist_albums_df.sort_values('Ranked Date')
-            first_album_row = sorted_albums.iloc[0]
-            last_album_row = sorted_albums.iloc[-1]
-
-            first_album_ranked_name = first_album_row['album_name']
-            first_album_ranked_date = first_album_row['Ranked Date'].strftime('%b %d, %Y') if pd.notnull(
-                first_album_row['Ranked Date']) else ""
-            last_album_ranked_name = last_album_row['album_name']
-            last_album_ranked_date = last_album_row['Ranked Date'].strftime('%b %d, %Y') if pd.notnull(
-                last_album_row['Ranked Date']) else ""
+        if not artist_songs_df.empty and 'Ranked Date' in artist_songs_df.columns:
+            artist_songs_df['Ranked Date'] = pd.to_datetime(artist_songs_df['Ranked Date'], errors='coerce')
+            # Get the row with the earliest ranked date
+            first_song_row = artist_songs_df.loc[artist_songs_df['Ranked Date'].idxmin()]
+            last_song_row = artist_songs_df.loc[artist_songs_df['Ranked Date'].idxmax()]
+            first_album_ranked_name = first_song_row['Album Name']
+            first_album_ranked_date = first_song_row['Ranked Date'].strftime('%b %d, %Y') if pd.notnull(
+                first_song_row['Ranked Date']) else ""
+            last_album_ranked_name = last_song_row['Album Name']
+            last_album_ranked_date = last_song_row['Ranked Date'].strftime('%b %d, %Y') if pd.notnull(
+                last_song_row['Ranked Date']) else ""
         else:
             first_album_ranked_name = ""
             first_album_ranked_date = ""
