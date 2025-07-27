@@ -222,7 +222,7 @@
         .timeline-horizontal-bar {
             position: absolute;
             left: 0; right: 0;
-            top: 75px; /* Set to match dot center */
+            top: 75px; /* This is the vertical position of the line */
             height: 4px;
             background: #383838;
             border-radius: 2px;
@@ -246,19 +246,19 @@
         }
 
         .timeline-event-col {
+            position: relative;
+            min-width: 165px;
+            max-width: 200px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            min-width: 165px;
-            max-width: 200px;
-            position: relative; /* Needed for absolute dot */
             background: none;
         }
 
         .timeline-dot {
             position: absolute;
             left: 50%;
-            top: 75px; /* Same as .timeline-horizontal-bar top */
+            top: 75px; /* EXACTLY the same as .timeline-horizontal-bar top */
             transform: translate(-50%, -50%);
             width: 24px;
             height: 24px;
@@ -269,12 +269,18 @@
             z-index: 3;
         }
 
+        .timeline-content {
+            margin-top: 100px; /* pushes the album art below the line/dot */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
         .timeline-img {
             width: 110px;
             height: 110px;
             border-radius: 12px;
             margin-bottom: 12px;
-            margin-top: 60px; /* Pushes image below the dot/line */
+            margin-top: 0;
             box-shadow: 0 2px 8px rgba(0,0,0,0.18);
         }
 
@@ -598,11 +604,13 @@
                         {% for event in ranking_timeline_data %}
                         <div class="timeline-event-col">
                             <div class="timeline-dot"></div>
-                            <img src="{{ event.album_cover_url or 'https://placehold.co/100x100/181818/FFF?text=?' }}" class="timeline-img" alt="{{ event.album_name }}">
-                            <div class="timeline-album-title">{{ event.album_name }}</div>
-                            <div class="timeline-score">Score: {{ "%.2f"|format(event.score) }}</div>
-                            <div class="timeline-placement">Placement: {{ event.placement }}</div>
-                            <div class="timeline-date">{{ event.ranking_date_str }}</div>
+                            <div class="timeline-content">
+                                <img src="{{ event.album_cover_url or 'https://placehold.co/100x100/181818/FFF?text=?' }}" class="timeline-img" alt="{{ event.album_name }}">
+                                <div class="timeline-album-title">{{ event.album_name }}</div>
+                                <div class="timeline-score">Score: {{ "%.2f"|format(event.score) }}</div>
+                                <div class="timeline-placement">Placement: {{ event.placement }}</div>
+                                <div class="timeline-date">{{ event.ranking_date_str }}</div>
+                            </div>
                         </div>
                         {% endfor %}
                     </div>
