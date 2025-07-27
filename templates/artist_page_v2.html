@@ -219,10 +219,11 @@
             position: relative;
         }
 
+        /* Timeline Line */
         .timeline-horizontal-bar {
             position: absolute;
             left: 0; right: 0;
-            top: 75px; /* This is the vertical position of the line */
+            top: 80px; /* set this to the vertical position for your timeline */
             height: 4px;
             background: #383838;
             border-radius: 2px;
@@ -231,20 +232,7 @@
             margin-right: 45px;
         }
 
-        .timeline-horizontal {
-            display: flex;
-            flex-direction: row;
-            align-items: flex-start;
-            min-height: 320px;
-            gap: 60px;
-            width: max-content;
-            margin-top: 30px;
-            position: relative;
-            z-index: 2;
-            padding-left: 50px;
-            padding-right: 50px;
-        }
-
+        /* Timeline Event Container */
         .timeline-event-col {
             position: relative;
             min-width: 165px;
@@ -255,10 +243,11 @@
             background: none;
         }
 
+        /* The Dot - sits directly on the line */
         .timeline-dot {
             position: absolute;
             left: 50%;
-            top: 75px; /* EXACTLY the same as .timeline-horizontal-bar top */
+            top: 80px; /* must match .timeline-horizontal-bar top! */
             transform: translate(-50%, -50%);
             width: 24px;
             height: 24px;
@@ -269,12 +258,14 @@
             z-index: 3;
         }
 
+        /* Content is pushed below the line+dot */
         .timeline-content {
-            margin-top: 100px; /* pushes the album art below the line/dot */
+            margin-top: 100px; /* must be greater than .timeline-horizontal-bar top + dot radius */
             display: flex;
             flex-direction: column;
             align-items: center;
         }
+
         .timeline-img {
             width: 110px;
             height: 110px;
