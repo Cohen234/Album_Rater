@@ -208,6 +208,7 @@
             flex-direction: column;
             justify-content: flex-start;
             background: var(--surface-color);
+            position: relative;
         }
 
         .timeline-scrollbar {
@@ -221,13 +222,13 @@
         .timeline-horizontal-bar {
             position: absolute;
             left: 0; right: 0;
-            top: 62px;
+            top: 64px; /* Now aligns with dot center */
             height: 4px;
             background: #383838;
             border-radius: 2px;
             z-index: 1;
-            margin-left: 25px;
-            margin-right: 25px;
+            margin-left: 45px;
+            margin-right: 45px;
         }
 
         .timeline-horizontal {
@@ -235,52 +236,50 @@
             flex-direction: row;
             align-items: flex-start;
             min-height: 320px;
-            gap: 38px;
+            gap: 60px;
             width: max-content;
             margin-top: 30px;
             position: relative;
             z-index: 2;
-            padding-left: 38px;
-            padding-right: 38px;
+            padding-left: 50px;
+            padding-right: 50px;
         }
 
         .timeline-event-col {
             display: flex;
             flex-direction: column;
             align-items: center;
-            min-width: 160px;
-            max-width: 180px;
+            min-width: 165px;
+            max-width: 200px;
             position: relative;
             background: none;
         }
 
         .timeline-dot {
-            width: 20px;
-            height: 20px;
+            width: 24px;
+            height: 24px;
             border-radius: 50%;
             background: var(--spotify-green);
-            margin-bottom: 8px;
-            margin-top: -14px;
-            z-index: 3;
             border: 3px solid var(--surface-color);
             box-shadow: 0 0 0 2px #232323;
+            position: relative;
+            z-index: 3;
+            top: 0;
+            margin-bottom: 0px;
         }
 
-        .timeline-connector {
-            position: absolute;
-            top: 32px;
-            left: 50%;
-            width: 4px;
+        .timeline-spacer {
             height: 30px;
-            background: transparent;
-            z-index: 2;
+            width: 1px;
+            display: block;
         }
 
         .timeline-img {
-            width: 100px;
-            height: 100px;
-            border-radius: 10px;
+            width: 110px;
+            height: 110px;
+            border-radius: 12px;
             margin-bottom: 12px;
+            margin-top: 0px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.18);
         }
 
@@ -599,12 +598,12 @@
             <div class="chart-card ranking-timeline-card">
                 <h3>Ranking Timeline</h3>
                 <div class="timeline-scrollbar">
-                    <div class="timeline-horizontal-bar"></div> <!-- Timeline bar -->
+                    <div class="timeline-horizontal-bar"></div>
                     <div class="timeline-horizontal">
                         {% for event in ranking_timeline_data %}
                         <div class="timeline-event-col">
-                            <div class="timeline-connector"></div>
                             <div class="timeline-dot"></div>
+                            <div class="timeline-spacer"></div>
                             <img src="{{ event.album_cover_url or 'https://placehold.co/100x100/181818/FFF?text=?' }}" class="timeline-img" alt="{{ event.album_name }}">
                             <div class="timeline-album-title">{{ event.album_name }}</div>
                             <div class="timeline-score">Score: {{ "%.2f"|format(event.score) }}</div>
