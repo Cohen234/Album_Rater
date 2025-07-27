@@ -438,19 +438,45 @@
             font-weight: 800;
             margin-left: 4px;
         }
-        .lb-table-album-name,
-        .lb-table-song-name {
-            display: inline-block;
-            max-width: 200px; /* Adjust as needed for your layout */
+        .lb-table-album-cell, .lb-table-song-cell {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            /* Set a max width to prevent the cell from growing too much */
+            max-width: 280px; /* adjust as needed for your layout */
+            min-width: 140px;
+            width: 100%;
+            /* Prevent cell from wrapping content to a new row */
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        .lb-table-album-name, .lb-table-song-name {
+            display: block;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
-            vertical-align: middle;
-            position: relative;
+            flex: 1 1 0;
+            min-width: 0; /* Required for flex ellipsis to work! */
             cursor: pointer;
+            position: relative;
+            font-size: 1.07em;
+            color: #fff;
         }
 
-        /* Optional: Tooltip style on hover */
+        .lb-table-album-cell img,
+        .lb-table-song-cell img {
+            flex-shrink: 0;
+        }
+        .lb-medal.gold {color:var(--gold);}
+        .lb-medal.silver {color:var(--silver);}
+        .lb-medal.bronze {color:var(--bronze);}
+        tr:hover { background-color: #202020; cursor:pointer;}
+        @media (max-width: 900px) {
+            .section-grid-4, .section-grid-2 { grid-template-columns: 1fr; }
+            .timeline-container { padding:10px; }
+            .timeline-card img { width:60px; height:60px;}
+        }
         .lb-table-album-name:hover::after,
         .lb-table-song-name:hover::after {
             content: attr(data-full-title);
@@ -468,22 +494,6 @@
             min-width: 180px;
             max-width: 340px;
             pointer-events: none;
-        }
-
-        /* Make the leaderboard image and name fit in a flex row for better alignment */
-        .lb-table-album-cell, .lb-table-song-cell {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .lb-medal.gold {color:var(--gold);}
-        .lb-medal.silver {color:var(--silver);}
-        .lb-medal.bronze {color:var(--bronze);}
-        tr:hover { background-color: #202020; cursor:pointer;}
-        @media (max-width: 900px) {
-            .section-grid-4, .section-grid-2 { grid-template-columns: 1fr; }
-            .timeline-container { padding:10px; }
-            .timeline-card img { width:60px; height:60px;}
         }
         /* Responsive scroll for tables */
         .chart-card table {display: block; overflow-x: auto;}
