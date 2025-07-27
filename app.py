@@ -270,6 +270,20 @@ def load_google_sheet_data():
     return sheet.get_all_records()
 
 
+def clean_title(title):
+    """
+    Removes edition/descriptive tags from album/song titles for display.
+    Examples removed: (Remastered), - Remastered, - 2009 Mix, (Deluxe Edition), etc.
+    """
+    # Remove anything in parentheses, e.g. (Remastered 2009), (Deluxe Edition)
+    title = re.sub(r'\s*\([^)]*\)', '', title)
+    # Remove dashes and descriptors like "- Remastered", "- 2009 Mix", "- Extended Edition", etc.
+    title = re.sub(r'\s*-\s*(Remastered|[0-9]{4} Mix|Mix|Extended Edition|Bonus Track|Deluxe Edition|Mono Version|Stereo Version|Edit|Version|Live|Single Version|From .*|Remaster(ed)? ?[0-9]*)', '', title, flags=re.IGNORECASE)
+    # Remove "Remastered YYYY" at the end
+    title = re.sub(r'\s*Remaster(ed)? ?[0-9]*$', '', title, flags=re.IGNORECASE)
+    # Remove extra whitespace
+    title = re.sub(r'\s+', ' ', title)
+    return title.strip()
 # In app.py
 
 @app.route("/artist/<string:artist_name>")
@@ -555,6 +569,12 @@ def artist_page_v2(artist_name):
             first_album_ranked_date = ""
             last_album_ranked_name = ""
             last_album_ranked_date = ""
+        top_album_display_name = clean_title(top_album_name)
+        low_album_display_name = clean_title(low_album_name)
+        top_song_display_name = clean_title(top_song_name)
+        low_song_display_name = clean_title(low_song_name)
+        first_album_ranked_name_display = clean_title(first_album_ranked_name)
+        last_album_ranked_name_display = clean_title(last_album_ranked_name)
 
         return render_template(
             "artist_page_v2.html",
@@ -568,27 +588,27 @@ def artist_page_v2(artist_name):
             song_leaderboard=artist_songs_df.to_dict('records'),
             album_leaderboard=artist_albums_df.to_dict('records'),
             artist_score = artist_score,
-            first_album_ranked_name= first_album_ranked_name,
+            first_album_ranked_name= first_album_ranked_name_display,
             first_album_ranked_date = first_album_ranked_date,
-            last_album_ranked_name = last_album_ranked_name,
+            last_album_ranked_name = last_album_ranked_name_display,
             last_album_ranked_date = last_album_ranked_date,
             average_song_score=average_song_score,
             median_song_score=median_song_score,
             ranking_trajectory_data=ranking_trajectory_data,
             std_song_score=std_song_score,
-            top_album_name=top_album_name,
+            top_album_name=top_album_display_name,
             top_album_score=top_album_score,
             top_album_cover=top_album_cover,
             top_album_link=top_album_link,
-            low_album_name=low_album_name,
+            low_album_name=low_album_display_name,
             low_album_score=low_album_score,
             low_album_cover=low_album_cover,
             low_album_link=low_album_link,
-            top_song_name=top_song_name,
+            top_song_name=top_song_display_name,
             top_song_score=top_song_score,
             top_song_cover=top_song_cover,
             top_song_link=top_song_link,
-            low_song_name=low_song_name,
+            low_song_name=low_song_display_name,
             low_song_score=low_song_score,
             low_song_cover=low_song_cover,
             low_song_link=low_song_link,
