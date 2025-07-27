@@ -463,6 +463,39 @@
             font-size: 1.07em;
             color: #fff;
         }
+        .lb-table-song-cell, .lb-table-album-cell {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            max-width: 280px; /* Adjust for your layout */
+            min-width: 140px;
+            width: 100%;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        .lb-table-song-img, .lb-table-album-img {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            object-fit: cover;
+            flex-shrink: 0;
+            margin-right: 7px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+        }
+
+        .lb-table-song-name, .lb-table-album-name {
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1 1 0;
+            min-width: 0; /* Required for flex ellipsis! */
+            cursor: pointer;
+            position: relative;
+            font-size: 1.07em;
+            color: #fff;
+        }
 
         .lb-table-album-cell img,
         .lb-table-song-cell img {
