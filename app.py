@@ -608,14 +608,18 @@ def artist_page_v2(artist_name):
         points = []
 
         def safe_json_val(val):
-            # Convert pandas NA, numpy nan, or Jinja Undefined to None or ''
-            if pd.isna(val):
+            import pandas as pd
+            import numpy as np
+            from jinja2 import Undefined
+            if isinstance(val, Undefined):
+                return None
+            if val is None:
                 return None
             if isinstance(val, float) and np.isnan(val):
                 return None
-            if str(val).startswith('Undefined'):
+            if pd.isna(val):
                 return None
-            return val
+            return str(val) if isinstance(val, (pd.Timestamp, np.datetime64)) else val
         album_boundaries = []
         album_labels = []
         last_album = None
@@ -637,6 +641,13 @@ def artist_page_v2(artist_name):
                 album_boundaries.append(idx)
                 album_labels.append(album)
                 last_album = album
+        for point in points:
+            for k, v in point.items():
+                point[k] = safe_json_val(v)
+
+        # For album_labels and album_boundaries
+        album_labels = [safe_json_val(x) for x in album_labels]
+        album_boundaries = [int(x) for x in album_boundaries]
         days = 7
         now = pd.Timestamp.now()
         recent = artist_songs_df[artist_songs_df['Ranked Date'] >= (now - pd.Timedelta(days=days))]
@@ -686,7 +697,10 @@ def artist_page_v2(artist_name):
             most_improved_song_delta=most_improved_song_delta,
             global_avg_song_score=global_avg_song_score,
             arrow_direction = arrow_direction,
-            arrow_delta = arrow_delta
+            arrow_delta = arrow_delta,
+            album_boundaries = album_boundaries,
+            album_labels = album_labels,
+            points = points
         )
 
     except Exception as e:
