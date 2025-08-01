@@ -606,6 +606,16 @@ def artist_page_v2(artist_name):
         songs_sorted = artist_songs_df.sort_values('Ranked Date')
 
         points = []
+
+        def safe_json_val(val):
+            # Convert pandas NA, numpy nan, or Jinja Undefined to None or ''
+            if pd.isna(val):
+                return None
+            if isinstance(val, float) and np.isnan(val):
+                return None
+            if str(val).startswith('Undefined'):
+                return None
+            return val
         album_boundaries = []
         album_labels = []
         last_album = None
@@ -616,10 +626,11 @@ def artist_page_v2(artist_name):
             score = getattr(row, 'Ranking', None)
             points.append({
                 "x": idx,
-                "y": score,
-                "album": album,
-                "song": song,
-                "date": ranked_date.strftime('%b %d, %Y') if pd.notnull(ranked_date) else ""
+                "y": safe_json_val(score),
+                "album": safe_json_val(album),
+                "song": safe_json_val(song),
+                "date": safe_json_val(
+                    ranked_date.strftime('%b %d, %Y') if ranked_date and pd.notnull(ranked_date) else "")
             })
             # Check for album change to mark boundaries and labels
             if album != last_album:
