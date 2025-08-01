@@ -939,6 +939,7 @@
         const albumBoundaries = {{ album_boundaries|tojson }};
         const albumLabels = {{ album_labels|tojson }};
         const albumArts = {{ album_arts|tojson }};
+        const ctx = document.getElementById('songByAlbumChart').getContext('2d');
 
         // Generate background color for each album region
         function albumBgColor(idx) {
@@ -1109,6 +1110,7 @@
             },
             plugins: [albumArtPlugin]
         });
+    });
 </script>
 </body>
 </html>
