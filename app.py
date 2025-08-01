@@ -610,10 +610,10 @@ def artist_page_v2(artist_name):
         album_labels = []
         last_album = None
         for idx, row in enumerate(songs_sorted.itertuples()):
-            album = clean_title(getattr(row, 'Album Name', 'Unknown Album'))
-            song = clean_title(getattr(row, 'Song Name', ''))
-            ranked_date = getattr(row, 'Ranked Date')
-            score = getattr(row, 'Ranking')
+            album = clean_title(getattr(row, 'Album_Name', 'Unknown Album'))
+            song = clean_title(getattr(row, 'Song_Name', ''))
+            ranked_date = getattr(row, 'Ranked_Date', None)
+            score = getattr(row, 'Ranking', None)
             points.append({
                 "x": idx,
                 "y": score,
