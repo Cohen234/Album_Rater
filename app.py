@@ -602,6 +602,38 @@ def artist_page_v2(artist_name):
         low_song_display_name = clean_title(low_song_name)
         first_album_ranked_name_display = clean_title(first_album_ranked_name)
         last_album_ranked_name_display = clean_title(last_album_ranked_name)
+        artist_songs_df['Ranked Date'] = pd.to_datetime(artist_songs_df['Ranked Date'], errors='coerce')
+        songs_sorted = artist_songs_df.sort_values('Ranked Date')
+
+        points = []
+        album_boundaries = []
+        album_labels = []
+        last_album = None
+        for idx, row in enumerate(songs_sorted.itertuples()):
+            album = clean_title(getattr(row, 'Album Name', 'Unknown Album'))
+            song = clean_title(getattr(row, 'Song Name', ''))
+            ranked_date = getattr(row, 'Ranked Date')
+            score = getattr(row, 'Ranking')
+            points.append({
+                "x": idx,
+                "y": score,
+                "album": album,
+                "song": song,
+                "date": ranked_date.strftime('%b %d, %Y') if pd.notnull(ranked_date) else ""
+            })
+            # Check for album change to mark boundaries and labels
+            if album != last_album:
+                album_boundaries.append(idx)
+                album_labels.append(album)
+                last_album = album
+        days = 7
+        now = pd.Timestamp.now()
+        recent = artist_songs_df[artist_songs_df['Ranked Date'] >= (now - pd.Timedelta(days=days))]
+        old = artist_songs_df[artist_songs_df['Ranked Date'] < (now - pd.Timedelta(days=days))]
+        recent_avg = recent['Ranking'].mean() if not recent.empty else 0
+        old_avg = old['Ranking'].mean() if not old.empty else 0
+        arrow_delta = recent_avg - old_avg
+        arrow_direction = "up" if arrow_delta > 0 else "down" if arrow_delta < 0 else "flat"
 
         return render_template(
             "artist_page_v2.html",
@@ -642,6 +674,8 @@ def artist_page_v2(artist_name):
             most_improved_song_name=most_improved_song_name,
             most_improved_song_delta=most_improved_song_delta,
             global_avg_song_score=global_avg_song_score,
+            arrow_direction = arrow_direction,
+            arrow_delta = arrow_delta
         )
 
     except Exception as e:

@@ -566,9 +566,20 @@
                         <div class="score-num global">{{ "%.2f"|format(global_avg_song_score) }}</div>
                         <div class="score-caption">Global Avg</div>
                     </div>
+
                     <div class="vs-separator">vs</div>
+
                     <div class="global-comp-score">
-                        <div class="score-num user">{{ "%.2f"|format(average_song_score) }}</div>
+                        <div class="score-num user">
+                            {{ "%.2f"|format(average_song_score) }}
+                            {% if arrow_direction == "up" %}
+                              <span title="Increased by {{ "%.2f"|format(arrow_delta) }} in last 30 days" style="color: #1DB954;">&#8593;</span>
+                            {% elif arrow_direction == "down" %}
+                              <span title="Decreased by {{ "%.2f"|format(arrow_delta) }} in last 30 days" style="color: #e74c3c;">&#8595;</span>
+                            {% else %}
+                              <span title="No change in last 30 days">&#8594;</span>
+                            {% endif %}
+                        </div>
                         <div class="score-caption">Artist Avg</div>
                     </div>
                 </div>
@@ -665,12 +676,14 @@
                     <canvas id="rankPolarAreaChart"></canvas>
                 </div>
             </div>
+
             <div class="chart-card">
-                <h3>Ranking Trajectory (Avg Song Score Over Time)</h3>
+                <h3>Song Rankings by Album</h3>
                 <div class="chart-container">
-                    <canvas id="rankingTrajectoryChart"></canvas>
+                    <canvas id="songByAlbumChart"></canvas>
                 </div>
             </div>
+
         </section>
         <section class="section-grid-2">
             <div class="chart-card ranking-era-card">
@@ -909,39 +922,119 @@
             });
         }
         // --- Ranking Trajectory Chart ---
-        const trajCtx = document.getElementById('rankingTrajectoryChart').getContext('2d');
-        const trajChartData = {{ ranking_trajectory_data | tojson }};
-        if (trajChartData && trajChartData.labels.length > 1) {
-            new Chart(trajCtx, {
-                type: 'line',
-                data: trajChartData,
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    elements: { line: { tension: 0.4 } },
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) { return `Avg Song Score: ${context.raw.toFixed(2)}`; }
+
+        const songPoints = {{ points|tojson }};
+        const albumBoundaries = {{ album_boundaries|tojson }};
+        const albumLabels = {{ album_labels|tojson }};
+
+        // Generate background color for each album region
+        function albumBgColor(idx) {
+            // alternate colors for visibility
+            return idx % 2 === 0 ? 'rgba(29, 185, 84, 0.07)' : 'rgba(255,255,255,0.05)';
+        }
+
+        // Chart.js dataset
+        const data = {
+            datasets: [{
+                label: 'Song Score',
+                data: songPoints.map(p => ({x: p.x, y: p.y, song: p.song, album: p.album, date: p.date})),
+                borderColor: 'rgba(29,185,84,1)',
+                backgroundColor: 'rgba(29,185,84,0.18)',
+                pointBackgroundColor: 'rgba(29,185,84,1)',
+                pointRadius: 6,
+                pointHoverRadius: 9,
+                showLine: true,
+                tension: 0.2,
+            }]
+        };
+
+        // Chart.js annotation plugin regions for album backgrounds
+        const annotations = {};
+        for (let i = 0; i < albumBoundaries.length; i++) {
+            const start = albumBoundaries[i];
+            const end = albumBoundaries[i+1] || songPoints.length;
+            annotations[`album-bg-${i}`] = {
+                type: 'box',
+                xMin: start - 0.5,
+                xMax: end - 0.5,
+                yMin: 0,
+                yMax: 10,
+                backgroundColor: albumBgColor(i),
+                borderWidth: 0,
+                z: -1,
+            };
+            // Vertical dashed line at each album boundary except the first
+            if (i > 0) {
+                annotations[`album-line-${i}`] = {
+                    type: 'line',
+                    xMin: start - 0.5,
+                    xMax: start - 0.5,
+                    borderColor: 'rgba(180,180,180,0.5)',
+                    borderWidth: 2,
+                    borderDash: [6,6],
+                    label: {
+                        enabled: false
+                    }
+                };
+            }
+        }
+
+        // Chart.js x-tick callback for album names
+        function albumNameTick(value, index, ticks) {
+            for (let i = 0; i < albumBoundaries.length; i++) {
+                if (index === albumBoundaries[i]) return albumLabels[i];
+            }
+            return '';
+        }
+
+        const ctx = document.getElementById('songByAlbumChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: data,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            title: function(context) {
+                                const p = context[0].raw;
+                                return `${p.song} (${p.album})`;
+                            },
+                            label: function(context) {
+                                const p = context.raw;
+                                return [`Score: ${p.y.toFixed(2)}`, `Ranked: ${p.date}`];
                             }
                         }
                     },
-                    scales: {
-                        y: {
-                            ticks: { color: chartTextColor, padding: 10 },
-                            grid: { color: gridColor },
-                            suggestedMin: Math.max(0, Math.floor(Math.min(...trajChartData.datasets[0].data) - 1)),
-                            suggestedMax: Math.min(10, Math.ceil(Math.max(...trajChartData.datasets[0].data) + 1))
+                    annotation: {
+                        annotations: annotations
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        title: { display: true, text: 'Song (by ranking order)' },
+                        ticks: {
+                            color: '#b3b3b3',
+                            autoSkip: false,
+                            callback: albumNameTick,
+                            maxRotation: 0,
+                            minRotation: 0
                         },
-                        x: {
-                            ticks: { color: chartTextColor, maxRotation: 0, minRotation: 0, autoSkip: true },
-                            grid: { color: gridColor }
-                        }
+                        grid: { color: '#282828' }
+                    },
+                    y: {
+                        min: 0,
+                        max: 10,
+                        title: { display: true, text: 'Song Score' },
+                        ticks: { color: '#b3b3b3' },
+                        grid: { color: '#282828' }
                     }
                 }
-            });
-        }
+            }
+        });
     });
 </script>
 </body>
