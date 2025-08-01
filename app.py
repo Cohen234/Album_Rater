@@ -622,8 +622,11 @@ def artist_page_v2(artist_name):
             return str(val) if isinstance(val, (pd.Timestamp, np.datetime64)) else val
         album_boundaries = []
         album_labels = []
+        album_arts = []
         last_album = None
         for idx, row in enumerate(songs_sorted.itertuples()):
+            album = clean_title(getattr(row, 'Album_Name', 'Unknown Album'))
+            album_cover = getattr(row, 'album_cover_url', None) or 'https://placehold.co/36x36'
             album = clean_title(getattr(row, 'Album_Name', 'Unknown Album'))
             song = clean_title(getattr(row, 'Song_Name', ''))
             ranked_date = getattr(row, 'Ranked_Date', None)
@@ -640,6 +643,7 @@ def artist_page_v2(artist_name):
             if album != last_album:
                 album_boundaries.append(idx)
                 album_labels.append(album)
+                album_arts.append(album_cover)
                 last_album = album
         for point in points:
             for k, v in point.items():
@@ -656,6 +660,7 @@ def artist_page_v2(artist_name):
         old_avg = old['Ranking'].mean() if not old.empty else 0
         arrow_delta = recent_avg - old_avg
         arrow_direction = "up" if arrow_delta > 0 else "down" if arrow_delta < 0 else "flat"
+
 
         return render_template(
             "artist_page_v2.html",
@@ -700,7 +705,8 @@ def artist_page_v2(artist_name):
             arrow_delta = arrow_delta,
             album_boundaries = album_boundaries,
             album_labels = album_labels,
-            points = points
+            points = points,
+            album_arts = album_arts
         )
 
     except Exception as e:
