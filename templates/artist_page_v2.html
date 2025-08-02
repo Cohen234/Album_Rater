@@ -996,32 +996,35 @@
             const xScale = chart.scales.x;
             const yBottom = chartArea.bottom + 30; // below axis labels
 
-            albumBoundaries.forEach((boundary, i) => {
-                // Get x pixel for boundary
-                const xVal = boundary;
-                const xPix = xScale.getPixelForValue(xVal);
-                // Draw album art (if available)
+            for (let i = 0; i < albumBoundaries.length; i++) {
+                const start = albumBoundaries[i];
+                const end = (albumBoundaries[i + 1] || chart.data.datasets[0].data.length);
+                const xCenter = xScale.getPixelForValue((start + end - 1) / 2);
+
+                // Draw album art at center
                 if (albumArts[i]) {
                     const img = new window.Image();
                     img.src = albumArts[i];
                     img.onload = function () {
                         ctx.save();
                         ctx.beginPath();
-                        ctx.arc(xPix, yBottom - 25, 18, 0, 2 * Math.PI); // circular crop
+                        ctx.arc(xCenter, yBottom - 25, 18, 0, 2 * Math.PI);
                         ctx.closePath();
                         ctx.clip();
-                        ctx.drawImage(img, xPix - 18, yBottom - 43, 36, 36);
+                        ctx.drawImage(img, xCenter - 18, yBottom - 43, 36, 36);
                         ctx.restore();
                     };
+                    // If image is already loaded (cached), draw immediately
+                    if (img.complete) img.onload();
                 }
                 // Draw album name under the art
                 ctx.save();
                 ctx.font = 'bold 13px Montserrat';
                 ctx.fillStyle = '#1DB954';
                 ctx.textAlign = 'center';
-                ctx.fillText(albumLabels[i], xPix, yBottom + 25);
+                ctx.fillText(albumLabels[i], xCenter, yBottom + 25);
                 ctx.restore();
-            });
+            }
         }
 
         // Chart.js plugin for drawing album art and names
@@ -1071,9 +1074,7 @@
                             }
                         }
                     },
-                    annotation: {
-                        annotations: annotations
-                    },
+                    annotation: { annotations },
                     albumArtTicks: {
                         albumBoundaries: albumBoundaries,
                         albumLabels: albumLabels,
