@@ -942,38 +942,19 @@
         const albumArts = {{ album_arts|tojson }};
         const ctx = document.getElementById('songByAlbumChart').getContext('2d');
 
-        // Generate background color for each album region
-        function albumBgColor(idx) {
-            // alternate colors for visibility
-            return idx % 2 === 0 ? 'rgba(29, 185, 84, 0.07)' : 'rgba(255,255,255,0.05)';
-        }
-
-        // Chart.js dataset
-        const data = {
-            datasets: [{
-                label: 'Song Score',
-                data: songPoints.map(p => ({x: p.x, y: p.y, song: p.song, album: p.album, date: p.date})),
-                borderColor: 'rgba(29,185,84,1)',
-                backgroundColor: 'rgba(29,185,84,0.18)',
-                pointBackgroundColor: 'rgba(29,185,84,1)',
-                pointRadius: 6,
-                pointHoverRadius: 9,
-                showLine: true,
-                tension: 0.8,
-            }]
-        };
-
+        // === Annotation Regions and Separators ===
         const annotations = {};
         for (let i = 0; i < albumBoundaries.length; i++) {
             const start = albumBoundaries[i];
             const end = (albumBoundaries[i + 1] || songPoints.length);
+            // Bright backgrounds for visibility
             annotations[`album-bg-${i}`] = {
                 type: 'box',
                 xMin: start - 0.5,
                 xMax: end - 0.5,
                 yMin: 0,
                 yMax: 10,
-                backgroundColor: i % 2 === 0 ? 'rgba(29,185,84,0.10)' : 'rgba(255,255,255,0.03)',
+                backgroundColor: i % 2 === 0 ? 'rgba(29,185,84,0.18)' : 'rgba(255,255,255,0.07)',
                 borderWidth: 0,
                 z: -1
             };
@@ -982,14 +963,17 @@
                     type: 'line',
                     xMin: start - 0.5,
                     xMax: start - 0.5,
+                    yMin: 0,
+                    yMax: 10,
                     borderColor: '#1DB954',
-                    borderWidth: 2,
+                    borderWidth: 3,
                     borderDash: [8, 6],
                     label: { enabled: false }
                 };
             }
         }
 
+        // === Album Art & Label Plugin ===
         function drawAlbumArtTicks(chart, albumBoundaries, albumLabels, albumArts) {
             const ctx = chart.ctx;
             const chartArea = chart.chartArea;
@@ -1014,7 +998,6 @@
                         ctx.drawImage(img, xCenter - 18, yBottom - 43, 36, 36);
                         ctx.restore();
                     };
-                    // If image is already loaded (cached), draw immediately
                     if (img.complete) img.onload();
                 }
                 // Draw album name under the art
@@ -1026,8 +1009,6 @@
                 ctx.restore();
             }
         }
-
-        // Chart.js plugin for drawing album art and names
         const albumArtPlugin = {
             id: 'albumArtTicks',
             afterDraw(chart, args, options) {
@@ -1035,13 +1016,7 @@
             }
         };
 
-        // Smooth line and album art backgrounds
-        // Debug logs
-        console.log("albumBoundaries", albumBoundaries);
-        console.log("annotations", annotations);
-        console.log("songPoints X", songPoints.map(p=>p.x));
-
-        // Chart.js initialization
+        // === Chart.js Chart ===
         new Chart(ctx, {
             type: 'line',
             data: {
@@ -1068,12 +1043,18 @@
                 maintainAspectRatio: false,
                 plugins: {
                     legend: { display: false },
-                    annotation: { annotations }, // <-- THIS IS CRITICAL. annotations must be your object, not wrapped again.
+                    annotation: { annotations },
+                    albumArtTicks: {
+                        albumBoundaries: albumBoundaries,
+                        albumLabels: albumLabels,
+                        albumArts: albumArts
+                    }
                 },
+                elements: { line: { tension: 0.45 } },
                 scales: {
                     x: {
                         type: 'linear',
-                        title: { display: true, text: 'Song (by ranking order)' },
+                        title: { display: false, text: '' },
                         min: 0,
                         max: songPoints.length - 1,
                         ticks: {
@@ -1093,7 +1074,8 @@
                         grid: { color: '#282828' }
                     }
                 }
-            }
+            },
+            plugins: [albumArtPlugin]
         });
     });
 </script>
