@@ -660,6 +660,10 @@ def artist_page_v2(artist_name):
         old_avg = old['Ranking'].mean() if not old.empty else 0
         arrow_delta = recent_avg - old_avg
         arrow_direction = "up" if arrow_delta > 0 else "down" if arrow_delta < 0 else "flat"
+        print(songs_sorted['Album_Name'].unique())
+        print(album_boundaries)
+        print(album_labels)
+        print(album_arts)
 
 
         return render_template(
