@@ -625,11 +625,10 @@ def artist_page_v2(artist_name):
         album_arts = []
         last_album = None
         for idx, row in enumerate(songs_sorted.itertuples()):
-            album = clean_title(getattr(row, 'Album_Name', 'Unknown Album'))
+            album = clean_title(getattr(row, 'Album_Name', None) or getattr(row, 'Album Name', 'Unknown Album'))
             album_cover = getattr(row, 'album_cover_url', None) or 'https://placehold.co/36x36'
-            album = clean_title(getattr(row, 'Album_Name', 'Unknown Album'))
-            song = clean_title(getattr(row, 'Song_Name', ''))
-            ranked_date = getattr(row, 'Ranked_Date', None)
+            song = clean_title(getattr(row, 'Song_Name', None) or getattr(row, 'Song Name', ''))
+            ranked_date = getattr(row, 'Ranked_Date', None) or getattr(row, 'Ranked Date', None)
             score = getattr(row, 'Ranking', None)
             points.append({
                 "x": idx,
@@ -639,7 +638,6 @@ def artist_page_v2(artist_name):
                 "date": safe_json_val(
                     ranked_date.strftime('%b %d, %Y') if ranked_date and pd.notnull(ranked_date) else "")
             })
-            # Check for album change to mark boundaries and labels
             if album != last_album:
                 album_boundaries.append(idx)
                 album_labels.append(album)
