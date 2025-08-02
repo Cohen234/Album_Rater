@@ -1036,6 +1036,13 @@
         };
 
         // Smooth line and album art backgrounds
+        // Debug logs
+        console.log("albumBoundaries", albumBoundaries);
+        console.log("annotations", annotations);
+        console.log("songPoints X", songPoints.map(p=>p.x));
+
+        // Chart.js initialization
+        const ctx = document.getElementById('songByAlbumChart').getContext('2d');
         new Chart(ctx, {
             type: 'line',
             data: {
@@ -1054,7 +1061,7 @@
                     pointRadius: 6,
                     pointHoverRadius: 10,
                     showLine: true,
-                    tension: 0.45 // Smooth!
+                    tension: 0.45
                 }]
             },
             options: {
@@ -1062,38 +1069,19 @@
                 maintainAspectRatio: false,
                 plugins: {
                     legend: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            title: function(context) {
-                                const p = context[0].raw;
-                                return `${p.song} (${p.album})`;
-                            },
-                            label: function(context) {
-                                const p = context.raw;
-                                return [`Score: ${p.y.toFixed(2)}`, `Ranked: ${p.date}`];
-                            }
-                        }
-                    },
-                    annotation: { annotations },
-                    albumArtTicks: {
-                        albumBoundaries: albumBoundaries,
-                        albumLabels: albumLabels,
-                        albumArts: albumArts // Array of album art URLs, e.g. ['https://...', ...]
-                    }
-                },
-                elements: {
-                    line: { tension: 0.45 }
+                    annotation: { annotations }, // <-- THIS IS CRITICAL. annotations must be your object, not wrapped again.
                 },
                 scales: {
                     x: {
                         type: 'linear',
                         title: { display: true, text: 'Song (by ranking order)' },
+                        min: 0,
+                        max: songPoints.length - 1,
                         ticks: {
                             color: '#b3b3b3',
                             autoSkip: false,
                             maxRotation: 0,
                             minRotation: 0,
-                            // No label, art is used instead
                             callback: function() { return ''; }
                         },
                         grid: { color: '#282828' }
@@ -1106,8 +1094,7 @@
                         grid: { color: '#282828' }
                     }
                 }
-            },
-            plugins: [albumArtPlugin]
+            }
         });
     });
 </script>
