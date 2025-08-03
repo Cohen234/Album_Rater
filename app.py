@@ -385,6 +385,7 @@ def artist_page_v2(artist_name):
         # Join these to the album dataframe (make sure to match on lower-case names)
         artist_albums_df['first_ranked_date'] = artist_albums_df['album_name'].map(album_first_ranked)
         artist_albums_df['first_score'] = artist_albums_df['album_name'].map(album_first_score)
+        artist_albums_df['first_ranked_date'] = pd.to_datetime(artist_albums_df['first_ranked_date'], errors='coerce')
 
         def get_album_placement_on_rank_date(album_id, rank_date, albums_df):
             # Only consider albums ranked on or before this date
