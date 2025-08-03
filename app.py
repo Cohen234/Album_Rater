@@ -379,8 +379,12 @@ def artist_page_v2(artist_name):
         album_percentile = ((total_albums - artist_albums_df['Global_Rank'].mean()) / total_albums) * 100 if total_albums > 0 and not artist_albums_df.empty else 0
         song_percentile = ((total_songs - artist_songs_df['Universal_Rank'].mean()) / total_songs) * 100 if total_songs > 0 and not artist_songs_df.empty else 0
         artist_score = (album_percentile * 0.6) + (song_percentile * 0.4) if ranked_albums_count > 0 else 0
-        album_first_ranked = artist_songs_df.groupby('Album_Name')['Ranked_Date'].min()
-        album_first_score = artist_songs_df.groupby('Album_Name')['Ranking'].first()
+        album_first_ranked = all_songs_df.groupby('Album_Name')['Ranked_Date'].min()
+        album_first_score = all_songs_df.groupby('Album_Name')['Ranking'].first()
+
+        # ...now deduplicate for your other work
+        all_songs_df = all_songs_df.sort_values('Ranked_Date').drop_duplicates(['Song_Name', 'Artist_Name'],
+                                                                               keep='last')
 
         # Join these to the album dataframe (make sure to match on lower-case names)
         artist_albums_df['first_ranked_date'] = artist_albums_df['album_name'].map(album_first_ranked)
