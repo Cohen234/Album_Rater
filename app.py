@@ -592,7 +592,7 @@ def artist_page_v2(artist_name):
         last_album_ranked_name_display = clean_title(last_album_ranked_name)
 
         # --- Points and chart boundaries ---
-        songs_sorted = artist_songs_df.sort_values('Ranked_Date') if 'Ranked_Date' in artist_songs_df else artist_songs_df
+        songs_sorted = artist_songs_df.sort_values(['Album_Name', 'Ranked_Date'])
         points = []
 
         def safe_json_val(val):
@@ -606,13 +606,16 @@ def artist_page_v2(artist_name):
                 return None
             return str(val) if isinstance(val, (pd.Timestamp, np.datetime64)) else val
 
+        album_cover_map = dict(
+            zip(artist_albums_df['album_name'].map(clean_title), artist_albums_df['album_cover_url']))
+
         album_boundaries = []
         album_labels = []
         album_arts = []
         last_album = None
         for idx, row in enumerate(songs_sorted.itertuples()):
             album = clean_title(getattr(row, 'Album_Name', 'Unknown Album'))
-            album_cover = getattr(row, 'album_cover_url', None) or 'https://placehold.co/36x36'
+            album_cover = album_cover_map.get(album, 'https://placehold.co/36x36')
             song = clean_title(getattr(row, 'Song_Name', ''))
             ranked_date = getattr(row, 'Ranked_Date', None)
             score = getattr(row, 'Ranking', None)
