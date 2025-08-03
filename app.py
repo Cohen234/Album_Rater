@@ -404,7 +404,7 @@ def artist_page_v2(artist_name):
             placement = get_album_placement_on_rank_date(row['album_id'], dt, artist_albums_df)
             timeline_events.append({
                 'date_obj': dt,
-                'ranking_date_str': dt.strftime('%b %d, %Y'),
+                'ranking_date_str': dt.strftime('%b %d, %Y %I:%M:%S %p') if not pd.isnull(dt) else 'N/A',
                 'score': row.get('first_score'),
                 'placement': placement,
                 'album_name': row['album_name'],
