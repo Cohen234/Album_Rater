@@ -410,25 +410,29 @@ def artist_page_v2(artist_name):
         }
         for d in ranking_era_data['datasets'][0]['data']:
             d['label'] = clean_title(d['label'])
-
-        # --- Prepare Data for "Ranking Timeline" ---
-        timeline_events = []
+        timeline_events = []  # <-- add this!
         for _, row in artist_albums_df.iterrows():
             try:
                 history = json.loads(row.get('rerank_history', '[]')) if 'rerank_history' in row else []
                 for i, event in enumerate(history):
                     rerank_note = f" (Rerank {i})" if i > 0 else ""
                     dt = pd.to_datetime(event.get('date'), errors='coerce')
+
+                    # Only the first event gets a placement; reranks do not!
+                    if i == 0:
+                        placement = event.get('placement', 'N/A')
+                    else:
+                        placement = "N/A"
+
                     timeline_events.append({
                         'date_obj': dt,
                         'ranking_date_str': dt.strftime('%b %d, %Y') if not pd.isnull(dt) else 'N/A',
                         'score': event.get('score'),
-                        'placement': event.get('placement', 'N/A'),
+                        'placement': placement,
                         'album_name': row['album_name'] + rerank_note,
                         'album_cover_url': row.get('album_cover_url', '')
                     })
             except (json.JSONDecodeError, TypeError, AttributeError):
-                logging.warning(f"Could not parse rerank_history for album {row.get('album_id', '')}")
                 continue
         for event in timeline_events:
             event['album_name'] = clean_title(event['album_name'])
