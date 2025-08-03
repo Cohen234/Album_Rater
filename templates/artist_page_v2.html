@@ -753,7 +753,13 @@
                                 <span class="lb-table-album-name" data-full-title="{{ album['album_name'] }}">{{ album['album_name'] }}</span>
                             </td>
                             <td>{{ "%.2f"|format(album['weighted_average_score']) }}</td>
-                            <td class="global-rank">#{{ album['Global Rank'] }}</td>
+                            <td class="global-rank">
+                                {% if album['Global Rank'] %}
+                                    #{{ album['Global Rank'] }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -784,7 +790,13 @@
                                 <span class="lb-table-song-name" data-full-title="{{ song['Song Name'] }}">{{ song['Song Name'] }}</span>
                             </td>
                             <td>{{ "%.2f"|format(song['Ranking']) }}</td>
-                            <td class="global-rank">#{{ song['Universal Rank'] }}</td>
+                            <td class="global-rank">
+                                {% if song['Universal Rank'] %}
+                                    #{{ song['Universal Rank'] }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
