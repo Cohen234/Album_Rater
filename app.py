@@ -381,19 +381,14 @@ def artist_page_v2(artist_name):
         artist_score = (album_percentile * 0.6) + (song_percentile * 0.4) if ranked_albums_count > 0 else 0
         album_first_ranked = all_songs_df.groupby('Album_Name')['Ranked_Date'].min()
         album_first_score = all_songs_df.groupby('Album_Name')['Ranking'].first()
+        all_albums_df['album_name_clean'] = all_albums_df['album_name'].astype(str).str.strip().str.lower()
+        all_albums_df['first_ranked_date'] = all_albums_df['album_name_clean'].map(album_first_ranked)
+        all_albums_df['first_score'] = all_albums_df['album_name_clean'].map(album_first_score)
+        all_albums_df['first_ranked_date'] = pd.to_datetime(all_albums_df['first_ranked_date'], errors='coerce')
 
-        # ...now deduplicate for your other work
-        all_songs_df = all_songs_df.sort_values('Ranked_Date').drop_duplicates(['Song_Name', 'Artist_Name'],
-                                                                               keep='last')
-
-        # Join these to the album dataframe (make sure to match on lower-case names)
-        artist_albums_df['first_ranked_date'] = artist_albums_df['album_name'].map(album_first_ranked)
-        artist_albums_df['first_score'] = artist_albums_df['album_name'].map(album_first_score)
-        artist_albums_df['first_ranked_date'] = pd.to_datetime(artist_albums_df['first_ranked_date'], errors='coerce')
-
-        def get_album_placement_on_rank_date(album_id, rank_date, albums_df):
-            # Only consider albums ranked on or before this date
-            eligible = albums_df[albums_df['first_ranked_date'] <= rank_date].copy()
+        def get_album_placement_on_rank_date(album_id, rank_date, all_albums_df):
+            # Only include albums ranked on or before this date
+            eligible = all_albums_df[all_albums_df['first_ranked_date'] <= rank_date].copy()
             eligible = eligible.sort_values('weighted_average_score', ascending=False).reset_index(drop=True)
             try:
                 placement = eligible[eligible['album_id'] == album_id].index[0] + 1
@@ -401,16 +396,17 @@ def artist_page_v2(artist_name):
             except Exception:
                 return None
 
+        # 2. In your timeline event loop, use all_albums_df for placement:
         timeline_events = []
         for _, row in artist_albums_df.iterrows():
             dt = pd.to_datetime(row['first_ranked_date'], errors='coerce')
             if pd.isnull(dt): continue
-            placement = get_album_placement_on_rank_date(row['album_id'], dt, artist_albums_df)
+            placement = get_album_placement_on_rank_date(row['album_id'], dt, all_albums_df)
             timeline_events.append({
                 'date_obj': dt,
                 'ranking_date_str': dt.strftime('%b %d, %Y %I:%M:%S %p') if not pd.isnull(dt) else 'N/A',
                 'score': row.get('first_score'),
-                'placement': placement,
+                'placement': placement,  # This is now global!
                 'album_name': row['album_name'],
                 'album_cover_url': row.get('album_cover_url', '')
             })
