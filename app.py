@@ -382,17 +382,19 @@ def artist_page_v2(artist_name):
         all_songs_df['album_name_clean'] = all_songs_df['Album_Name'].astype(str).str.strip().str.lower()
         all_albums_df['album_name_clean'] = all_albums_df['album_name'].astype(str).str.strip().str.lower()
 
-        # Group by cleaned album name
+        # 2. Compute first ranked date and score for each album
         album_first_ranked = all_songs_df.groupby('album_name_clean')['Ranked_Date'].min()
         album_first_score = all_songs_df.groupby('album_name_clean')['Ranking'].first()
 
-        # Map using cleaned names
+        # 3. Map to albums DataFrame
         all_albums_df['first_ranked_date'] = all_albums_df['album_name_clean'].map(album_first_ranked)
         all_albums_df['first_score'] = all_albums_df['album_name_clean'].map(album_first_score)
         all_albums_df['first_ranked_date'] = pd.to_datetime(all_albums_df['first_ranked_date'], errors='coerce')
-        print("Null first_ranked_date in albums:", all_albums_df['first_ranked_date'].isnull().sum())
-        print("Examples of album_name_clean with null dates:",
-              all_albums_df[all_albums_df['first_ranked_date'].isnull()]['album_name_clean'])
+
+        # 4. Filter out albums never ranked (will have NaN first_ranked_date)
+        all_albums_df = all_albums_df[all_albums_df['first_ranked_date'].notnull()]
+        artist_albums_df = artist_albums_df[
+            artist_albums_df['album_name_clean'].isin(all_albums_df['album_name_clean'])]
 
         def get_album_placement_on_rank_date(album_id, rank_date, all_albums_df):
             # Only include albums ranked on or before this date
