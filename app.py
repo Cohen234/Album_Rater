@@ -380,10 +380,14 @@ def artist_page_v2(artist_name):
         song_percentile = ((total_songs - artist_songs_df['Universal_Rank'].mean()) / total_songs) * 100 if total_songs > 0 and not artist_songs_df.empty else 0
         artist_score = (album_percentile * 0.6) + (song_percentile * 0.4) if ranked_albums_count > 0 else 0
         album_first_ranked = artist_songs_df.groupby('Album_Name')['Ranked_Date'].min()
+        album_first_score = artist_songs_df.groupby('Album_Name')['Ranking'].first()
+
+        # Join these to the album dataframe (make sure to match on lower-case names)
         artist_albums_df['first_ranked_date'] = artist_albums_df['album_name'].map(album_first_ranked)
+        artist_albums_df['first_score'] = artist_albums_df['album_name'].map(album_first_score)
 
         def get_album_placement_on_rank_date(album_id, rank_date, albums_df):
-            # Only consider albums ranked on or before this date (using their first ranking date)
+            # Only consider albums ranked on or before this date
             eligible = albums_df[albums_df['first_ranked_date'] <= rank_date].copy()
             eligible = eligible.sort_values('weighted_average_score', ascending=False).reset_index(drop=True)
             try:
@@ -391,6 +395,25 @@ def artist_page_v2(artist_name):
                 return placement
             except Exception:
                 return None
+
+        timeline_events = []
+        for _, row in artist_albums_df.iterrows():
+            dt = pd.to_datetime(row['first_ranked_date'], errors='coerce')
+            if pd.isnull(dt): continue
+            placement = get_album_placement_on_rank_date(row['album_id'], dt, artist_albums_df)
+            timeline_events.append({
+                'date_obj': dt,
+                'ranking_date_str': dt.strftime('%b %d, %Y'),
+                'score': row.get('first_score'),
+                'placement': placement,
+                'album_name': row['album_name'],
+                'album_cover_url': row.get('album_cover_url', '')
+            })
+
+        for event in timeline_events:
+            event['album_name'] = clean_title(event['album_name'])
+        valid_timeline_events = [event for event in timeline_events if not pd.isnull(event['date_obj'])]
+        ranking_timeline_data = sorted(valid_timeline_events, key=lambda x: x['date_obj'])
 
         # RELEASE HISTORY HISTOGRAM
         ranked_album_ids = artist_albums_df['album_id'].tolist() if 'album_id' in artist_albums_df else []
@@ -420,35 +443,7 @@ def artist_page_v2(artist_name):
         }
         for d in ranking_era_data['datasets'][0]['data']:
             d['label'] = clean_title(d['label'])
-        timeline_events = []
-        for _, row in artist_albums_df.iterrows():
-            try:
-                history = json.loads(row.get('rerank_history', '[]')) if 'rerank_history' in row else []
-                for i, event in enumerate(history):
-                    rerank_note = f" (Rerank {i})" if i > 0 else ""
-                    dt = pd.to_datetime(event.get('date'), errors='coerce')
 
-                    if i == 0:
-                        placement = get_album_placement_on_rank_date(
-                            row['album_id'], dt, artist_albums_df
-                        )
-                    else:
-                        placement = "N/A"
-
-                    timeline_events.append({
-                        'date_obj': dt,
-                        'ranking_date_str': dt.strftime('%b %d, %Y') if not pd.isnull(dt) else 'N/A',
-                        'score': event.get('score'),
-                        'placement': placement,
-                        'album_name': row['album_name'] + rerank_note,
-                        'album_cover_url': row.get('album_cover_url', '')
-                    })
-            except (json.JSONDecodeError, TypeError, AttributeError):
-                continue
-        for event in timeline_events:
-            event['album_name'] = clean_title(event['album_name'])
-        valid_timeline_events = [event for event in timeline_events if not pd.isnull(event['date_obj'])]
-        ranking_timeline_data = sorted(valid_timeline_events, key=lambda x: x['date_obj'])
 
         # --- Prepare Leaderboard and other stats ---
         artist_songs_df.sort_values(by='Ranking', ascending=False, inplace=True)
