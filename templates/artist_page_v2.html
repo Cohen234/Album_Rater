@@ -942,22 +942,25 @@
         const albumArts = {{ album_arts|tojson }};
         const ctx = document.getElementById('songByAlbumChart').getContext('2d');
 
-        // === Annotation Regions and Separators ===
+        // --- Annotations (Backgrounds + Dividers) ---
         const annotations = {};
         for (let i = 0; i < albumBoundaries.length; i++) {
             const start = albumBoundaries[i];
             const end = (albumBoundaries[i + 1] || songPoints.length);
-            // Bright backgrounds for visibility
+
+            // Background for this album region
             annotations[`album-bg-${i}`] = {
                 type: 'box',
                 xMin: start - 0.5,
                 xMax: end - 0.5,
                 yMin: 0,
                 yMax: 10,
-                backgroundColor: i % 2 === 0 ? 'rgba(29,185,84,0.18)' : 'rgba(255,255,255,0.07)',
+                backgroundColor: i % 2 === 0 ? 'rgba(29,185,84,0.07)' : 'rgba(255,255,255,0.04)',
                 borderWidth: 0,
                 z: -1
             };
+
+            // Divider line at start of this album (except for very first)
             if (i > 0) {
                 annotations[`album-sep-${i}`] = {
                     type: 'line',
@@ -966,26 +969,28 @@
                     yMin: 0,
                     yMax: 10,
                     borderColor: '#1DB954',
-                    borderWidth: 3,
-                    borderDash: [8, 6],
+                    borderWidth: 2,
+                    borderDash: [6, 6],
                     label: { enabled: false }
                 };
             }
         }
 
-        // === Album Art & Label Plugin ===
+        // --- Album Art and Label Plugin (centered under each album region) ---
         function drawAlbumArtTicks(chart, albumBoundaries, albumLabels, albumArts) {
             const ctx = chart.ctx;
             const chartArea = chart.chartArea;
+            if (!chartArea) return;
             const xScale = chart.scales.x;
-            const yBottom = chartArea.bottom + 30; // below axis labels
+            const yBottom = chartArea.bottom + 30;
 
             for (let i = 0; i < albumBoundaries.length; i++) {
                 const start = albumBoundaries[i];
                 const end = (albumBoundaries[i + 1] || chart.data.datasets[0].data.length);
+                // Center: middle of region, not just start/end
                 const xCenter = xScale.getPixelForValue((start + end - 1) / 2);
 
-                // Draw album art at center
+                // Album art
                 if (albumArts[i]) {
                     const img = new window.Image();
                     img.src = albumArts[i];
@@ -1000,7 +1005,8 @@
                     };
                     if (img.complete) img.onload();
                 }
-                // Draw album name under the art
+
+                // Album name below the art
                 ctx.save();
                 ctx.font = 'bold 13px Montserrat';
                 ctx.fillStyle = '#1DB954';
@@ -1016,7 +1022,7 @@
             }
         };
 
-        // === Chart.js Chart ===
+        // --- Chart.js Chart ---
         new Chart(ctx, {
             type: 'line',
             data: {
@@ -1077,11 +1083,6 @@
             },
             plugins: [albumArtPlugin]
         });
-        console.log('albumBoundaries', albumBoundaries);
-        console.log('albumLabels', albumLabels);
-        console.log('albumArts', albumArts);
-        console.log('annotations', annotations);
-    });
 </script>
 </body>
 </html>
