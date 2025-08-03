@@ -1007,52 +1007,53 @@
 
         // --- Chart.js Chart ---
         new Chart(ctx, {
-        type: 'line',
-        data: {
-            datasets: [{
-                label: 'Song Score',
-                data: songPoints.map(p => ({
-                    x: p.x,
-                    y: p.y,
-                    song: p.song,
-                    album: p.album,
-                    date: p.date
-                })),
-                borderColor: 'rgba(29,185,84,1)',
-                backgroundColor: 'rgba(29,185,84,0.12)',
-                pointBackgroundColor: 'rgba(29,185,84,1)',
-                pointRadius: 6,
-                pointHoverRadius: 10,
-                showLine: true,
-                tension: 0.45
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false },
-                annotation: { annotations }
+            type: 'line',
+            data: {
+                datasets: [{
+                    label: 'Song Score',
+                    data: songPoints.map(p => ({
+                        x: p.x,
+                        y: p.y,
+                        song: p.song,
+                        album: p.album,
+                        date: p.date
+                    })),
+                    borderColor: 'rgba(29,185,84,1)',
+                    backgroundColor: 'rgba(29,185,84,0.12)',
+                    pointBackgroundColor: 'rgba(29,185,84,1)',
+                    pointRadius: 6,
+                    pointHoverRadius: 10,
+                    showLine: true,
+                    tension: 0.45
+                }]
             },
-            elements: { line: { tension: 0.45 } },
-            scales: {
-                x: {
-                    type: 'linear',
-                    min: 0,
-                    max: songPoints.length - 1,
-                    ticks: { color: '#b3b3b3', callback: () => '' },
-                    grid: { color: '#282828' }
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    annotation: { annotations }
                 },
-                y: {
-                    min: 0,
-                    max: 10,
-                    title: { display: true, text: 'Song Score' },
-                    ticks: { color: '#b3b3b3' },
-                    grid: { color: '#282828' }
+                elements: { line: { tension: 0.45 } },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        min: 0,
+                        max: songPoints.length - 1,
+                        ticks: { color: '#b3b3b3', callback: () => '' },
+                        grid: { color: '#282828' }
+                    },
+                    y: {
+                        min: 0,
+                        max: 10,
+                        title: { display: true, text: 'Song Score' },
+                        ticks: { color: '#b3b3b3' },
+                        grid: { color: '#282828' }
+                    }
                 }
             }
         });
-    });
+    }); // <-- THIS closes the DOMContentLoaded function!
 </script>
 </body>
 </html>
