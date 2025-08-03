@@ -571,12 +571,17 @@ def artist_page_v2(artist_name):
         # --- First/last album ranked info ---
         if not artist_songs_df.empty and 'Ranked_Date' in artist_songs_df.columns:
             artist_songs_df['Ranked_Date'] = pd.to_datetime(artist_songs_df['Ranked_Date'], errors='coerce')
-            first_song_row = artist_songs_df.loc[artist_songs_df['Ranked_Date'].idxmin()]
-            last_song_row = artist_songs_df.loc[artist_songs_df['Ranked_Date'].idxmax()]
-            first_album_ranked_name = first_song_row['Album_Name']
-            first_album_ranked_date = first_song_row['Ranked_Date'].strftime('%b %d, %Y') if pd.notnull(first_song_row['Ranked_Date']) else ""
-            last_album_ranked_name = last_song_row['Album_Name']
-            last_album_ranked_date = last_song_row['Ranked_Date'].strftime('%b %d, %Y') if pd.notnull(last_song_row['Ranked_Date']) else ""
+            # Get the first album for which any song was ranked (by earliest song Ranked_Date)
+            first_album_row = \
+            artist_songs_df.sort_values('Ranked_Date').drop_duplicates('Album_Name', keep='first').iloc[0]
+            last_album_row = artist_songs_df.sort_values('Ranked_Date').drop_duplicates('Album_Name', keep='last').iloc[
+                0]
+            first_album_ranked_name = first_album_row['Album_Name']
+            first_album_ranked_date = first_album_row['Ranked_Date'].strftime('%b %d, %Y') if pd.notnull(
+                first_album_row['Ranked_Date']) else ""
+            last_album_ranked_name = last_album_row['Album_Name']
+            last_album_ranked_date = last_album_row['Ranked_Date'].strftime('%b %d, %Y') if pd.notnull(
+                last_album_row['Ranked_Date']) else ""
         else:
             first_album_ranked_name = ""
             first_album_ranked_date = ""
