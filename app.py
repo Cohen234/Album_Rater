@@ -379,8 +379,18 @@ def artist_page_v2(artist_name):
         album_percentile = ((total_albums - artist_albums_df['Global_Rank'].mean()) / total_albums) * 100 if total_albums > 0 and not artist_albums_df.empty else 0
         song_percentile = ((total_songs - artist_songs_df['Universal_Rank'].mean()) / total_songs) * 100 if total_songs > 0 and not artist_songs_df.empty else 0
         artist_score = (album_percentile * 0.6) + (song_percentile * 0.4) if ranked_albums_count > 0 else 0
+        album_first_ranked = artist_songs_df.groupby('Album_Name')['Ranked_Date'].min()
+        artist_albums_df['first_ranked_date'] = artist_albums_df['album_name'].map(album_first_ranked)
 
-        # 3. --- Prepare Data for Histograms ---
+        def get_album_placement_on_rank_date(album_id, rank_date, albums_df):
+            # Only consider albums ranked on or before this date (using their first ranking date)
+            eligible = albums_df[albums_df['first_ranked_date'] <= rank_date].copy()
+            eligible = eligible.sort_values('weighted_average_score', ascending=False).reset_index(drop=True)
+            try:
+                placement = eligible[eligible['album_id'] == album_id].index[0] + 1
+                return placement
+            except Exception:
+                return None
 
         # RELEASE HISTORY HISTOGRAM
         ranked_album_ids = artist_albums_df['album_id'].tolist() if 'album_id' in artist_albums_df else []
@@ -410,7 +420,7 @@ def artist_page_v2(artist_name):
         }
         for d in ranking_era_data['datasets'][0]['data']:
             d['label'] = clean_title(d['label'])
-        timeline_events = []  # <-- add this!
+        timeline_events = []
         for _, row in artist_albums_df.iterrows():
             try:
                 history = json.loads(row.get('rerank_history', '[]')) if 'rerank_history' in row else []
@@ -418,9 +428,10 @@ def artist_page_v2(artist_name):
                     rerank_note = f" (Rerank {i})" if i > 0 else ""
                     dt = pd.to_datetime(event.get('date'), errors='coerce')
 
-                    # Only the first event gets a placement; reranks do not!
                     if i == 0:
-                        placement = event.get('placement', 'N/A')
+                        placement = get_album_placement_on_rank_date(
+                            row['album_id'], dt, artist_albums_df
+                        )
                     else:
                         placement = "N/A"
 
