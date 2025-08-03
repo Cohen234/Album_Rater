@@ -380,26 +380,27 @@ def artist_page_v2(artist_name):
         song_percentile = ((total_songs - artist_songs_df['Universal_Rank'].mean()) / total_songs) * 100 if total_songs > 0 and not artist_songs_df.empty else 0
         artist_score = (album_percentile * 0.6) + (song_percentile * 0.4) if ranked_albums_count > 0 else 0
         # 1. Clean names in all DataFrames (do this as early as possible)
+        # Clean names in all DataFrames
         all_songs_df['album_name_clean'] = all_songs_df['Album_Name'].astype(str).str.strip().str.lower()
         all_albums_df['album_name_clean'] = all_albums_df['album_name'].astype(str).str.strip().str.lower()
-        artist_albums_df['album_name_clean'] = artist_albums_df['album_name'].astype(str).str.strip().str.lower()
 
-        # 2. Compute first ranked date and score for each album
+        # Compute first ranked date and score for each album
         album_first_ranked = all_songs_df.groupby('album_name_clean')['Ranked_Date'].min()
         album_first_score = all_songs_df.groupby('album_name_clean')['Ranking'].first()
 
-        # 3. Map to albums DataFrame
+        # Map to albums DataFrame
         all_albums_df['first_ranked_date'] = all_albums_df['album_name_clean'].map(album_first_ranked)
         all_albums_df['first_score'] = all_albums_df['album_name_clean'].map(album_first_score)
         all_albums_df['first_ranked_date'] = pd.to_datetime(all_albums_df['first_ranked_date'], errors='coerce')
 
-        # 4. Filter out albums never ranked (will have NaN first_ranked_date)
+        # Filter out albums never ranked (will have NaN first_ranked_date)
         all_albums_df = all_albums_df[all_albums_df['first_ranked_date'].notnull()]
 
-        # 5. Filter artist_albums_df to only those with a ranked date
-        artist_albums_df = artist_albums_df[
-            artist_albums_df['album_name_clean'].isin(all_albums_df['album_name_clean'])
-        ]
+        # NOW filter for the current artist (after mapping and filtering)
+        artist_albums_df = all_albums_df[
+            all_albums_df['artist_name'].astype(str).str.lower() == artist_name.lower()
+            ].copy()
+        artist_albums_df['album_name_clean'] = artist_albums_df['album_name'].astype(str).str.strip().str.lower()
 
         def get_album_placement_on_rank_date(album_id, rank_date, all_albums_df):
             # Only include albums ranked on or before this date
