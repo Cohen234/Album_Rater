@@ -907,15 +907,30 @@ def submit_rankings():
             for ranked_song_data in all_ranked_songs_from_js:
                 song_id = str(ranked_song_data.get('song_id'))
                 details = song_details_map.get(song_id, {})
+
+                # Try to preserve the original 'Ranked Date' if it exists for this song/album/artist
+                existing_row = main_df[
+                    (main_df['Spotify Song ID'].astype(str) == song_id) &
+                    (main_df['Album Name'] == ranked_song_data.get('album_name')) &
+                    (main_df['Artist Name'] == ranked_song_data.get('artist_name'))
+                    ]
+                if not existing_row.empty and existing_row.iloc[0].get('Ranked Date'):
+                    ranked_date = existing_row.iloc[0]['Ranked Date']
+                else:
+                    ranked_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
                 new_final_rows_data.append({
-                    'Album Name': ranked_song_data.get('album_name'), 'Artist Name': ranked_song_data.get('artist_name'),
+                    'Album Name': ranked_song_data.get('album_name'),
+                    'Artist Name': ranked_song_data.get('artist_name'),
                     'Spotify Album ID': ranked_song_data.get('album_id'),
                     'Song Name': details.get('name', ranked_song_data.get('song_name')),
                     'Ranking': ranked_song_data.get('calculated_score', 0.0),
                     'Duration (ms)': details.get('duration_ms', 0),
-                    'Ranking Status': 'final', 'Ranked Date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'Ranking Status': 'final',
+                    'Ranked Date': ranked_date,  # <<---------------------- FIXED
                     'Position In Group': str(ranked_song_data.get('position_in_group', '')),
-                    'Rank Group': str(ranked_song_data.get('rank_group')), 'Spotify Song ID': song_id,
+                    'Rank Group': str(ranked_song_data.get('rank_group')),
+                    'Spotify Song ID': song_id,
                 })
 
             final_main_df = pd.concat([main_df_filtered, pd.DataFrame(new_final_rows_data)],
