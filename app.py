@@ -587,9 +587,9 @@ def artist_page_v2(artist_name):
         # For song leaderboard
         song_leaderboard_clean = []
         for row in artist_songs_df.to_dict('records'):
-            row['Song_Name'] = clean_title(row['Song_Name'])
+            row['Song Name'] = clean_title(row.get('Song_Name', ''))  # Ensure this key is present
             row['Universal Rank'] = row.get('Universal_Rank', '')
-            row['Artist Rank'] = row.get('Artist_Rank', '')  # <-- Make sure you set this!
+            row['Artist Rank'] = row.get('Artist_Rank', '')
             song_leaderboard_clean.append(row)
         # For album leaderboard
         album_leaderboard_clean = []
