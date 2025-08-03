@@ -447,17 +447,103 @@
             font-weight: 800;
             margin-left: 4px;
         }
+        /* --- Leaderboard Table Styles (Album + Song) --- */
+
+        /* Card & Table Container */
+        .chart-card.leaderboard-card {
+            background: var(--surface-color);
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.18);
+            overflow: hidden;
+            margin-bottom: 0;
+            padding: 0 0 18px 0;
+        }
+
+        .leaderboard-table-wrapper {
+            max-height: 500px;
+            overflow-y: auto;
+            border-radius: 0 0 10px 10px;
+        }
+
+        /* Table */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: auto;
+            background: none;
+        }
+        th, td {
+            padding: 14px 10px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 1.07em;
+        }
+        th {
+            color: var(--secondary-text);
+            text-transform: uppercase;
+            font-size: 0.85em;
+            font-weight: 700;
+            position: sticky;
+            top: 0;
+            background: var(--surface-color);
+            z-index: 2;
+            letter-spacing: 1px;
+        }
+        td {
+            color: var(--primary-text);
+            background: none;
+            vertical-align: middle;
+        }
+
+        /* --- Column Sizing & Alignment --- */
+        td:first-child, th:first-child {
+            width: 50px;
+            text-align: center;
+            color: var(--secondary-text);
+        }
+
+        th:nth-child(2), td:nth-child(2) {
+            /* Album/Song name column */
+            min-width: 140px;
+            max-width: 270px;
+            width: 35%;
+        }
+
+        th:nth-child(3), td:nth-child(3) {
+            /* Score column */
+            width: 85px;
+            text-align: right;
+        }
+
+        .global-rank, th:last-child {
+            font-size: 0.95em;
+            color: var(--secondary-text);
+            min-width: 60px;
+            text-align: right;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding-right: 14px;
+        }
+
+        /* --- Song/Album Cell (with Flex for name & art) --- */
         .lb-table-album-cell, .lb-table-song-cell {
             display: flex;
             align-items: center;
-            gap: 8px;
-            /* Set a max width to prevent the cell from growing too much */
-            max-width: 280px; /* adjust as needed for your layout */
-            min-width: 140px;
-            width: 100%;
-            /* Prevent cell from wrapping content to a new row */
-            white-space: nowrap;
-            overflow: hidden;
+            gap: 10px;
+            min-width: 0;
+            background: none;
+        }
+
+        .lb-table-album-img, .lb-table-song-img {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            object-fit: cover;
+            vertical-align: middle;
+            margin-right: 7px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+            flex-shrink: 0;
+            background: #232323;
         }
 
         .lb-table-album-name, .lb-table-song-name {
@@ -466,57 +552,14 @@
             text-overflow: ellipsis;
             white-space: nowrap;
             flex: 1 1 0;
-            min-width: 0; /* Required for flex ellipsis to work! */
-            cursor: pointer;
-            position: relative;
-            font-size: 1.07em;
-            color: #fff;
-        }
-        .lb-table-song-cell, .lb-table-album-cell {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            max-width: 280px;
-            min-width: 140px;
-            /* REMOVE width: 100% */
-            white-space: nowrap;
-            overflow: hidden;
-        }
-        .lb-table-song-img {
-            width: 32px;
-            height: 32px;
-            border-radius: 6px;
-            object-fit: cover;
-            flex-shrink: 0;
-            margin-right: 7px;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.18);
-        }
-        .lb-table-song-name {
-            display: inline-block; /* or just leave as default */
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
             min-width: 0;
             cursor: pointer;
             position: relative;
             font-size: 1.07em;
             color: #fff;
-            vertical-align: middle;
+            line-height: 1.35;
         }
 
-        .lb-table-album-cell img,
-        .lb-table-song-cell img {
-            flex-shrink: 0;
-        }
-        .lb-medal.gold {color:var(--gold);}
-        .lb-medal.silver {color:var(--silver);}
-        .lb-medal.bronze {color:var(--bronze);}
-        tr:hover { background-color: #202020; cursor:pointer;}
-        @media (max-width: 900px) {
-            .section-grid-4, .section-grid-2 { grid-template-columns: 1fr; }
-            .timeline-container { padding:10px; }
-            .timeline-card img { width:60px; height:60px;}
-        }
         .lb-table-album-name:hover::after,
         .lb-table-song-name:hover::after {
             content: attr(data-full-title);
@@ -534,10 +577,46 @@
             min-width: 180px;
             max-width: 340px;
             pointer-events: none;
+            word-break: break-word;
         }
-        /* Responsive scroll for tables */
-        .chart-card table {display: block; overflow-x: auto;}
-        .chart-card table thead, .chart-card table tbody, .chart-card table tr {display:table; width:100%; table-layout:fixed;}
+
+        /* Medals */
+        .lb-medal {
+            font-size: 1.3em;
+            vertical-align: middle;
+            margin-right: 2px;
+        }
+        .lb-medal.gold { color: var(--gold); }
+        .lb-medal.silver { color: var(--silver); }
+        .lb-medal.bronze { color: var(--bronze); }
+
+        /* Hover effect for rows */
+        tr:hover { background-color: #1a1a1a; cursor: pointer; transition: background 0.13s; }
+
+        /* Responsive Table */
+        @media (max-width: 900px) {
+            th:nth-child(2), td:nth-child(2) { max-width: 180px; }
+            th:nth-child(3), td:nth-child(3) { width: 60px; }
+            .global-rank, th:last-child { min-width: 40px; }
+        }
+
+        /* Hide overflowed rows for "See More" button */
+        .hidden-row { display: none; }
+        #see-more-btn {
+            background: none;
+            border: 1px solid var(--secondary-text);
+            color: var(--secondary-text);
+            padding: 8px 16px;
+            border-radius: 500px;
+            cursor: pointer;
+            margin: 15px auto 0 auto;
+            display: block;
+            transition: all 0.2s ease;
+        }
+        #see-more-btn:hover {
+            background-color: var(--border-color);
+            color: var(--primary-text);
+        }
         .progress-bar-bg {height:8px;}
         .progress-bar-fill {height:8px;}
     </style>
@@ -738,79 +817,93 @@
             <div class="chart-card leaderboard-card">
                 <h3>Album Leaderboard</h3>
                 <div class="leaderboard-table-wrapper">
-                <table>
-                    <thead>
-                        <tr><th>#</th><th>Album</th><th>Score</th><th>Global</th></tr>
-                    </thead>
-                    <tbody>
-                        {% for album in album_leaderboard %}
-                        <tr title="Released: {{ album.release_date or 'unknown' }}">
-                            <td>
-                                {% if album['Artist Rank'] == 1 %}
-                                    <span class="lb-medal gold">&#x1F947;</span>
-                                {% elif album['Artist Rank'] == 2 %}
-                                    <span class="lb-medal silver">&#x1F948;</span>
-                                {% elif album['Artist Rank'] == 3 %}
-                                    <span class="lb-medal bronze">&#x1F949;</span>
-                                {% else %}
-                                    {{ album['Artist Rank'] }}
-                                {% endif %}
-                            </td>
-                            <td class="lb-table-album-cell">
-                                <img class="lb-table-album-img" src="{{ album['album_cover_url'] or 'https://placehold.co/32x32' }}" alt="" />
-                                <span class="lb-table-album-name" data-full-title="{{ album['album_name'] }}">{{ album['album_name'] }}</span>
-                            </td>
-                            <td>{{ "%.2f"|format(album['weighted_average_score']) }}</td>
-                            <td class="global-rank">
-                                {% if album['Global Rank'] %}
-                                    #{{ album['Global Rank'] }}
-                                {% else %}
-                                    -
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Album</th>
+                                <th>Score</th>
+                                <th>Global</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for album in album_leaderboard %}
+                            <tr title="Released: {{ album.release_date or 'unknown' }}">
+                                <td>
+                                    {% if album['Artist Rank'] == 1 %}
+                                        <span class="lb-medal gold">&#x1F947;</span>
+                                    {% elif album['Artist Rank'] == 2 %}
+                                        <span class="lb-medal silver">&#x1F948;</span>
+                                    {% elif album['Artist Rank'] == 3 %}
+                                        <span class="lb-medal bronze">&#x1F949;</span>
+                                    {% else %}
+                                        {{ album['Artist Rank'] }}
+                                    {% endif %}
+                                </td>
+                                <td class="lb-table-album-cell">
+                                    <img class="lb-table-album-img" src="{{ album['album_cover_url'] or 'https://placehold.co/32x32' }}" alt="" />
+                                    <span class="lb-table-album-name" data-full-title="{{ album['album_name'] }}">{{ album['album_name'] }}</span>
+                                </td>
+                                <td style="text-align:right;">{{ "%.2f"|format(album['weighted_average_score']) }}</td>
+                                <td class="global-rank">
+                                    {% if album['Global Rank'] %}
+                                        #{{ album['Global Rank'] }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
             </div>
+
+            <!-- Song Leaderboard -->
             <div class="chart-card leaderboard-card">
                 <h3>Song Leaderboard</h3>
                 <div class="leaderboard-table-wrapper">
-                <table>
-                    <thead><tr><th>#</th><th>Song</th><th>Score</th><th>Global</th></tr></thead>
-                    <tbody>
-                        {% for song in song_leaderboard %}
-                        <tr class="{{ 'hidden-row' if loop.index > 50 else '' }}" title="Album: {{ song['Album Name'] }}">
-                            <td>
-                                {% if song['Artist Rank'] == 1 %}
-                                    <span class="lb-medal gold">&#x1F947;</span>
-                                {% elif song['Artist Rank'] == 2 %}
-                                    <span class="lb-medal silver">&#x1F948;</span>
-                                {% elif song['Artist Rank'] == 3 %}
-                                    <span class="lb-medal bronze">&#x1F949;</span>
-                                {% else %}
-                                    {{ song['Artist Rank'] }}
-                                {% endif %}
-                            </td>
-                            <td class="lb-table-song-cell">
-                                <span class="lb-table-song-name" data-full-title="{{ song['Song Name'] }}">{{ song['Song Name'] }}</span>
-                            </td>
-                            <td>{{ "%.2f"|format(song['Ranking']) }}</td>
-                            <td class="global-rank">
-                                {% if song['Universal Rank'] %}
-                                    #{{ song['Universal Rank'] }}
-                                {% else %}
-                                    -
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-                {% if song_leaderboard | length > 50 %}
-                <button id="see-more-btn">See More</button>
-                {% endif %}
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Song</th>
+                                <th>Score</th>
+                                <th>Global</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for song in song_leaderboard %}
+                            <tr class="{{ 'hidden-row' if loop.index > 50 else '' }}" title="Album: {{ song['Album Name'] }}">
+                                <td>
+                                    {% if song['Artist Rank'] == 1 %}
+                                        <span class="lb-medal gold">&#x1F947;</span>
+                                    {% elif song['Artist Rank'] == 2 %}
+                                        <span class="lb-medal silver">&#x1F948;</span>
+                                    {% elif song['Artist Rank'] == 3 %}
+                                        <span class="lb-medal bronze">&#x1F949;</span>
+                                    {% else %}
+                                        {{ song['Artist Rank'] }}
+                                    {% endif %}
+                                </td>
+                                <td class="lb-table-song-cell">
+                                    <span class="lb-table-song-name" data-full-title="{{ song['Song Name'] }}">{{ song['Song Name'] }}</span>
+                                </td>
+                                <td style="text-align:right;">{{ "%.2f"|format(song['Ranking']) }}</td>
+                                <td class="global-rank">
+                                    {% if song['Universal Rank'] %}
+                                        #{{ song['Universal Rank'] }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% if song_leaderboard | length > 50 %}
+                    <button id="see-more-btn">See More</button>
+                    {% endif %}
                 </div>
             </div>
         </section>
