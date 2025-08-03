@@ -390,6 +390,9 @@ def artist_page_v2(artist_name):
         all_albums_df['first_ranked_date'] = all_albums_df['album_name_clean'].map(album_first_ranked)
         all_albums_df['first_score'] = all_albums_df['album_name_clean'].map(album_first_score)
         all_albums_df['first_ranked_date'] = pd.to_datetime(all_albums_df['first_ranked_date'], errors='coerce')
+        print("Null first_ranked_date in albums:", all_albums_df['first_ranked_date'].isnull().sum())
+        print("Examples of album_name_clean with null dates:",
+              all_albums_df[all_albums_df['first_ranked_date'].isnull()]['album_name_clean'])
 
         def get_album_placement_on_rank_date(album_id, rank_date, all_albums_df):
             # Only include albums ranked on or before this date
