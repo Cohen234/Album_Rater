@@ -465,9 +465,10 @@
             color: #fff;
         }
         .lb-table-song-cell {
-            display: flex;
-            align-items: center;
-            gap: 8px;
+            /* Remove flexbox layout */
+            display: table-cell;
+            vertical-align: middle;
+            padding: 0 1rem; /* or your preferred horizontal padding */
             max-width: 280px;
             min-width: 140px;
             width: 100%;
@@ -484,16 +485,16 @@
             box-shadow: 0 1px 4px rgba(0,0,0,0.18);
         }
         .lb-table-song-name {
-            display: block;
+            display: inline-block; /* or just leave as default */
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
-            flex: 1 1 0;
             min-width: 0;
             cursor: pointer;
             position: relative;
             font-size: 1.07em;
             color: #fff;
+            vertical-align: middle;
         }
 
         .lb-table-album-cell img,
