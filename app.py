@@ -588,15 +588,15 @@ def artist_page_v2(artist_name):
         song_leaderboard_clean = []
         for row in artist_songs_df.to_dict('records'):
             row['Song_Name'] = clean_title(row['Song_Name'])
-            # Add global rank to row for template
-            row['global_rank'] = row.get('Universal_Rank', '')
+            # Set the key as 'Universal Rank' (to match your template)
+            row['Universal Rank'] = row.get('Universal_Rank', '')
             song_leaderboard_clean.append(row)
         # For album leaderboard
         album_leaderboard_clean = []
         for row in artist_albums_df.to_dict('records'):
             row['album_name'] = clean_title(row['album_name'])
-            # Add global rank to row for template
-            row['global_rank'] = row.get('Global_Rank', '')
+            # Set the key as 'Global Rank' (to match your template)
+            row['Global Rank'] = row.get('Global_Rank', '')
             album_leaderboard_clean.append(row)
 
         # --- First/last album ranked info ---
