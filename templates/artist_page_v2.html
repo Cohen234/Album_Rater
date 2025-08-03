@@ -944,36 +944,19 @@
 
         // --- Annotations (Backgrounds + Dividers) ---
         const annotations = {};
-        for (let i = 0; i < albumBoundaries.length; i++) {
+        for (let i = 1; i < albumBoundaries.length; i++) {
             const start = albumBoundaries[i];
-            const end = (albumBoundaries[i + 1] || songPoints.length);
-
-            // Background for this album region
-            annotations[`album-bg-${i}`] = {
-                type: 'box',
+            annotations[`album-divider-${i}`] = {
+                type: 'line',
                 xMin: start - 0.5,
-                xMax: end - 0.5,
+                xMax: start - 0.5,
                 yMin: 0,
                 yMax: 10,
-                backgroundColor: i % 2 === 0 ? 'rgba(29,185,84,0.07)' : 'rgba(255,255,255,0.04)',
-                borderWidth: 0,
-                z: -1
+                borderColor: '#1DB954',
+                borderWidth: 3,
+                borderDash: [8, 8],
+                label: { enabled: false }
             };
-
-            // Divider line at start of this album (except for very first)
-            if (i > 0) {
-                annotations[`album-sep-${i}`] = {
-                    type: 'line',
-                    xMin: start - 0.5,
-                    xMax: start - 0.5,
-                    yMin: 0,
-                    yMax: 10,
-                    borderColor: '#1DB954',
-                    borderWidth: 2,
-                    borderDash: [6, 6],
-                    label: { enabled: false }
-                };
-            }
         }
 
         // --- Album Art and Label Plugin (centered under each album region) ---
@@ -1024,65 +1007,51 @@
 
         // --- Chart.js Chart ---
         new Chart(ctx, {
-            type: 'line',
-            data: {
-                datasets: [{
-                    label: 'Song Score',
-                    data: songPoints.map(p => ({
-                        x: p.x,
-                        y: p.y,
-                        song: p.song,
-                        album: p.album,
-                        date: p.date
-                    })),
-                    borderColor: 'rgba(29,185,84,1)',
-                    backgroundColor: 'rgba(29,185,84,0.12)',
-                    pointBackgroundColor: 'rgba(29,185,84,1)',
-                    pointRadius: 6,
-                    pointHoverRadius: 10,
-                    showLine: true,
-                    tension: 0.45
-                }]
+        type: 'line',
+        data: {
+            datasets: [{
+                label: 'Song Score',
+                data: songPoints.map(p => ({
+                    x: p.x,
+                    y: p.y,
+                    song: p.song,
+                    album: p.album,
+                    date: p.date
+                })),
+                borderColor: 'rgba(29,185,84,1)',
+                backgroundColor: 'rgba(29,185,84,0.12)',
+                pointBackgroundColor: 'rgba(29,185,84,1)',
+                pointRadius: 6,
+                pointHoverRadius: 10,
+                showLine: true,
+                tension: 0.45
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                annotation: { annotations }
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    annotation: { annotations },
-                    albumArtTicks: {
-                        albumBoundaries: albumBoundaries,
-                        albumLabels: albumLabels,
-                        albumArts: albumArts
-                    }
+            elements: { line: { tension: 0.45 } },
+            scales: {
+                x: {
+                    type: 'linear',
+                    min: 0,
+                    max: songPoints.length - 1,
+                    ticks: { color: '#b3b3b3', callback: () => '' },
+                    grid: { color: '#282828' }
                 },
-                elements: { line: { tension: 0.45 } },
-                scales: {
-                    x: {
-                        type: 'linear',
-                        title: { display: false, text: '' },
-                        min: 0,
-                        max: songPoints.length - 1,
-                        ticks: {
-                            color: '#b3b3b3',
-                            autoSkip: false,
-                            maxRotation: 0,
-                            minRotation: 0,
-                            callback: function() { return ''; }
-                        },
-                        grid: { color: '#282828' }
-                    },
-                    y: {
-                        min: 0,
-                        max: 10,
-                        title: { display: true, text: 'Song Score' },
-                        ticks: { color: '#b3b3b3' },
-                        grid: { color: '#282828' }
-                    }
+                y: {
+                    min: 0,
+                    max: 10,
+                    title: { display: true, text: 'Song Score' },
+                    ticks: { color: '#b3b3b3' },
+                    grid: { color: '#282828' }
                 }
-            },
-            plugins: [albumArtPlugin]
-        });
+            }
+        }
     });
 </script>
 </body>
