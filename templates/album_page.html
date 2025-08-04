@@ -317,32 +317,20 @@
         </section>
         <!-- Comparison Stats -->
         <section class="section-grid-4">
-            <div class="quick-stat-card">
-                <div class="quick-stat-header">ALBUM AVG vs. ARTIST AVG</div>
-                <div class="stat-score">
-                    Album Avg: <span>{{ "%.2f"|format(avg_song_score) }}</span><br>
-                    Artist Avg: <span style="color:#b3b3b3;">{{ "%.2f"|format(artist_avg_song_score) }}</span>
-                    {% if avg_song_score > artist_avg_song_score %}
-                        <span class="arrow-up" style="margin-left:12px;">&#8593;</span>
-                    {% elif avg_song_score < artist_avg_song_score %}
-                        <span class="arrow-down" style="margin-left:12px;">&#8595;</span>
-                    {% else %}
-                        <span class="arrow-flat" style="margin-left:12px;">&#8594;</span>
-                    {% endif %}
+            <div class="global-comp-scores" style="display:flex;align-items:center;justify-content:center;gap:32px;width:100%;">
+                <div class="global-comp-score" style="min-width:110px;text-align:center;">
+                    <div class="score-num global" style="font-size:2.2em;font-weight:800;">{{ "%.2f"|format(avg_song_score) }}</div>
+                    <div class="score-caption">Album Avg</div>
                 </div>
-            </div>
-            <div class="quick-stat-card">
-                <div class="quick-stat-header">ALBUM AVG vs. GLOBAL AVG</div>
-                <div class="stat-score">
-                    Album Avg: <span>{{ "%.2f"|format(avg_song_score) }}</span><br>
-                    Global Avg: <span style="color:#b3b3b3;">{{ "%.2f"|format(global_avg_song_score) }}</span>
-                    {% if avg_song_score > global_avg_song_score %}
-                        <span class="arrow-up" style="margin-left:12px;">&#8593;</span>
-                    {% elif avg_song_score < global_avg_song_score %}
-                        <span class="arrow-down" style="margin-left:12px;">&#8595;</span>
-                    {% else %}
-                        <span class="arrow-flat" style="margin-left:12px;">&#8594;</span>
-                    {% endif %}
+                <div class="vs-separator" style="font-size:1.3em;font-weight:700;color:#888;opacity:0.7;margin:0 10px;">vs</div>
+                <div class="global-comp-score" style="min-width:110px;text-align:center;">
+                    <div class="score-num user" style="font-size:2.2em;font-weight:800;color:var(--spotify-green);">{{ "%.2f"|format(artist_avg_song_score) }}</div>
+                    <div class="score-caption">Artist Avg</div>
+                </div>
+                <div class="vs-separator" style="font-size:1.3em;font-weight:700;color:#888;opacity:0.7;margin:0 10px;">vs</div>
+                <div class="global-comp-score" style="min-width:110px;text-align:center;">
+                    <div class="score-num user" style="font-size:2.2em;font-weight:800;color:#b3b3b3;">{{ "%.2f"|format(global_avg_song_score) }}</div>
+                    <div class="score-caption">Global Avg</div>
                 </div>
             </div>
             <div class="quick-stat-card">

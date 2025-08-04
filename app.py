@@ -1229,13 +1229,45 @@ def get_album_data(artist_name, album_name):
             if delta < min_delta:
                 min_delta = delta
                 worst_improved_song = {'title': song_name, 'delta': delta}
+    if 'Duration (ms)' in album_songs_df.columns:
+        album_songs_df['duration_ms'] = pd.to_numeric(album_songs_df['Duration (ms)'], errors='coerce').fillna(180000)
+    elif 'duration_ms' in album_songs_df.columns:
+        album_songs_df['duration_ms'] = pd.to_numeric(album_songs_df['duration_ms'], errors='coerce').fillna(180000)
+    else:
+        album_songs_df['duration_ms'] = 180000  # fallback: 3min per song
+
+    # Sort by Position In Group or track number, fallback to index
+    if 'Position In Group' in album_songs_df.columns:
+        album_songs_df = album_songs_df.sort_values(by='Position In Group')
+    else:
+        album_songs_df = album_songs_df.sort_index()
+
+    # Calculate song start and midpoint times
+    midpoints = []
+    current_time = 0
+    for idx, row in album_songs_df.iterrows():
+        duration_sec = (row['duration_ms'] or 0) / 1000
+        start_sec = current_time
+        midpoint_sec = start_sec + (duration_sec / 2)
+        midpoints.append(midpoint_sec)
+        current_time += duration_sec
+    all_songs_df = main_df.copy()
+    all_songs_df['Ranking'] = pd.to_numeric(all_songs_df['Ranking'], errors='coerce')
+    all_songs_df = all_songs_df[all_songs_df['Ranking'].notnull()]
+    all_songs_df = all_songs_df.sort_values('Ranking', ascending=False).reset_index(drop=True)
+    all_songs_df['global_rank'] = all_songs_df.index + 1
     album_songs = []
-    # Try to use Position In Group as track number, fallback to index+1
-    for idx, row in album_songs_df.sort_values(
-            by=['Position In Group' if 'Position In Group' in album_songs_df.columns else None]).iterrows():
+    for (idx, row), midpoint_sec in zip(album_songs_df.iterrows(), midpoints):
         song_name = row['Song Name']
         track_number = int(row.get('Position In Group', idx + 1))
-        # Delta in the last 7 days
+        # Find global rank for this song (and artist to be safe)
+        song_match = all_songs_df[
+            (all_songs_df['Song Name'] == song_name) &
+            (all_songs_df['Artist Name'].str.strip().str.lower() == artist_name_clean)
+            ]
+        global_rank = int(song_match.iloc[0]['global_rank']) if not song_match.empty else None
+
+        # Delta in the last 7 days (your logic)
         history = album_songs_df[
             (album_songs_df['Song Name'] == song_name)
         ].sort_values('Ranked Date')
@@ -1244,16 +1276,18 @@ def get_album_data(artist_name, album_name):
         if len(history) > 1:
             last_7d = history[history['Ranked Date'] >= (pd.Timestamp.now() - pd.Timedelta(days=7))]
             old = history[history['Ranked Date'] < (pd.Timestamp.now() - pd.Timedelta(days=7))]
-            delta_7d = (last_7d['Ranking'].mean() if not last_7d.empty else row['Ranking']) - (old['Ranking'].mean() if not old.empty else row['Ranking'])
+            delta_7d = (last_7d['Ranking'].mean() if not last_7d.empty else row['Ranking']) - (
+                old['Ranking'].mean() if not old.empty else row['Ranking'])
             score_history = list(zip(history['Ranked Date'].astype(str), history['Ranking']))
+
         album_songs.append({
             'track_number': track_number,
             'title': song_name,
             'score': row['Ranking'],
             'delta_7d': delta_7d,
             'score_history_str': "; ".join([f"{d}: {s:.2f}" for d, s in score_history]),
-            'midpoint_sec': None,  # Can fill using duration if needed
-            'global_rank': None,   # Fill if you have global rank data
+            'midpoint_sec': midpoint_sec,
+            'global_rank': global_rank,
         })
     artist_songs_df = main_df[
         (main_df['Artist Name'].str.strip().str.lower() == artist_name_clean)
@@ -1282,8 +1316,7 @@ def get_album_data(artist_name, album_name):
         'album_score': album_row.get('weighted_average_score', 0),
         'avg_song_score': avg_song_score,
         'median_song_score': median_song_score,
-        'std_song_score': std_song_score,
-        'album_mastery': 100,  # Set as appropriate or remove if not needed
+        'std_song_score': std_song_score,  # Set as appropriate or remove if not needed
         'top_3_songs': top_3_songs,
         'lowest_song': lowest_song,
         'most_improved_song': most_improved_song,
