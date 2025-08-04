@@ -1174,28 +1174,27 @@ def get_album_data(artist_name, album_name):
     album_length_sec = 0
     try:
         album_info = load_album_data(sp, album_id)
-        # Try to get track order from Spotify
-
         track_order_map = {}
         if album_info and 'songs' in album_info:
             for i, song in enumerate(album_info['songs']):
-                song_name = song['name'].strip().lower()
+                song_name = song['song_name'].strip().lower()  # Use correct key!
                 track_order_map[song_name] = i + 1  # 1-based
 
         album_songs_df['track_order'] = album_songs_df['Song Name'].str.strip().str.lower().map(track_order_map)
 
-        # Fallback if mapping failed (all null or missing)
-        if album_songs_df['track_order'].isnull().all():
+        if album_songs_df['track_order'].isnull().any():
+            # Fill missing values with Position In Group or index (1-based)
             if 'Position In Group' in album_songs_df.columns:
-                album_songs_df['track_order'] = album_songs_df['Position In Group']
+                album_songs_df['track_order'] = album_songs_df['track_order'].fillna(
+                    album_songs_df['Position In Group'])
             else:
-                album_songs_df['track_order'] = range(1, len(album_songs_df) + 1)
+                album_songs_df['track_order'] = album_songs_df['track_order'].fillna(
+                    pd.Series(range(1, len(album_songs_df) + 1), index=album_songs_df.index))
 
         album_songs_df = album_songs_df.sort_values('track_order')
 
-        # Add a column to album_songs_df for the true track order
-
         release_date = album_info.get('release_date', None)
+        # Album length calculation from Spotify...
         # Album length calculation from Spotify
         if album_info.get('songs'):
             total_duration_ms = 0
@@ -1298,7 +1297,7 @@ def get_album_data(artist_name, album_name):
             score_history = list(zip(history['Ranked Date'].astype(str), history['Ranking']))
 
         album_songs.append({
-            'track_number': int(row['track_order']) if not pd.isnull(row['track_order']) else idx + 1,
+            'track_number': int(row['track_order']),
             'title': song_name,
             'score': row['Ranking'],
             'delta_7d': delta_7d,
