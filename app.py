@@ -1174,11 +1174,23 @@ def get_album_data(artist_name, album_name):
     album_length_sec = 0
     try:
         album_info = load_album_data(sp, album_id)
+        # Try to get track order from Spotify
         track_order_map = {}
         if album_info and 'songs' in album_info:
             for i, song in enumerate(album_info['songs']):
                 song_name = song['name'].strip().lower()
                 track_order_map[song_name] = i + 1  # 1-based
+
+        album_songs_df['track_order'] = album_songs_df['Song Name'].str.strip().str.lower().map(track_order_map)
+
+        # Fallback if mapping failed (all null or missing)
+        if album_songs_df['track_order'].isnull().all():
+            if 'Position In Group' in album_songs_df.columns:
+                album_songs_df['track_order'] = album_songs_df['Position In Group']
+            else:
+                album_songs_df['track_order'] = range(1, len(album_songs_df) + 1)
+
+        album_songs_df = album_songs_df.sort_values('track_order')
 
         # Add a column to album_songs_df for the true track order
         album_songs_df['track_order'] = album_songs_df['Song Name'].str.strip().str.lower().map(track_order_map)
@@ -1246,10 +1258,6 @@ def get_album_data(artist_name, album_name):
     album_songs_df['duration_sec'] = album_songs_df['duration_ms'] / 1000
 
     # Sort by Position In Group or track number, fallback to index
-    if 'Position In Group' in album_songs_df.columns:
-        album_songs_df = album_songs_df.sort_values(by='Position In Group')
-    else:
-        album_songs_df = album_songs_df.sort_index()
 
     # Calculate song start and midpoint times
     midpoints = []
