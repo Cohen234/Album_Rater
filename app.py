@@ -1259,13 +1259,11 @@ def get_album_data(artist_name, album_name):
     # Sort by Position In Group or track number, fallback to index
 
     # Calculate song start and midpoint times
-    midpoints = []
+    song_starts = []
     current_time = 0
     for idx, row in album_songs_df.iterrows():
+        song_starts.append(current_time)
         duration_sec = row['duration_sec'] or 0
-        start_sec = current_time
-        midpoint_sec = start_sec + (duration_sec / 2)
-        midpoints.append(midpoint_sec)
         current_time += duration_sec
     all_songs_df = main_df.copy()
     all_songs_df['Ranking'] = pd.to_numeric(all_songs_df['Ranking'], errors='coerce')
@@ -1273,7 +1271,7 @@ def get_album_data(artist_name, album_name):
     all_songs_df = all_songs_df.sort_values('Ranking', ascending=False).reset_index(drop=True)
     all_songs_df['global_rank'] = all_songs_df.index + 1
     album_songs = []
-    for (idx, row), midpoint_sec in zip(album_songs_df.iterrows(), midpoints):
+    for (idx, row), start_sec in zip(album_songs_df.iterrows(), song_starts):
         song_name = row['Song Name']
         track_number = int(row.get('Position In Group', idx + 1))
         # Find global rank for this song (and artist to be safe)
@@ -1302,7 +1300,7 @@ def get_album_data(artist_name, album_name):
             'score': row['Ranking'],
             'delta_7d': delta_7d,
             'score_history_str': "; ".join([f"{d}: {s:.2f}" for d, s in score_history]),
-            'midpoint_sec': midpoint_sec,
+            'start_sec': start_sec,
             'global_rank': global_rank,
         })
     artist_songs_df = main_df[

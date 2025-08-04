@@ -407,10 +407,12 @@
             datasets: [{
                 label: "Song Score by Album Runtime",
                 data: [
-                    {% for song in album_songs %}
-                    { x: {{ song.midpoint_sec }}, y: {{ "%.2f"|format(song.score) }}, song: "{{ song.title|escape }}" }{% if not loop.last %},{% endif %}
-                    {% endfor %}
-                ],
+                        {% for song in album_songs %}
+                        { x: {{ song.start_sec }}, y: {{ "%.2f"|format(song.score) }}, song: "{{ song.title|escape }}" }{% if not loop.last %},{% endif %}
+                        {% endfor %}
+                        // Optionally, add a final point at album_length_sec with the last song's score to reach the far right:
+                        , { x: {{ album_length_sec }}, y: {{ "%.2f"|format(album_songs[-1].score) }}, song: "{{ album_songs[-1].title|escape }}" }
+                    ],
                 borderColor: "#1DB954",
                 backgroundColor: "#1DB954",
                 pointRadius: 7,
