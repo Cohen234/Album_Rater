@@ -1174,6 +1174,15 @@ def get_album_data(artist_name, album_name):
     album_length_sec = 0
     try:
         album_info = load_album_data(sp, album_id)
+        track_order_map = {}
+        if album_info and 'songs' in album_info:
+            for i, song in enumerate(album_info['songs']):
+                song_name = song['name'].strip().lower()
+                track_order_map[song_name] = i + 1  # 1-based
+
+        # Add a column to album_songs_df for the true track order
+        album_songs_df['track_order'] = album_songs_df['Song Name'].str.strip().str.lower().map(track_order_map)
+        album_songs_df = album_songs_df.sort_values('track_order')
         release_date = album_info.get('release_date', None)
         # Album length calculation from Spotify
         if album_info.get('songs'):
@@ -1234,6 +1243,7 @@ def get_album_data(artist_name, album_name):
         album_songs_df['duration_ms'] = pd.to_numeric(album_songs_df['duration_ms'], errors='coerce').fillna(180000)
     else:
         album_songs_df['duration_ms'] = 180000  # fallback: 3min per song
+    album_songs_df['duration_sec'] = album_songs_df['duration_ms'] / 1000
 
     # Sort by Position In Group or track number, fallback to index
     if 'Position In Group' in album_songs_df.columns:
@@ -1245,7 +1255,7 @@ def get_album_data(artist_name, album_name):
     midpoints = []
     current_time = 0
     for idx, row in album_songs_df.iterrows():
-        duration_sec = (row['duration_ms'] or 0) / 1000
+        duration_sec = row['duration_sec'] or 0
         start_sec = current_time
         midpoint_sec = start_sec + (duration_sec / 2)
         midpoints.append(midpoint_sec)
@@ -1280,7 +1290,7 @@ def get_album_data(artist_name, album_name):
             score_history = list(zip(history['Ranked Date'].astype(str), history['Ranking']))
 
         album_songs.append({
-            'track_number': track_number,
+            'track_number': int(row['track_order']) if not pd.isnull(row['track_order']) else idx + 1,
             'title': song_name,
             'score': row['Ranking'],
             'delta_7d': delta_7d,
