@@ -769,7 +769,6 @@ def album_page(artist_name, album_name):
         median_song_score=album_data['median_song_score'],
         std_song_score=album_data['std_song_score'],
         global_album_rank=album_data['global_album_rank'],
-        album_mastery=album_data['album_mastery'],
         top_3_songs=album_data['top_3_songs'],
         lowest_song=album_data['lowest_song'],
         most_improved_song=album_data['most_improved_song'],
@@ -1325,6 +1324,7 @@ def get_album_data(artist_name, album_name):
         'global_avg_song_score': global_avg_song_score,
         'album_ranking_timeline': album_ranking_timeline,
         'album_ranking_delta': 0,
+
         "global_album_rank": global_album_rank,
         'album_songs': album_songs,
     }
