@@ -744,10 +744,11 @@ def artist_page_v2(artist_name):
         return f"An error occurred: {e}", 500
 
 from flask import abort
-@app.route("/artist/<artist_name>/album/<album_name>")
+from urllib.parse import unquote
+@app.route("/artist/<artist_name>/album/<path:album_name>")
 def album_page(artist_name, album_name):
-    # Fetch album data from your database or logic
-    album_data = get_album_data(artist_name, album_name)  # You must implement this function
+    album_name = unquote(album_name)
+    album_data = get_album_data(artist_name, album_name)
     if not album_data:
         abort(404)
     return render_template(
