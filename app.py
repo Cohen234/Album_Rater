@@ -747,9 +747,12 @@ from flask import abort
 from urllib.parse import unquote
 @app.route("/artist/<artist_name>/album/<path:album_name>")
 def album_page(artist_name, album_name):
+    from urllib.parse import unquote
     album_name = unquote(album_name)
+    print(f"Album name from URL: '{album_name}'")
     album_data = get_album_data(artist_name, album_name)
     if not album_data:
+        print("ALBUM DATA NOT FOUND!")
         abort(404)
     return render_template(
         "album_page.html",  # Use your album page template filename here
