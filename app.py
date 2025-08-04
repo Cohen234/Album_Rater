@@ -754,6 +754,8 @@ def album_page(artist_name, album_name):
     if not album_data:
         print("ALBUM DATA NOT FOUND!")
         abort(404)
+
+
     return render_template(
         "album_page.html",  # Use your album page template filename here
         artist_name=artist_name,
@@ -1123,8 +1125,20 @@ def submit_rankings():
     except Exception as e:
         logging.critical(f"\n🔥 CRITICAL ERROR in /submit_rankings: {e}", exc_info=True)
         return jsonify({'status': 'error', 'message': f"An unexpected error occurred: {e}"}), 500
+
 def get_album_data(artist_name, album_name):
     import pandas as pd
+    import json
+
+    def format_seconds(seconds):
+        h = seconds // 3600
+        m = (seconds % 3600) // 60
+        s = seconds % 60
+        if h > 0:
+            return f"{h}:{m:02}:{s:02}"
+        else:
+            return f"{m}:{s:02}"
+
     # Load dataframes
     main_df = get_as_dataframe(client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)).fillna("")
     averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
@@ -1141,12 +1155,13 @@ def get_album_data(artist_name, album_name):
     if album_row.empty:
         return None
     album_row = album_row.iloc[0]
-
     album_id = album_row['album_id']
     album_cover_url = album_row.get("album_cover_url", "")
-    release_date = None
-    album_length = None
-    album_length_sec = None
+
+    # Sort all albums by score to assign global ranks
+    averages_df = averages_df.sort_values(by='weighted_average_score', ascending=False).reset_index(drop=True)
+    placement_series = averages_df.index[averages_df['album_id'] == album_id]
+    global_album_rank = int(placement_series[0] + 1) if not placement_series.empty else None
 
     # Get all songs for this album
     album_songs_df = main_df[
@@ -1155,15 +1170,32 @@ def get_album_data(artist_name, album_name):
     ].copy()
 
     # Try to get release date and album length from your Spotify lookups if needed
+    release_date = None
+    album_length = ""
+    album_length_sec = 0
     try:
         album_info = load_album_data(sp, album_id)
         release_date = album_info.get('release_date', None)
-        album_length = album_info.get('album_length', None)
-        album_length_sec = album_info.get('album_length_sec', None)
+        # Album length calculation from Spotify
+        if album_info.get('songs'):
+            total_duration_ms = 0
+            for song in album_info['songs']:
+                # If you have duration_ms field, use it
+                if 'duration_ms' in song:
+                    total_duration_ms += int(song['duration_ms'])
+            album_length_sec = total_duration_ms // 1000
+            album_length = format_seconds(album_length_sec)
         if not album_cover_url and album_info.get('album_cover_url'):
             album_cover_url = album_info.get('album_cover_url')
     except Exception:
         pass
+
+    # Fallback album length calculation from your main sheet if not found above
+    if not album_length or album_length_sec == 0:
+        album_songs_df['Duration (ms)'] = pd.to_numeric(album_songs_df.get('Duration (ms)', 0), errors='coerce').fillna(0)
+        total_duration_ms = album_songs_df['Duration (ms)'].sum()
+        album_length_sec = int(total_duration_ms // 1000)
+        album_length = format_seconds(album_length_sec) if album_length_sec else ""
 
     # Song stats
     album_songs_df['Ranking'] = pd.to_numeric(album_songs_df['Ranking'], errors='coerce')
@@ -1181,11 +1213,29 @@ def get_album_data(artist_name, album_name):
     lowest_row = album_songs_df.sort_values('Ranking', ascending=True).head(1)
     lowest_song = {'title': lowest_row.iloc[0]['Song Name'], 'score': lowest_row.iloc[0]['Ranking']} if not lowest_row.empty else None
 
-    # For song leaderboard/stat table
+    most_improved_song = {'title': '', 'delta': 0}
+    worst_improved_song = None
+    max_delta = float('-inf')
+    min_delta = float('inf')
+    for song_name, group in album_songs_df.groupby('Song Name'):
+        group_sorted = group.sort_values('Ranked Date')
+        if len(group_sorted) > 1:
+            first_rank = group_sorted.iloc[0]['Ranking']
+            last_rank = group_sorted.iloc[-1]['Ranking']
+            delta = last_rank - first_rank
+            if delta > max_delta:
+                max_delta = delta
+                most_improved_song = {'title': song_name, 'delta': delta}
+            if delta < min_delta:
+                min_delta = delta
+                worst_improved_song = {'title': song_name, 'delta': delta}
     album_songs = []
-    for idx, row in album_songs_df.iterrows():
-        # Delta in the last 7 days
+    # Try to use Position In Group as track number, fallback to index+1
+    for idx, row in album_songs_df.sort_values(
+            by=['Position In Group' if 'Position In Group' in album_songs_df.columns else None]).iterrows():
         song_name = row['Song Name']
+        track_number = int(row.get('Position In Group', idx + 1))
+        # Delta in the last 7 days
         history = album_songs_df[
             (album_songs_df['Song Name'] == song_name)
         ].sort_values('Ranked Date')
@@ -1197,17 +1247,25 @@ def get_album_data(artist_name, album_name):
             delta_7d = (last_7d['Ranking'].mean() if not last_7d.empty else row['Ranking']) - (old['Ranking'].mean() if not old.empty else row['Ranking'])
             score_history = list(zip(history['Ranked Date'].astype(str), history['Ranking']))
         album_songs.append({
-            'track_number': row.get('Position In Group', idx + 1),
+            'track_number': track_number,
             'title': song_name,
             'score': row['Ranking'],
             'delta_7d': delta_7d,
             'score_history_str': "; ".join([f"{d}: {s:.2f}" for d, s in score_history]),
-            'midpoint_sec': None  # Fill with midpoint of song for chart (from your song/album data)
+            'midpoint_sec': None,  # Can fill using duration if needed
+            'global_rank': None,   # Fill if you have global rank data
         })
+    artist_songs_df = main_df[
+        (main_df['Artist Name'].str.strip().str.lower() == artist_name_clean)
+    ]
+    artist_songs_df['Ranking'] = pd.to_numeric(artist_songs_df['Ranking'], errors='coerce')
+    artist_avg_song_score = artist_songs_df['Ranking'].mean() if not artist_songs_df.empty else 0
+
+    main_df['Ranking'] = pd.to_numeric(main_df['Ranking'], errors='coerce')
+    global_avg_song_score = main_df['Ranking'].mean() if not main_df.empty else 0
 
     # Album ranking timeline
     rerank_history = album_row.get('rerank_history', '[]')
-    import json
     try:
         timeline = json.loads(rerank_history)
     except Exception:
@@ -1225,16 +1283,16 @@ def get_album_data(artist_name, album_name):
         'avg_song_score': avg_song_score,
         'median_song_score': median_song_score,
         'std_song_score': std_song_score,
-        'global_album_rank': album_row.get('Global_Rank', ""),
-        'album_mastery': 100,  # Set as appropriate
+        'album_mastery': 100,  # Set as appropriate or remove if not needed
         'top_3_songs': top_3_songs,
         'lowest_song': lowest_song,
-        'most_improved_song': {'title': '', 'delta': 0},  # TODO: Compute from song history
-        'worst_improved_song': None,
-        'artist_avg_song_score': avg_song_score,  # TODO: Compute from all artist's albums
-        'global_avg_song_score': avg_song_score,  # TODO: Compute from all global albums
+        'most_improved_song': most_improved_song,
+        'worst_improved_song': worst_improved_song,
+        'artist_avg_song_score': artist_avg_song_score,
+        'global_avg_song_score': global_avg_song_score,
         'album_ranking_timeline': album_ranking_timeline,
-        'album_ranking_delta': 0,  # Fill as appropriate
+        'album_ranking_delta': 0,
+        "global_album_rank": global_album_rank,
         'album_songs': album_songs,
     }
     return album_data

@@ -230,6 +230,14 @@
             .section-grid-4 { grid-template-columns: 1fr; }
             .chart-container { height: 210px; }
         }
+        .lb-medal {
+            font-size: 1.3em;
+            vertical-align: middle;
+            margin-right: 2px;
+        }
+        .lb-medal.gold { color: var(--gold); }
+        .lb-medal.silver { color: var(--silver); }
+        .lb-medal.bronze { color: var(--bronze); }
     </style>
 </head>
 <body>
@@ -277,7 +285,11 @@
             <div class="quick-stat-card">
                 <div class="quick-stat-header">TOP 3 SONGS</div>
                 {% for song in top_3_songs %}
-                    <div class="stat-score" style="color:var(--spotify-green);font-size:1.14em;">
+                    <div class="stat-score" style="font-size:1.14em;">
+                        {% if loop.index == 1 %}<span class="lb-medal gold">&#x1F947;</span>
+                        {% elif loop.index == 2 %}<span class="lb-medal silver">&#x1F948;</span>
+                        {% elif loop.index == 3 %}<span class="lb-medal bronze">&#x1F949;</span>
+                        {% endif %}
                         <span style="font-weight:700;">{{ song.title }}</span>: {{ "%.2f"|format(song.score) }}
                     </div>
                 {% endfor %}
@@ -349,52 +361,33 @@
                 </div>
                 {% endif %}
             </div>
-            <div class="quick-stat-card">
-                <div class="quick-stat-header">ALBUM MASTERY</div>
-                <div class="quick-stat-value">{{ "%.1f"|format(album_mastery) }}%</div>
-                <div class="progress-bar-bg" style="margin-top:10px;">
-                    <div class="progress-bar-fill" style="width:{{ album_mastery|float }}%;"></div>
-                </div>
-            </div>
         </section>
         <!-- Album Song Leaderboard -->
         <section>
-            <div class="chart-card leaderboard-card album-songs-leaderboard">
-                <h3>Album Track Leaderboard</h3>
+            <div class="chart-card album-songs-tracklist">
+                <h3>Tracklist</h3>
                 <div class="leaderboard-table-wrapper">
                     <table>
                         <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>Song</th>
-                            <th>Score (7d Δ)</th>
-                        </tr>
+                            <tr>
+                                <th>Global</th>
+                                <th>Song</th>
+                                <th style="text-align:right;">Score</th>
+                            </tr>
                         </thead>
                         <tbody>
-                        {% for song in album_songs %}
-                        <tr>
-                            <td>{{ song.track_number }}</td>
-                            <td class="lb-table-song-cell">{{ song.title }}</td>
-                            <td class="score-delta-cell">
-                                <span class="song-score"
-                                    onmouseenter="showScoreHistory(event, '{{ song.title|escape }}', '{{ song.score_history_str|escape }}')"
-                                    onmouseleave="hideScoreHistory(event)">
-                                    {{ "%.2f"|format(song.score) }}
-                                    {% if song.delta_7d > 0 %}
-                                        <span class="arrow-up" title="Up {{ song.delta_7d|round(2) }} in last 7d">&#8593;</span>
-                                    {% elif song.delta_7d < 0 %}
-                                        <span class="arrow-down" title="Down {{ song.delta_7d|round(2) }} in last 7d">&#8595;</span>
-                                    {% else %}
-                                        <span class="arrow-flat" title="No change">&#8594;</span>
-                                    {% endif %}
-                                </span>
-                            </td>
-                        </tr>
-                        {% endfor %}
+                            {% for song in album_songs|sort(attribute='track_number') %}
+                            <tr>
+                                <td style="text-align:center;">
+                                    {% if song.global_rank %}#{{ song.global_rank }}{% else %}-{% endif %}
+                                </td>
+                                <td>{{ song.title }}</td>
+                                <td style="text-align:right;">{{ "%.2f"|format(song.score) }}</td>
+                            </tr>
+                            {% endfor %}
                         </tbody>
                     </table>
                 </div>
-                <div class="song-score-history-tooltip" id="score-history-tooltip"></div>
             </div>
         </section>
         <!-- Listen Time Chart -->
