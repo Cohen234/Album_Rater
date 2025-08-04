@@ -1175,6 +1175,7 @@ def get_album_data(artist_name, album_name):
     try:
         album_info = load_album_data(sp, album_id)
         # Try to get track order from Spotify
+
         track_order_map = {}
         if album_info and 'songs' in album_info:
             for i, song in enumerate(album_info['songs']):
@@ -1193,8 +1194,7 @@ def get_album_data(artist_name, album_name):
         album_songs_df = album_songs_df.sort_values('track_order')
 
         # Add a column to album_songs_df for the true track order
-        album_songs_df['track_order'] = album_songs_df['Song Name'].str.strip().str.lower().map(track_order_map)
-        album_songs_df = album_songs_df.sort_values('track_order')
+
         release_date = album_info.get('release_date', None)
         # Album length calculation from Spotify
         if album_info.get('songs'):
