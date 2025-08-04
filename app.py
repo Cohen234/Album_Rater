@@ -743,8 +743,37 @@ def artist_page_v2(artist_name):
         logging.critical(f"🔥 CRITICAL ERROR loading artist page for {artist_name}: {e}")
         return f"An error occurred: {e}", 500
 
-
-
+from flask import abort
+@app.route("/artist/<artist_name>/album/<album_name>")
+def album_page(artist_name, album_name):
+    # Fetch album data from your database or logic
+    album_data = get_album_data(artist_name, album_name)  # You must implement this function
+    if not album_data:
+        abort(404)
+    return render_template(
+        "album_page.html",  # Use your album page template filename here
+        artist_name=artist_name,
+        album_name=album_data['album_name'],
+        album_cover_url=album_data['album_cover_url'],
+        release_date=album_data['release_date'],
+        album_length=album_data['album_length'],
+        album_length_sec=album_data['album_length_sec'],
+        album_score=album_data['album_score'],
+        avg_song_score=album_data['avg_song_score'],
+        median_song_score=album_data['median_song_score'],
+        std_song_score=album_data['std_song_score'],
+        global_album_rank=album_data['global_album_rank'],
+        album_mastery=album_data['album_mastery'],
+        top_3_songs=album_data['top_3_songs'],
+        lowest_song=album_data['lowest_song'],
+        most_improved_song=album_data['most_improved_song'],
+        worst_improved_song=album_data.get('worst_improved_song'),
+        artist_avg_song_score=album_data['artist_avg_song_score'],
+        global_avg_song_score=album_data['global_avg_song_score'],
+        album_ranking_timeline=album_data.get('album_ranking_timeline'),
+        album_ranking_delta=album_data.get('album_ranking_delta'),
+        album_songs=album_data['album_songs'],
+    )
 @app.route('/get_album_stats/<album_id>')
 def get_album_stats(album_id):
     try:
@@ -1090,7 +1119,121 @@ def submit_rankings():
     except Exception as e:
         logging.critical(f"\n🔥 CRITICAL ERROR in /submit_rankings: {e}", exc_info=True)
         return jsonify({'status': 'error', 'message': f"An unexpected error occurred: {e}"}), 500
+def get_album_data(artist_name, album_name):
+    import pandas as pd
+    # Load dataframes
+    main_df = get_as_dataframe(client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)).fillna("")
+    averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
 
+    # Clean for matching (album names may have case/space differences)
+    album_name_clean = album_name.strip().lower()
+    artist_name_clean = artist_name.strip().lower()
+
+    # Find the album row
+    album_row = averages_df[
+        (averages_df['album_name'].str.strip().str.lower() == album_name_clean) &
+        (averages_df['artist_name'].str.strip().str.lower() == artist_name_clean)
+    ]
+    if album_row.empty:
+        return None
+    album_row = album_row.iloc[0]
+
+    album_id = album_row['album_id']
+    album_cover_url = album_row.get("album_cover_url", "")
+    release_date = None
+    album_length = None
+    album_length_sec = None
+
+    # Get all songs for this album
+    album_songs_df = main_df[
+        (main_df['Album Name'].str.strip().str.lower() == album_name_clean) &
+        (main_df['Artist Name'].str.strip().str.lower() == artist_name_clean)
+    ].copy()
+
+    # Try to get release date and album length from your Spotify lookups if needed
+    try:
+        album_info = load_album_data(sp, album_id)
+        release_date = album_info.get('release_date', None)
+        album_length = album_info.get('album_length', None)
+        album_length_sec = album_info.get('album_length_sec', None)
+        if not album_cover_url and album_info.get('album_cover_url'):
+            album_cover_url = album_info.get('album_cover_url')
+    except Exception:
+        pass
+
+    # Song stats
+    album_songs_df['Ranking'] = pd.to_numeric(album_songs_df['Ranking'], errors='coerce')
+    album_songs_df = album_songs_df[album_songs_df['Ranking'].notnull()]
+
+    avg_song_score = album_songs_df['Ranking'].mean() if not album_songs_df.empty else 0
+    median_song_score = album_songs_df['Ranking'].median() if not album_songs_df.empty else 0
+    std_song_score = album_songs_df['Ranking'].std() if not album_songs_df.empty else 0
+
+    # Top/lowest 3 songs
+    top_3_songs = album_songs_df.sort_values('Ranking', ascending=False).head(3)[['Song Name', 'Ranking']].to_dict('records')
+    for song in top_3_songs:
+        song['title'] = song.pop('Song Name')
+        song['score'] = song.pop('Ranking')
+    lowest_row = album_songs_df.sort_values('Ranking', ascending=True).head(1)
+    lowest_song = {'title': lowest_row.iloc[0]['Song Name'], 'score': lowest_row.iloc[0]['Ranking']} if not lowest_row.empty else None
+
+    # For song leaderboard/stat table
+    album_songs = []
+    for idx, row in album_songs_df.iterrows():
+        # Delta in the last 7 days
+        song_name = row['Song Name']
+        history = album_songs_df[
+            (album_songs_df['Song Name'] == song_name)
+        ].sort_values('Ranked Date')
+        delta_7d = 0.0
+        score_history = []
+        if len(history) > 1:
+            last_7d = history[history['Ranked Date'] >= (pd.Timestamp.now() - pd.Timedelta(days=7))]
+            old = history[history['Ranked Date'] < (pd.Timestamp.now() - pd.Timedelta(days=7))]
+            delta_7d = (last_7d['Ranking'].mean() if not last_7d.empty else row['Ranking']) - (old['Ranking'].mean() if not old.empty else row['Ranking'])
+            score_history = list(zip(history['Ranked Date'].astype(str), history['Ranking']))
+        album_songs.append({
+            'track_number': row.get('Position In Group', idx + 1),
+            'title': song_name,
+            'score': row['Ranking'],
+            'delta_7d': delta_7d,
+            'score_history_str': "; ".join([f"{d}: {s:.2f}" for d, s in score_history]),
+            'midpoint_sec': None  # Fill with midpoint of song for chart (from your song/album data)
+        })
+
+    # Album ranking timeline
+    rerank_history = album_row.get('rerank_history', '[]')
+    import json
+    try:
+        timeline = json.loads(rerank_history)
+    except Exception:
+        timeline = []
+    album_ranking_timeline = [{'date': x['date'], 'rank': x.get('placement')} for x in timeline if 'date' in x]
+
+    album_data = {
+        'album_name': album_row['album_name'],
+        'artist_name': album_row['artist_name'],
+        'album_cover_url': album_cover_url,
+        'release_date': release_date or "",  # Provide something always
+        'album_length': album_length or "",
+        'album_length_sec': album_length_sec or 0,
+        'album_score': album_row.get('weighted_average_score', 0),
+        'avg_song_score': avg_song_score,
+        'median_song_score': median_song_score,
+        'std_song_score': std_song_score,
+        'global_album_rank': album_row.get('Global_Rank', ""),
+        'album_mastery': 100,  # Set as appropriate
+        'top_3_songs': top_3_songs,
+        'lowest_song': lowest_song,
+        'most_improved_song': {'title': '', 'delta': 0},  # TODO: Compute from song history
+        'worst_improved_song': None,
+        'artist_avg_song_score': avg_song_score,  # TODO: Compute from all artist's albums
+        'global_avg_song_score': avg_song_score,  # TODO: Compute from all global albums
+        'album_ranking_timeline': album_ranking_timeline,
+        'album_ranking_delta': 0,  # Fill as appropriate
+        'album_songs': album_songs,
+    }
+    return album_data
 @app.route('/prelim_success')
 def prelim_success():
     dominant_color = request.args.get('dominant_color', '#121212')

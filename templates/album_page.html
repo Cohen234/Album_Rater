@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ album_name }} - {{ artist_name }}</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #121212;
+            --surface-color: #181818;
+            --primary-text: #ffffff;
+            --secondary-text: #b3b3b3;
+            --border-color: #282828;
+            --spotify-green: #1DB954;
+            --gold: #ffd700;
+            --silver: #c0c0c0;
+            --bronze: #cd7f32;
+        }
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--primary-text);
+            margin: 0;
+            padding: 25px;
+        }
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 28px;
+        }
+        .album-hero {
+            display: flex;
+            gap: 36px;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .album-art-large {
+            width: 168px;
+            height: 168px;
+            border-radius: 15px;
+            box-shadow: 0 2px 16px rgba(0,0,0,0.18);
+            background: #232323;
+            object-fit: cover;
+        }
+        .album-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .album-title {
+            font-size: 2.2em;
+            font-weight: 800;
+            margin: 0 0 6px 0;
+            letter-spacing: 1.2px;
+        }
+        .album-artist a {
+            color: var(--spotify-green);
+            font-weight: 700;
+            text-decoration: none;
+            font-size: 1.15em;
+        }
+        .album-release, .album-length {
+            color: var(--secondary-text);
+            font-size: 1.05em;
+        }
+        .compare-btn-box {
+            margin-left: auto;
+        }
+        .action-button {
+            background-color: var(--spotify-green);
+            color: white;
+            padding: 10px 25px;
+            border-radius: 500px;
+            font-weight: 600;
+            transition: transform 0.2s, background-color 0.2s;
+            text-transform: uppercase;
+            font-size: 0.93em;
+            letter-spacing: 1px;
+            border: none;
+            box-shadow: 0 2px 8px rgba(29,185,84,0.18);
+            cursor: pointer;
+        }
+        .action-button:hover {
+            transform: scale(1.05);
+            background-color: #1ed760;
+        }
+        .section-grid-4 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 25px;
+        }
+        .quick-stat-card {
+            height: 220px;
+            min-height: 180px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            gap: 10px;
+            box-sizing: border-box;
+            background: var(--surface-color);
+            border-radius: 8px;
+            padding: 25px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        }
+        .quick-stat-header {
+            font-size: 1.18em;
+            color: var(--secondary-text);
+            font-weight: 700;
+            letter-spacing: 1.2px;
+            text-transform: uppercase;
+            margin-bottom: 18px;
+        }
+        .quick-stat-value {
+            font-size: 3.15em;
+            font-weight: 800;
+            color: var(--spotify-green);
+            margin: 0;
+            line-height: 1.1;
+            text-align: center;
+        }
+        .stat-score {
+            margin-top: 12px;
+            font-size: 1.3em;
+            font-weight: 600;
+            color: #b3b3b3;
+            letter-spacing: 0.03em;
+        }
+        .stat-score span {
+            color: var(--spotify-green);
+            font-size: 1.3em;
+            font-weight: 800;
+            margin-left: 4px;
+        }
+        .quick-stat-img {
+            width:60px; height:60px; border-radius:8px; object-fit:cover; box-shadow:0 2px 8px rgba(0,0,0,0.14);
+            flex-shrink:0;
+            margin-bottom: 6px;
+        }
+        .chart-card {
+            background-color: var(--surface-color);
+            border-radius: 8px;
+            padding: 25px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            margin-bottom: 0;
+            position:relative;
+        }
+        .chart-card h3 { margin-top: 0; margin-bottom: 18px;}
+        .album-songs-leaderboard .leaderboard-table-wrapper {
+            max-height: 320px;
+            overflow-y: auto;
+        }
+        .leaderboard-table-wrapper {
+            max-height: 500px;
+            overflow-y: auto;
+            border-radius: 0 0 10px 10px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: auto;
+            background: none;
+        }
+        th, td {
+            padding: 14px 10px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 1.07em;
+        }
+        th {
+            color: var(--secondary-text);
+            text-transform: uppercase;
+            font-size: 0.85em;
+            font-weight: 700;
+            position: sticky;
+            top: 0;
+            background: var(--surface-color);
+            z-index: 2;
+            letter-spacing: 1px;
+        }
+        td {
+            color: var(--primary-text);
+            background: none;
+            vertical-align: middle;
+        }
+        td:first-child, th:first-child {
+            width: 44px;
+            text-align: center;
+            color: var(--secondary-text);
+        }
+        th:nth-child(2), td:nth-child(2) {
+            min-width: 140px;
+            max-width: 270px;
+            width: 45%;
+        }
+        th:nth-child(3), td:nth-child(3) {
+            width: 120px;
+            text-align: right;
+        }
+        .score-delta-cell {
+            text-align: right;
+            font-weight: 700;
+            font-size: 1.14em;
+        }
+        .arrow-up { color: #1DB954; margin-left: 8px; }
+        .arrow-down { color: #e74c3c; margin-left: 8px; }
+        .arrow-flat { color: #888; margin-left: 8px; }
+        .song-score { cursor: pointer; }
+        .song-score-history-tooltip {
+            display: none;
+            position: absolute;
+            background: #222;
+            color: #fff;
+            border-radius: 5px;
+            padding: 10px 14px;
+            font-size: 1em;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+            z-index: 40;
+            pointer-events: none;
+        }
+        .chart-container {
+            width: 100%;
+            height: 340px;
+            min-height: 260px;
+        }
+        @media (max-width: 900px) {
+            .album-hero { flex-direction: column; align-items: flex-start; }
+            .album-art-large { margin-bottom: 10px; }
+            .section-grid-4 { grid-template-columns: 1fr; }
+            .chart-container { height: 210px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="album-hero">
+        <img class="album-art-large" src="{{ album_cover_url or 'https://placehold.co/168x168' }}" alt="{{ album_name }}">
+        <div class="album-meta">
+            <h1 class="album-title">{{ album_name }}</h1>
+            <div class="album-artist">
+                <a href="{{ url_for('artist_page', artist_name=artist_name) }}">{{ artist_name }}</a>
+            </div>
+            <div class="album-release">{{ release_date }}</div>
+            <div class="album-length">Length: {{ album_length }}</div>
+        </div>
+        <div class="compare-btn-box">
+            <button class="action-button" id="compare-album-btn">Compare</button>
+        </div>
+    </div>
+    <main class="main-grid">
+        <!-- Stat Cards -->
+        <section class="section-grid-4">
+            <div class="quick-stat-card">
+                <div class="quick-stat-header">ALBUM SCORE</div>
+                <div class="quick-stat-value">{{ "%.2f"|format(album_score) }}</div>
+            </div>
+            <div class="quick-stat-card">
+                <div class="quick-stat-header">AVG SONG SCORE</div>
+                <div class="quick-stat-value">{{ "%.2f"|format(avg_song_score) }}</div>
+            </div>
+            <div class="quick-stat-card">
+                <div class="quick-stat-header">MEDIAN SONG SCORE</div>
+                <div class="quick-stat-value">{{ "%.2f"|format(median_song_score) }}</div>
+            </div>
+            <div class="quick-stat-card">
+                <div class="quick-stat-header">STD. DEV. SONG SCORE</div>
+                <div class="quick-stat-value">{{ "%.2f"|format(std_song_score) }}</div>
+            </div>
+        </section>
+        <section class="section-grid-4">
+            <div class="quick-stat-card">
+                <div class="quick-stat-header">GLOBAL ALBUM RANK</div>
+                <div class="quick-stat-value">
+                    {% if global_album_rank %}#{{ global_album_rank }}{% else %}-{% endif %}
+                </div>
+            </div>
+            <div class="quick-stat-card">
+                <div class="quick-stat-header">TOP 3 SONGS</div>
+                {% for song in top_3_songs %}
+                    <div class="stat-score" style="color:var(--spotify-green);font-size:1.14em;">
+                        <span style="font-weight:700;">{{ song.title }}</span>: {{ "%.2f"|format(song.score) }}
+                    </div>
+                {% endfor %}
+            </div>
+            <div class="quick-stat-card">
+                <div class="quick-stat-header">LOWEST RATED SONG</div>
+                <div class="stat-score" style="color:#e74c3c;font-size:1.18em;">
+                    {{ lowest_song.title }}: {{ "%.2f"|format(lowest_song.score) }}
+                </div>
+            </div>
+            <div class="quick-stat-card">
+                <div class="quick-stat-header">MOST IMPROVED SONG</div>
+                <div class="stat-score" style="color:var(--spotify-green);font-size:1.13em;">
+                    {{ most_improved_song.title }} {% if most_improved_song.delta > 0 %}<span class="arrow-up">&#8593;</span>{% elif most_improved_song.delta < 0 %}<span class="arrow-down">&#8595;</span>{% endif %}
+                    <span style="margin-left:7px;">{{ "%.2f"|format(most_improved_song.delta) }}</span>
+                </div>
+                {% if worst_improved_song %}
+                <div class="quick-stat-header" style="margin-top:16px;">WORST IMPROVED SONG</div>
+                <div class="stat-score" style="color:#e74c3c;font-size:1.13em;">
+                    {{ worst_improved_song.title }} {% if worst_improved_song.delta > 0 %}<span class="arrow-up">&#8593;</span>{% elif worst_improved_song.delta < 0 %}<span class="arrow-down">&#8595;</span>{% endif %}
+                    <span style="margin-left:7px;">{{ "%.2f"|format(worst_improved_song.delta) }}</span>
+                </div>
+                {% endif %}
+            </div>
+        </section>
+        <!-- Comparison Stats -->
+        <section class="section-grid-4">
+            <div class="quick-stat-card">
+                <div class="quick-stat-header">ALBUM AVG vs. ARTIST AVG</div>
+                <div class="stat-score">
+                    Album Avg: <span>{{ "%.2f"|format(avg_song_score) }}</span><br>
+                    Artist Avg: <span style="color:#b3b3b3;">{{ "%.2f"|format(artist_avg_song_score) }}</span>
+                    {% if avg_song_score > artist_avg_song_score %}
+                        <span class="arrow-up" style="margin-left:12px;">&#8593;</span>
+                    {% elif avg_song_score < artist_avg_song_score %}
+                        <span class="arrow-down" style="margin-left:12px;">&#8595;</span>
+                    {% else %}
+                        <span class="arrow-flat" style="margin-left:12px;">&#8594;</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="quick-stat-card">
+                <div class="quick-stat-header">ALBUM AVG vs. GLOBAL AVG</div>
+                <div class="stat-score">
+                    Album Avg: <span>{{ "%.2f"|format(avg_song_score) }}</span><br>
+                    Global Avg: <span style="color:#b3b3b3;">{{ "%.2f"|format(global_avg_song_score) }}</span>
+                    {% if avg_song_score > global_avg_song_score %}
+                        <span class="arrow-up" style="margin-left:12px;">&#8593;</span>
+                    {% elif avg_song_score < global_avg_song_score %}
+                        <span class="arrow-down" style="margin-left:12px;">&#8595;</span>
+                    {% else %}
+                        <span class="arrow-flat" style="margin-left:12px;">&#8594;</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="quick-stat-card">
+                <div class="quick-stat-header">ALBUM RANKING TIMELINE</div>
+                {% if album_ranking_timeline and album_ranking_timeline|length > 1 %}
+                <canvas id="albumRankingTimelineChart" style="width:100%;height:70px;max-height:90px;"></canvas>
+                {% else %}
+                <div class="stat-score">
+                    {% if album_ranking_delta > 0 %}
+                        <span class="arrow-up">&#8593;</span> +{{ "%.0f"|format(album_ranking_delta) }}
+                    {% elif album_ranking_delta < 0 %}
+                        <span class="arrow-down">&#8595;</span> {{ "%.0f"|format(album_ranking_delta) }}
+                    {% else %}
+                        <span class="arrow-flat">&#8594;</span> 0
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+            <div class="quick-stat-card">
+                <div class="quick-stat-header">ALBUM MASTERY</div>
+                <div class="quick-stat-value">{{ "%.1f"|format(album_mastery) }}%</div>
+                <div class="progress-bar-bg" style="margin-top:10px;">
+                    <div class="progress-bar-fill" style="width:{{ album_mastery|float }}%;"></div>
+                </div>
+            </div>
+        </section>
+        <!-- Album Song Leaderboard -->
+        <section>
+            <div class="chart-card leaderboard-card album-songs-leaderboard">
+                <h3>Album Track Leaderboard</h3>
+                <div class="leaderboard-table-wrapper">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Song</th>
+                            <th>Score (7d Δ)</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% for song in album_songs %}
+                        <tr>
+                            <td>{{ song.track_number }}</td>
+                            <td class="lb-table-song-cell">{{ song.title }}</td>
+                            <td class="score-delta-cell">
+                                <span class="song-score"
+                                    onmouseenter="showScoreHistory(event, '{{ song.title|escape }}', '{{ song.score_history_str|escape }}')"
+                                    onmouseleave="hideScoreHistory(event)">
+                                    {{ "%.2f"|format(song.score) }}
+                                    {% if song.delta_7d > 0 %}
+                                        <span class="arrow-up" title="Up {{ song.delta_7d|round(2) }} in last 7d">&#8593;</span>
+                                    {% elif song.delta_7d < 0 %}
+                                        <span class="arrow-down" title="Down {{ song.delta_7d|round(2) }} in last 7d">&#8595;</span>
+                                    {% else %}
+                                        <span class="arrow-flat" title="No change">&#8594;</span>
+                                    {% endif %}
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="song-score-history-tooltip" id="score-history-tooltip"></div>
+            </div>
+        </section>
+        <!-- Listen Time Chart -->
+        <section>
+            <div class="chart-card">
+                <h3>Listen Time Chart</h3>
+                <div class="chart-container">
+                    <canvas id="listenTimeChart"></canvas>
+                </div>
+            </div>
+        </section>
+    </main>
+    <script>
+        // --- Song Score History Tooltip ---
+        function showScoreHistory(event, songTitle, scoreHistoryStr) {
+            const tooltip = document.getElementById('score-history-tooltip');
+            tooltip.style.display = 'block';
+            tooltip.innerHTML = `<b>${songTitle}</b><br>${scoreHistoryStr.replaceAll('\\n', '<br>')}`;
+            const rect = event.target.getBoundingClientRect();
+            tooltip.style.top = (window.scrollY + rect.top - tooltip.offsetHeight - 10) + "px";
+            tooltip.style.left = (window.scrollX + rect.left + rect.width/2 - tooltip.offsetWidth/2) + "px";
+        }
+        function hideScoreHistory(event) {
+            const tooltip = document.getElementById('score-history-tooltip');
+            tooltip.style.display = 'none';
+        }
+
+        // --- Listen Time Chart (Chart.js) ---
+        const listenTimeCtx = document.getElementById('listenTimeChart').getContext('2d');
+        const listenTimeData = {
+            datasets: [{
+                label: "Song Score by Album Runtime",
+                data: [
+                    {% for song in album_songs %}
+                    { x: {{ song.midpoint_sec }}, y: {{ "%.2f"|format(song.score) }}, song: "{{ song.title|escape }}" }{% if not loop.last %},{% endif %}
+                    {% endfor %}
+                ],
+                borderColor: "#1DB954",
+                backgroundColor: "#1DB954",
+                pointRadius: 7,
+                pointHoverRadius: 12,
+                showLine: true,
+                tension: 0.45,
+            }]
+        };
+        new Chart(listenTimeCtx, {
+            type: 'line',
+            data: listenTimeData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            title: function(context) {
+                                let song = context[0].raw.song;
+                                let mins = Math.floor(context[0].raw.x / 60);
+                                let secs = Math.round(context[0].raw.x % 60).toString().padStart(2,"0");
+                                return song + " (" + mins + ":" + secs + ")";
+                            },
+                            label: function(context) {
+                                return "Score: " + context.raw.y.toFixed(2);
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        min: 0,
+                        max: {{ album_length_sec }},
+                        title: { display: true, text: "Album Runtime (min:sec)" },
+                        ticks: {
+                            color: "#b3b3b3",
+                            callback: function(val) {
+                                let mins = Math.floor(val/60);
+                                let secs = Math.round(val%60).toString().padStart(2,"0");
+                                return mins + ":" + secs;
+                            }
+                        },
+                        grid: { color: "#282828" }
+                    },
+                    y: {
+                        min: 0,
+                        max: 10,
+                        title: { display: true, text: "Song Score" },
+                        ticks: { color: "#b3b3b3" },
+                        grid: { color: "#282828" }
+                    }
+                }
+            }
+        });
+
+        // --- Album Ranking Timeline Chart (if available) ---
+        {% if album_ranking_timeline and album_ranking_timeline|length > 1 %}
+        const timelineCtx = document.getElementById('albumRankingTimelineChart').getContext('2d');
+        new Chart(timelineCtx, {
+            type: 'line',
+            data: {
+                labels: [{% for point in album_ranking_timeline %}"{{ point.date }}"{% if not loop.last %},{% endif %}{% endfor %}],
+                datasets: [{
+                    label: "Ranking",
+                    data: [{% for point in album_ranking_timeline %}{{ point.rank }}{% if not loop.last %},{% endif %}{% endfor %}],
+                    borderColor: "#1DB954",
+                    backgroundColor: "rgba(29,185,84,0.18)",
+                    pointBackgroundColor: "#1DB954",
+                    pointRadius: 5,
+                    pointHoverRadius: 8,
+                    fill: false,
+                    tension: 0.38,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: {
+                        display: false
+                    },
+                    y: {
+                        reverse: true,
+                        min: 1,
+                        title: { display: false },
+                        ticks: { color: "#b3b3b3" },
+                        grid: { color: "#282828" }
+                    }
+                }
+            }
+        });
+        {% endif %}
+    </script>
+</body>
+</html>
