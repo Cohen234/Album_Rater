@@ -1321,7 +1321,7 @@ def get_album_data(artist_name, album_name):
     album_ranking_timeline = [{'date': x['date'], 'rank': x.get('placement')} for x in timeline if 'date' in x]
     print("album_length_sec:", album_length_sec)
     print("album_length:", album_length)
-    print("Song midpoints:", [s['midpoint_sec'] for s in album_songs])
+
 
     album_data = {
         'album_name': album_row['album_name'],
