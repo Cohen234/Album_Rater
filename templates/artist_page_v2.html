@@ -810,7 +810,7 @@
                         <div class="timeline-event-col">
                             <div class="timeline-dot"></div>
                             <div class="timeline-content">
-                                <img src="{{ event.album_cover_url or 'https://placehold.co/100x100/181818/FFF?text=?" }}" class="timeline-img" alt="{{ event.album_name }}">
+                                <<img src="{{ event.album_cover_url or 'https://placehold.co/100x100/181818/FFF?text=?' }}" class="timeline-img" alt="{{ event.album_name }}">
                                 <div class="timeline-album-title">{{ event.album_name }}</div>
                                 <div class="timeline-score">Score: {{ "%.2f"|format(event.score) }}</div>
                                 <div class="timeline-placement">Placement: {{ event.placement }}</div>
