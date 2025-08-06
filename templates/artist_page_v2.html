@@ -256,14 +256,13 @@
         /* Timeline Line */
         .timeline-horizontal-bar {
             position: absolute;
-            left: 0; right: 0;
-            top: 80px; /* set this to the vertical position for your timeline */
+            left: 0;
+            top: 80px; /* Match the vertical position for your timeline */
+            width: 100%;
             height: 4px;
             background: #383838;
             border-radius: 2px;
             z-index: 1;
-            margin-left: 45px;
-            margin-right: 45px;
         }
 
         /* Timeline Event Container */
@@ -805,13 +804,13 @@
             <div class="chart-card ranking-timeline-card">
                 <h3>Ranking Timeline</h3>
                 <div class="timeline-scrollbar">
-                    <div class="timeline-horizontal-bar"></div>
                     <div class="timeline-horizontal">
+                        <div class="timeline-horizontal-bar"></div>
                         {% for event in ranking_timeline_data %}
                         <div class="timeline-event-col">
                             <div class="timeline-dot"></div>
                             <div class="timeline-content">
-                                <img src="{{ event.album_cover_url or 'https://placehold.co/100x100/181818/FFF?text=?' }}" class="timeline-img" alt="{{ event.album_name }}">
+                                <img src="{{ event.album_cover_url or 'https://placehold.co/100x100/181818/FFF?text=?" }}" class="timeline-img" alt="{{ event.album_name }}">
                                 <div class="timeline-album-title">{{ event.album_name }}</div>
                                 <div class="timeline-score">Score: {{ "%.2f"|format(event.score) }}</div>
                                 <div class="timeline-placement">Placement: {{ event.placement }}</div>
@@ -1078,9 +1077,16 @@
                 yMin: 0,
                 yMax: 10,
                 borderColor: '#1DB954',
-                borderWidth: 3,
-                borderDash: [8, 8],
-                label: { enabled: false }
+                borderWidth: 4, // thicker
+                borderDash: [5, 6],
+                label: {
+                    enabled: true,
+                    content: albumLabels[i],
+                    position: "start",
+                    font: { size: 12, weight: 'bold' },
+                    color: '#1DB954',
+                    backgroundColor: '#181818'
+                }
             };
         }
 
