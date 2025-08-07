@@ -410,7 +410,7 @@ def artist_page_v2(artist_name):
             eligible = all_albums_df[all_albums_df['first_ranked_date'] <= rank_date].copy()
             eligible = eligible.sort_values('weighted_average_score', ascending=False).reset_index(drop=True)
             try:
-                placement = eligible[eligible['album_id'] == album_id].index[0] + 1
+                placement = eligible[eligible['album_id'].astype(str) == str(album_id)].index[0] + 1
                 return placement
             except Exception:
                 return None
@@ -801,7 +801,7 @@ def get_album_stats(album_id):
         averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
 
         # 2. Find the specific album's data
-        album_stats = averages_df[averages_df['album_id'] == album_id]
+        album_stats = averages_df[averages_df['album_id'].astype(str) == str(album_id)]
         if album_stats.empty:
             return jsonify({'error': 'Album not found in averages sheet.'}), 404
 
@@ -834,7 +834,7 @@ def get_album_stats(album_id):
         averages_df.sort_values(by='weighted_average_score', ascending=False, inplace=True)
         averages_df.reset_index(drop=True, inplace=True)
 
-        placement_series = averages_df.index[averages_df['album_id'] == album_id]
+        placement_series = averages_df.index[averages_df['album_id'].astype(str) == str(album_id)]
         leaderboard_placement = int(placement_series[0] + 1) if not placement_series.empty else 'N/A'
 
         last_ranked_date = pd.to_datetime(album_stats.get('last_ranked_date'), errors='coerce')
@@ -932,13 +932,13 @@ def submit_rankings():
             if is_rerank:
                 averages_df_before = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
                 if not averages_df_before.empty:
-                    old_album_data = averages_df_before[averages_df_before['album_id'] == album_id]
+                    old_album_data = averages_df_before[averages_df_before['album_id'].astype(str) == str(album_id)]
                     if not old_album_data.empty:
                         old_score = old_album_data.iloc[0]['weighted_average_score']
                         # Sort to find old placement
                         averages_df_before.sort_values(by='weighted_average_score', ascending=False, inplace=True)
                         averages_df_before.reset_index(drop=True, inplace=True)
-                        old_placement_series = averages_df_before.index[averages_df_before['album_id'] == album_id]
+                        old_placement_series = averages_df_before.index[averages_df_before['album_id'].astype(str) == str(album_id)]
                         old_placement = int(old_placement_series[0] + 1) if not old_placement_series.empty else 1
 
             # --- 4. Update Google Sheets with New Final Rankings ---
@@ -1026,7 +1026,7 @@ def submit_rankings():
                 # THE FIX: This loop now updates the score history for ALL albums
                 for album_id_to_update, new_weighted_avg in weighted_averages.items():
                     new_simple_avg = simple_averages.get(album_id_to_update)
-                    existing_rows = album_averages_df[album_averages_df['album_id'] == album_id_to_update]
+                    existing_rows = album_averages_df[album_averages_df['album_id'].astype(str) == str(album_id_to_update)]
 
                     if not existing_rows.empty:
                         idx = existing_rows.index[0]
@@ -1104,13 +1104,13 @@ def submit_rankings():
             averages_df_after.sort_values(by='weighted_average_score', ascending=False, inplace=True)
             averages_df_after.reset_index(drop=True, inplace=True)
 
-            new_album_data = averages_df_after[averages_df_after['album_id'] == album_id]
+            new_album_data = averages_df_after[averages_df_after['album_id'].astype(str) == str(album_id)]
             if new_album_data.empty:
                 return jsonify({'status': 'error', 'message': 'Could not find album after ranking.'}), 500
 
             new_score = float(new_album_data.iloc[0]['weighted_average_score'])
             times_ranked = int(new_album_data.iloc[0]['times_ranked'])
-            new_placement_series = averages_df_after.index[averages_df_after['album_id'] == album_id]
+            new_placement_series = averages_df_after.index[averages_df_after['album_id'].astype(str) == str(album_id)]
             new_placement = int(new_placement_series[0] + 1) if not new_placement_series.empty else 1
             total_albums = len(averages_df_after)
             dominant_color = get_dominant_color(album_cover_url)
@@ -1176,7 +1176,7 @@ def get_album_data(artist_name, album_name, album_id):
 
     # Sort all albums by score to assign global ranks
     averages_df = averages_df.sort_values(by='weighted_average_score', ascending=False).reset_index(drop=True)
-    placement_series = averages_df.index[averages_df['album_id'] == album_id]
+    placement_series = averages_df.index[averages_df['album_id'].astype(str) == str(album_id)]
     global_album_rank = int(placement_series[0] + 1) if not placement_series.empty else None
 
     # Get all songs for this album
@@ -1591,7 +1591,7 @@ def view_album():
 
         is_rerank_mode = False
         if not album_averages_df.empty and 'album_id' in album_averages_df.columns:
-            album_stats = album_averages_df[album_averages_df['album_id'] == album_id]
+            album_stats = album_averages_df[album_averages_df['album_id'].astype(str) == str(album_id)]
             if not album_stats.empty and album_stats.iloc[0]['times_ranked'] > 0:
                 is_rerank_mode = True
 
