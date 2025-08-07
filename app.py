@@ -693,6 +693,15 @@ def artist_page_v2(artist_name):
         print(album_labels)
         print(album_arts)
         song_scores = artist_songs_df['Ranking'].tolist()
+        from datetime import datetime
+
+        def safe_date(val):
+            try:
+                return datetime.strptime(val, "%Y-%m-%d") if isinstance(val, str) else val
+            except Exception:
+                return datetime(1900, 1, 1)
+
+        era_chart_data = sorted(era_chart_data, key=lambda d: safe_date(d['x']))
 
         return render_template(
             "artist_page_v2.html",
