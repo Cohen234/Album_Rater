@@ -7,6 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-error-bars@latest/dist/chartjs-plugin-error-bars.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -801,6 +802,9 @@
         <section class="section-grid-2">
             <div class="chart-card ranking-era-card">
                 <h3>Ranking Era</h3>
+                <div style="display: flex; gap: 12px; margin-bottom: 12px;">
+                    <button id="toggle-era-errorbars" class="action-button" style="background:#444;">Toggle Error Bars</button>
+                </div>
                 <div class="chart-container large-era-chart">
                     <canvas id="rankingEraChart"></canvas>
                 </div>
@@ -995,73 +999,108 @@
                 }
             });
         }
-        // --- Ranking Era Chart ---
+
         const eraCtx = document.getElementById('rankingEraChart').getContext('2d');
-        const eraChartData = {{ ranking_era_data | tojson }};
-        if (eraChartData && eraChartData.datasets[0] && eraChartData.datasets[0].data.length > 0) {
-            const gradient = eraCtx.createLinearGradient(0, 0, 0, eraCtx.canvas.height);
-            gradient.addColorStop(0, 'rgba(29, 185, 84, 0.5)');
-            gradient.addColorStop(1, 'rgba(29, 185, 84, 0)');
-            eraChartData.datasets[0].backgroundColor = gradient;
-            eraChartData.datasets[0].fill = true;
-            const pointImages = eraChartData.datasets[0].data.map(point => {
-                const img = new Image();
-                img.src = point.image || 'https://placehold.co/32x32/181818/FFF?text=?';
-                img.width = 32; img.height = 32;
-                return img;
-            });
-            eraChartData.datasets[0].pointStyle = pointImages;
-            eraChartData.datasets[0].pointRadius = 16;
-            eraChartData.datasets[0].pointHoverRadius = 20;
-            eraChartData.datasets[0].pointBorderWidth = 2;
-            eraChartData.datasets[0].pointHoverBorderWidth = 3;
-            eraChartData.datasets[0].pointBorderColor = 'rgba(29, 185, 84, 1)';
-            eraChartData.datasets[0].pointHoverBorderColor = '#FFF';
-            const scores = eraChartData.datasets[0].data.map(d => d.y);
-            const minScore = Math.min(...scores);
-            const maxScore = Math.max(...scores);
-            new Chart(eraCtx, {
-                type: 'line',
-                data: eraChartData,
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            enabled: true,
-                            backgroundColor: '#000',
-                            titleFont: { size: 14, weight: 'bold' },
-                            bodyFont: { size: 12 },
-                            padding: 12,
-                            displayColors: false,
-                            callbacks: {
-                                title: function(context) { return context[0].raw.label; },
-                                label: function(context) {
-                                    const score = `Score: ${context.raw.y.toFixed(2)}`;
-                                    const date = `Released: ${new Date(context.raw.x).toLocaleDateString()}`;
-                                    return [score, date];
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            ticks: { color: chartTextColor, padding: 10 },
-                            grid: { color: gridColor },
-                            suggestedMin: Math.max(0, Math.floor(minScore - 1)),
-                            suggestedMax: Math.min(10, Math.ceil(maxScore + 1))
-                        },
-                        x: {
-                            type: 'time',
-                            time: { unit: 'year', tooltipFormat: 'MMM d, yyyy' },
-                            ticks: { color: chartTextColor, maxRotation: 0, minRotation: 0, autoSkip: true, maxTicksLimit: 10 },
-                            grid: { color: gridColor }
+        const eraChartData = {{ era_chart_data | tojson }}; // Use new era_chart_data with .y (mean), .sem (SEM), .label, .image, .x (release date)
+
+        let showErrorBars = false; // Initial state: error bars off
+
+        // Prepare Chart.js datasets
+        function getEraDataset(showErrorBars) {
+            return [{
+                label: 'Album Score',
+                data: eraChartData.map(point => ({
+                    x: point.x,
+                    y: point.y,
+                    errorBars: showErrorBars ? { y: { plus: +point.sem, minus: +point.sem } } : undefined,
+                    label: point.label,
+                    image: point.image
+                })),
+                borderColor: 'rgba(29, 185, 84, 1)',
+                backgroundColor: (() => {
+                    const gradient = eraCtx.createLinearGradient(0, 0, 0, eraCtx.canvas.height);
+                    gradient.addColorStop(0, 'rgba(29, 185, 84, 0.5)');
+                    gradient.addColorStop(1, 'rgba(29, 185, 84, 0)');
+                    return gradient;
+                })(),
+                fill: true,
+                pointStyle: eraChartData.map(point => {
+                    const img = new Image();
+                    img.src = point.image || 'https://placehold.co/32x32/181818/FFF?text=?';
+                    img.width = 32; img.height = 32;
+                    return img;
+                }),
+                pointRadius: 16,
+                pointHoverRadius: 20,
+                pointBorderWidth: 2,
+                pointHoverBorderWidth: 3,
+                pointBorderColor: 'rgba(29, 185, 84, 1)',
+                pointHoverBorderColor: '#FFF'
+            }];
+        }
+
+        // Get Y min/max
+        const scores = eraChartData.map(d => d.y);
+        const minScore = Math.min(...scores);
+        const maxScore = Math.max(...scores);
+
+        // Chart options
+        const eraChartOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                errorBars: { enabled: showErrorBars }, // plugin option
+                tooltip: {
+                    enabled: true,
+                    backgroundColor: '#000',
+                    titleFont: { size: 14, weight: 'bold' },
+                    bodyFont: { size: 12 },
+                    padding: 12,
+                    displayColors: false,
+                    callbacks: {
+                        title: function(context) { return context[0].raw.label; },
+                        label: function(context) {
+                            const score = `Score: ${context.raw.y.toFixed(2)}`;
+                            const sem = showErrorBars && context.raw.errorBars ? `SEM: ${context.raw.errorBars.y.plus.toFixed(2)}` : null;
+                            const date = `Released: ${new Date(context.raw.x).toLocaleDateString()}`;
+                            return [score, sem, date].filter(Boolean);
                         }
                     }
                 }
-            });
-        }
+            },
+            scales: {
+                y: {
+                    ticks: { color: chartTextColor, padding: 10 },
+                    grid: { color: gridColor },
+                    suggestedMin: Math.max(0, Math.floor(minScore - 1)),
+                    suggestedMax: Math.min(10, Math.ceil(maxScore + 1))
+                },
+                x: {
+                    type: 'time',
+                    time: { unit: 'year', tooltipFormat: 'MMM d, yyyy' },
+                    ticks: { color: chartTextColor, maxRotation: 0, minRotation: 0, autoSkip: true, maxTicksLimit: 10 },
+                    grid: { color: gridColor }
+                }
+            }
+        };
+
+        // Create chart
+        let rankingEraChart = new Chart(eraCtx, {
+            type: 'line',
+            data: { datasets: getEraDataset(showErrorBars) },
+            options: eraChartOptions
+        });
+
+        // Add toggle button somewhere in your HTML:
+        // <button id="toggle-era-errorbars" class="action-button" style="background:#444;">Toggle Error Bars</button>
+
+        document.getElementById('toggle-era-errorbars').onclick = () => {
+            showErrorBars = !showErrorBars;
+            rankingEraChart.data.datasets = getEraDataset(showErrorBars);
+            rankingEraChart.options.plugins.errorBars.enabled = showErrorBars;
+            rankingEraChart.update();
+        };
         // --- Ranking Trajectory Chart ---
 
         // --- Prepare Data ---

@@ -435,31 +435,31 @@ def artist_page_v2(artist_name):
         # RELEASE HISTORY HISTOGRAM
         ranked_album_ids = artist_albums_df['album_id'].tolist() if 'album_id' in artist_albums_df else []
         release_dates = get_album_release_dates(sp, ranked_album_ids) if ranked_album_ids else {}
+
         if 'album_id' in artist_albums_df:
             artist_albums_df['release_date'] = artist_albums_df['album_id'].map(release_dates)
             era_history_data = artist_albums_df.sort_values(by='release_date')
         else:
             era_history_data = artist_albums_df
 
-        ranking_era_data = {
-            'datasets': [{
-                'label': 'Album Score',
-                'data': [
-                    {
-                        'x': row['release_date'],
-                        'y': row['weighted_average_score'],
-                        'label': row['album_name'],
-                        'image': row.get('album_cover_url', '')
-                    }
-                    for _, row in era_history_data.iterrows() if
-                    pd.notna(row.get('release_date')) and pd.notna(row.get('weighted_average_score'))
-                ],
-                'borderColor': 'rgba(29, 185, 84, 1)',
-                'tension': 0.4,
-            }]
-        }
-        for d in ranking_era_data['datasets'][0]['data']:
-            d['label'] = clean_title(d['label'])
+        # Calculate SEM and mean
+        sem_by_album = artist_songs_df.groupby('Album_Name')['Ranking'].sem()
+        mean_by_album = artist_songs_df.groupby('Album_Name')['Ranking'].mean()
+
+        # Get album metadata
+        album_info = artist_albums_df.set_index('album_name')
+        era_chart_data = []
+        for album_name, mean in mean_by_album.items():
+            sem = sem_by_album.get(album_name, 0)
+            if album_name in album_info.index:
+                row = album_info.loc[album_name]
+                era_chart_data.append({
+                    'x': row['release_date'],
+                    'y': mean,
+                    'sem': sem,
+                    'label': album_name,
+                    'image': row.get('album_cover_url', '')
+                })
 
 
         # --- Prepare Leaderboard and other stats ---
@@ -700,7 +700,6 @@ def artist_page_v2(artist_name):
             artist_mastery=mastery_percentage,
             leaderboard_points=total_leaderboard_points,
             artist_average_score=artist_average_score,
-            ranking_era_data=ranking_era_data,
             ranking_timeline_data=ranking_timeline_data,
             polar_chart_data=polar_chart_data,
             song_leaderboard=song_leaderboard_clean,
@@ -740,6 +739,7 @@ def artist_page_v2(artist_name):
             points=points,
             album_arts=album_arts,
             song_scores=song_scores,
+            era_chart_data=era_chart_data
         )
     except Exception as e:
         logging.critical(f"🔥 CRITICAL ERROR loading artist page for {artist_name}: {e}")
