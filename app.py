@@ -692,6 +692,7 @@ def artist_page_v2(artist_name):
         print(album_boundaries)
         print(album_labels)
         print(album_arts)
+        song_scores = artist_songs_df['Ranking'].tolist()
 
         return render_template(
             "artist_page_v2.html",
@@ -737,7 +738,8 @@ def artist_page_v2(artist_name):
             album_boundaries=album_boundaries,
             album_labels=album_labels,
             points=points,
-            album_arts=album_arts
+            album_arts=album_arts,
+            song_scores=song_scores,
         )
     except Exception as e:
         logging.critical(f"🔥 CRITICAL ERROR loading artist page for {artist_name}: {e}")
