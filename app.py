@@ -1136,7 +1136,7 @@ def submit_rankings():
         logging.critical(f"\n🔥 CRITICAL ERROR in /submit_rankings: {e}", exc_info=True)
         return jsonify({'status': 'error', 'message': f"An unexpected error occurred: {e}"}), 500
 
-def get_album_data(artist_name, album_name):
+def get_album_data(artist_name, album_name, album_id):
     import pandas as pd
     import json
 
@@ -1159,9 +1159,10 @@ def get_album_data(artist_name, album_name):
 
     # Find the album row
     album_row = averages_df[
+        (averages_df['album_id'].astype(str) == str(album_id)) &
         (averages_df['album_name'].str.strip().str.lower() == album_name_clean) &
         (averages_df['artist_name'].str.strip().str.lower() == artist_name_clean)
-    ]
+        ]
     if album_row.empty:
         return None
     album_row = album_row.iloc[0]
