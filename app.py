@@ -183,9 +183,12 @@ def get_album_release_dates(sp_instance, album_ids):
     release_dates = {}
     if not album_ids:
         return release_dates
-    for i in range(0, len(album_ids), 50):
+    # Spotify allows max 20 IDs per batch call
+    album_ids = [str(aid) for aid in album_ids]
+    for i in range(0, len(album_ids), 20):
         try:
-            albums_info = sp_instance.albums(album_ids[i:i + 50])
+            batch = album_ids[i:i + 20]
+            albums_info = sp_instance.albums(batch)
             for album in albums_info['albums']:
                 if album:
                     release_dates[album['id']] = album.get('release_date')
@@ -946,8 +949,10 @@ def submit_rankings():
             song_details_map = {}
             if sp and all_song_ids:
                 try:
-                    for i in range(0, len(all_song_ids), 50):
-                        tracks_info = sp.tracks(all_song_ids[i:i + 50])
+                    all_song_ids = [str(sid) for sid in all_song_ids]
+                    for i in range(0, len(all_song_ids), 20):
+                        batch = all_song_ids[i:i + 20]
+                        tracks_info = sp.tracks(batch)
                         for track in tracks_info['tracks']:
                             if track: song_details_map[track['id']] = {'name': track['name'],
                                                                        'duration_ms': track['duration_ms']}
@@ -1608,11 +1613,12 @@ def view_album():
 
         album_covers_cache = {}
         if not sorted_other_albums_df.empty:
-            unique_album_ids = [aid for aid in sorted_other_albums_df['Spotify Album ID'].unique() if aid]
+            unique_album_ids = [str(aid) for aid in sorted_other_albums_df['Spotify Album ID'].unique() if aid]
             if unique_album_ids:
-                for i in range(0, len(unique_album_ids), 50):
+                for i in range(0, len(unique_album_ids), 20):
+                    batch = unique_album_ids[i:i + 20]
                     try:
-                        albums_info = sp.albums(unique_album_ids[i:i + 50])
+                        albums_info = sp.albums(batch)
                         for info in albums_info['albums']:
                             if info and info['images']:
                                 album_covers_cache[info['id']] = info['images'][-1]['url']
