@@ -1069,11 +1069,19 @@
         const songScores = {{ song_scores | tojson }};
         // Use your backend: const songScores = {{ song_scores | tojson }};
 
+        // Prepare bins and edges
         const bins = [];
-        for(let i = 0.5; i <= 10; i += 0.5) bins.push(+i.toFixed(1));
-        // Count songs per bin
-        const counts = bins.map(bin => songScores.filter(score => score === bin).length);
-        // For % graph
+        for (let i = 0.5; i <= 10; i += 0.5) bins.push(+i.toFixed(1));
+        const binEdges = [0.25];
+        for (let i = 0.75; i <= 10.25; i += 0.5) binEdges.push(+i.toFixed(2));
+
+        // Count songs per bin (range, not exact match)
+        const counts = bins.map((bin, i) => {
+          const left = binEdges[i];
+          const right = binEdges[i+1];
+          return songScores.filter(score => score >= left && score < right).length;
+        });
+
         const totalSongs = songScores.length;
         const percents = counts.map(count => totalSongs ? (count/totalSongs * 100).toFixed(2) : 0);
 
