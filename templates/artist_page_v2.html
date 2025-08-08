@@ -787,6 +787,7 @@
                 </div>
             </div>
 
+
             <div class="chart-card">
               <h3>Song Score Distribution</h3>
               <div style="display: flex; gap: 12px; margin-bottom: 12px;">
@@ -1023,7 +1024,7 @@
                     gradient.addColorStop(1, 'rgba(29, 185, 84, 0)');
                     return gradient;
                 })(),
-                fill: true,
+                fill: false,
                 pointStyle: eraChartData.map(point => {
                     const img = new Image();
                     img.src = point.image || 'https://placehold.co/32x32/181818/FFF?text=?';
