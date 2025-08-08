@@ -1005,6 +1005,8 @@
         // Prepare context and data
         const eraCtx = document.getElementById('rankingEraChart').getContext('2d');
         const eraChartData = {{ era_chart_data | tojson }}; // Must contain .y (mean), .sem (SEM), .label, .image, .x (release date)
+        const minWithError = Math.min(...eraChartData.map(d => d.y - (Number(d.sem) || 0)));
+        const maxWithError = Math.max(...eraChartData.map(d => d.y + (Number(d.sem) || 0)));
 
         let showErrorBars = false; // Initial state: error bars off
 
@@ -1075,8 +1077,8 @@
                 y: {
                     ticks: { color: chartTextColor, padding: 10 },
                     grid: { color: gridColor },
-                    suggestedMin: Math.max(0, Math.floor(minScore - 1)),
-                    suggestedMax: Math.min(10, Math.ceil(maxScore + 1))
+                    min: Math.max(0, Math.floor(minWithError - 0.5)), // slightly below
+                    max: Math.min(10, Math.ceil(maxWithError + 0.5)),
                 },
                 x: {
                     type: 'time',
@@ -1135,6 +1137,11 @@
         // Toggle button
         document.getElementById('toggle-era-errorbars').onclick = () => {
             showErrorBars = !showErrorBars;
+            // Recalculate min/max
+            const minWithError = Math.min(...eraChartData.map(d => d.y - (showErrorBars ? (Number(d.sem) || 0) : 0)));
+            const maxWithError = Math.max(...eraChartData.map(d => d.y + (showErrorBars ? (Number(d.sem) || 0) : 0)));
+            rankingEraChart.options.scales.y.min = Math.max(0, Math.floor(minWithError - 0.5));
+            rankingEraChart.options.scales.y.max = Math.min(10, Math.ceil(maxWithError + 0.5));
             rankingEraChart.data.datasets = getEraDataset(showErrorBars);
             rankingEraChart.update();
         };
