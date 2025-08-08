@@ -796,12 +796,16 @@ def album_page(artist_name, album_name):
 @app.route('/get_album_stats/<album_id>')
 def get_album_stats(album_id):
     try:
+        logging.info(f"Received album_id: {album_id}")
         # 1. Load data
         main_df = get_as_dataframe(client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)).fillna("")
+        logging.info(f"main_df columns: {main_df.columns.tolist()}; shape: {main_df.shape}")
         averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
+        logging.info(f"averages_df columns: {averages_df.columns.tolist()}; shape: {averages_df.shape}")
 
         # 2. Find the specific album's data
         album_stats = averages_df[averages_df['album_id'].astype(str) == str(album_id)]
+        logging.info(f"album_stats shape: {album_stats.shape}")
         if album_stats.empty:
             return jsonify({'error': 'Album not found in averages sheet.'}), 404
 
@@ -1146,6 +1150,7 @@ def get_album_data(artist_name, album_name, album_id):
     import pandas as pd
     import json
 
+
     def format_seconds(seconds):
         h = seconds // 3600
         m = (seconds % 3600) // 60
@@ -1157,7 +1162,9 @@ def get_album_data(artist_name, album_name, album_id):
 
     # Load dataframes
     main_df = get_as_dataframe(client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)).fillna("")
+
     averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
+
 
     # Clean for matching (album names may have case/space differences)
     album_name_clean = album_name.strip().lower()
