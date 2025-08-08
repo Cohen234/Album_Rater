@@ -759,12 +759,11 @@ def artist_page_v2(artist_name):
 
 from flask import abort
 from urllib.parse import unquote
-@app.route("/artist/<artist_name>/album/<path:album_name>")
-def album_page(artist_name, album_name):
-    from urllib.parse import unquote
+@app.route("/artist/<artist_name>/album/<path:album_name>/<album_id>")
+def album_page(artist_name, album_name, album_id):
     album_name = unquote(album_name)
     print(f"Album name from URL: '{album_name}'")
-    album_data = get_album_data(artist_name, album_name)
+    album_data = get_album_data(artist_name, album_name, album_id)
     if not album_data:
         print("ALBUM DATA NOT FOUND!")
         abort(404)
