@@ -446,14 +446,14 @@ def artist_page_v2(artist_name):
             era_history_data = artist_albums_df
 
         # Calculate SEM and mean
-        sem_by_album = artist_songs_df.groupby('Album_Name')['Ranking'].sem()
+        sd_by_album = artist_songs_df.groupby('Album_Name')['Ranking'].std()
         mean_by_album = artist_songs_df.groupby('Album_Name')['Ranking'].mean()
 
         # Get album metadata
         album_info = artist_albums_df.set_index('album_name')
         era_chart_data = []
         for album_name, mean in mean_by_album.items():
-            sem = sem_by_album.get(album_name, 0)
+            sem = sd_by_album.get(album_name, 0)
             if album_name in album_info.index:
                 row = album_info.loc[album_name]
                 era_chart_data.append({
@@ -1136,6 +1136,7 @@ def submit_rankings():
                         'total_albums': total_albums, 'dominant_color': dominant_color
                     }
                 })
+        
 
     except Exception as e:
         logging.critical(f"\n🔥 CRITICAL ERROR in /submit_rankings: {e}", exc_info=True)
