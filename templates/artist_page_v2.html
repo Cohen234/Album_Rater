@@ -7,7 +7,6 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.2"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-error-bars@latest/dist/chartjs-plugin-error-bars.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -1001,19 +1000,22 @@
             });
         }
 
+
+
+        // Prepare context and data
         const eraCtx = document.getElementById('rankingEraChart').getContext('2d');
-        const eraChartData = {{ era_chart_data | tojson }}; // Use new era_chart_data with .y (mean), .sem (SEM), .label, .image, .x (release date)
+        const eraChartData = {{ era_chart_data | tojson }}; // Must contain .y (mean), .sem (SEM), .label, .image, .x (release date)
 
         let showErrorBars = false; // Initial state: error bars off
 
-        // Prepare Chart.js datasets
+        // Function for Chart.js datasets
         function getEraDataset(showErrorBars) {
             return [{
                 label: 'Album Score',
                 data: eraChartData.map(point => ({
                     x: point.x,
                     y: point.y,
-                    errorBars: showErrorBars ? { y: { plus: +point.sem, minus: +point.sem } } : undefined,
+                    sem: point.sem, // Keep SEM for manual error bar drawing
                     label: point.label,
                     image: point.image
                 })),
@@ -1045,13 +1047,12 @@
         const minScore = Math.min(...scores);
         const maxScore = Math.max(...scores);
 
-        // Chart options
+        // Chart.js options
         const eraChartOptions = {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
                 legend: { display: false },
-                errorBars: { enabled: showErrorBars }, // plugin option
                 tooltip: {
                     enabled: true,
                     backgroundColor: '#000',
@@ -1063,7 +1064,7 @@
                         title: function(context) { return context[0].raw.label; },
                         label: function(context) {
                             const score = `Score: ${context.raw.y.toFixed(2)}`;
-                            const sem = showErrorBars && context.raw.errorBars ? `SEM: ${context.raw.errorBars.y.plus.toFixed(2)}` : null;
+                            const sem = showErrorBars ? `SEM: ${context.raw.sem ? Number(context.raw.sem).toFixed(2) : 'N/A'}` : null;
                             const date = `Released: ${new Date(context.raw.x).toLocaleDateString()}`;
                             return [score, sem, date].filter(Boolean);
                         }
@@ -1086,20 +1087,55 @@
             }
         };
 
+        // Manual error bar drawing plugin
+        const manualErrorBarPlugin = {
+            id: 'manualErrorBars',
+            afterDraw(chart) {
+                if (!showErrorBars) return;
+                if (chart.canvas.id !== 'rankingEraChart') return;
+                const ctx = chart.ctx;
+                const meta = chart.getDatasetMeta(0);
+                eraChartData.forEach((point, i) => {
+                    const dataPoint = meta.data[i];
+                    if (!dataPoint) return;
+                    const x = dataPoint.x;
+                    const y = dataPoint.y;
+                    const sem = Number(point.sem) || 0;
+                    if (!sem) return;
+                    const yTop = chart.scales.y.getPixelForValue(point.y + sem);
+                    const yBottom = chart.scales.y.getPixelForValue(point.y - sem);
+                    ctx.save();
+                    ctx.strokeStyle = "#FF5252";
+                    ctx.lineWidth = 2;
+                    // Vertical error bar
+                    ctx.beginPath();
+                    ctx.moveTo(x, yTop);
+                    ctx.lineTo(x, yBottom);
+                    ctx.stroke();
+                    // Horizontal caps
+                    ctx.beginPath();
+                    ctx.moveTo(x - 7, yTop);
+                    ctx.lineTo(x + 7, yTop);
+                    ctx.moveTo(x - 7, yBottom);
+                    ctx.lineTo(x + 7, yBottom);
+                    ctx.stroke();
+                    ctx.restore();
+                });
+            }
+        };
+
         // Create chart
         let rankingEraChart = new Chart(eraCtx, {
             type: 'line',
             data: { datasets: getEraDataset(showErrorBars) },
-            options: eraChartOptions
+            options: eraChartOptions,
+            plugins: [manualErrorBarPlugin]
         });
 
-        // Add toggle button somewhere in your HTML:
-        // <button id="toggle-era-errorbars" class="action-button" style="background:#444;">Toggle Error Bars</button>
-
+        // Toggle button
         document.getElementById('toggle-era-errorbars').onclick = () => {
             showErrorBars = !showErrorBars;
             rankingEraChart.data.datasets = getEraDataset(showErrorBars);
-            rankingEraChart.options.plugins.errorBars.enabled = showErrorBars;
             rankingEraChart.update();
         };
         // --- Ranking Trajectory Chart ---
@@ -1218,6 +1254,7 @@
           chartOptions.scales.y.max = percentMode ? 100 : Math.max(...counts, 5) + 1;
           scoreDistributionChart.update();
         };
+
     });
 </script>
 </body>
