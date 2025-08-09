@@ -1347,6 +1347,8 @@ def get_album_data(artist_name, album_name, album_id):
     print("Album songs times:")
     for song in album_songs:
         print(song['title'], song['start_sec'], song['score'])
+    last_song_end_sec = album_songs[-1]['start_sec'] + (
+        album_songs_df.iloc[-1]['duration_sec'] if not album_songs_df.empty else 0)
 
 
     album_data = {
@@ -1368,7 +1370,7 @@ def get_album_data(artist_name, album_name, album_id):
         'global_avg_song_score': global_avg_song_score,
         'album_ranking_timeline': album_ranking_timeline,
         'album_ranking_delta': 0,
-
+        'last_song_end_sec':last_song_end_sec,
         "global_album_rank": global_album_rank,
         'album_songs': album_songs,
     }
