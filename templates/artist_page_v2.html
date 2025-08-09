@@ -858,7 +858,7 @@
                                     {% endif %}
                                 </td>
                                 <td class="lb-table-album-cell">
-                                    <a href="{{ url_for('album_page', artist_name=artist_name, album_name=album['album_name']) }}"
+                                    <a href="{{ url_for('album_page', artist_name=artist_name, album_name=album['album_name'], album_id=album['album_id']) }}">
                                        style="display: flex; align-items: center; gap: 10px; color: inherit; text-decoration: none;">
                                         <img class="lb-table-album-img" src="{{ album['album_cover_url'] or 'https://placehold.co/32x32' }}" alt="" />
                                         <span class="lb-table-album-name" data-full-title="{{ album['album_name'] }}">{{ album['album_name'] }}</span>
