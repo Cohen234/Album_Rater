@@ -791,6 +791,7 @@ def album_page(artist_name, album_name, album_id):
         album_ranking_timeline=album_data.get('album_ranking_timeline'),
         album_ranking_delta=album_data.get('album_ranking_delta'),
         album_songs=album_data['album_songs'],
+        last_song_end_sec=album_data['last_song_end_sec']
     )
 @app.route('/get_album_stats/<album_id>')
 def get_album_stats(album_id):
