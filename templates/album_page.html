@@ -421,6 +421,13 @@
                 tension: 0.45,
             }]
         };
+        // Get the largest x value from your data (the last song's start, or album_length_sec if present)
+        const listenTimePoints = listenTimeData.datasets[0].data;
+        const maxX = Math.max(...listenTimePoints.map(pt => pt.x));
+        const minX = Math.min(...listenTimePoints.map(pt => pt.x));
+
+        // If you want to pad the right edge a bit, add a small margin
+        const paddedMaxX = maxX + 5; // 5 seconds or whatever margin you want
         new Chart(listenTimeCtx, {
             type: 'line',
             data: listenTimeData,
@@ -446,7 +453,7 @@
                 scales: {
                     x: {
                         min: 0,
-                        max: {{ album_length_sec }},
+                        max: paddedMaxX,
                         title: { display: true, text: "Album Runtime (min:sec)" },
                         ticks: {
                             color: "#b3b3b3",
