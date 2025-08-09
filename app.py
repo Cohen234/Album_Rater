@@ -1279,6 +1279,7 @@ def get_album_data(artist_name, album_name, album_id):
     else:
         album_songs_df['duration_ms'] = 180000  # fallback: 3min per song
     album_songs_df['duration_sec'] = album_songs_df['duration_ms'] / 1000
+    print(album_songs_df[['Song Name', 'duration_ms', 'duration_sec']])
 
     # Sort by Position In Group or track number, fallback to index
 
@@ -1343,8 +1344,9 @@ def get_album_data(artist_name, album_name, album_id):
     except Exception:
         timeline = []
     album_ranking_timeline = [{'date': x['date'], 'rank': x.get('placement')} for x in timeline if 'date' in x]
-    print("album_length_sec:", album_length_sec)
-    print("album_length:", album_length)
+    print("Album songs times:")
+    for song in album_songs:
+        print(song['title'], song['start_sec'], song['score'])
 
 
     album_data = {
