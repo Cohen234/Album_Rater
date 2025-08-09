@@ -427,7 +427,7 @@
         const minX = Math.min(...listenTimePoints.map(pt => pt.x));
 
         // If you want to pad the right edge a bit, add a small margin
-        const paddedMaxX = maxX + 5; // 5 seconds or whatever margin you want
+        const paddedMaxX = maxX + 10; // 5 seconds or whatever margin you want
         new Chart(listenTimeCtx, {
             type: 'line',
             data: listenTimeData,
@@ -452,7 +452,7 @@
                 },
                 scales: {
                     x: {
-                        min: 0,
+                        min: minX,
                         max: paddedMaxX,
                         title: { display: true, text: "Album Runtime (min:sec)" },
                         ticks: {
