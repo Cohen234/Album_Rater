@@ -791,7 +791,7 @@ def album_page(artist_name, album_name, album_id):
         album_ranking_timeline=album_data.get('album_ranking_timeline'),
         album_ranking_delta=album_data.get('album_ranking_delta'),
         album_songs=album_data['album_songs'],
-        last_song_end_sec=album_data['last_song_end_sec']
+        last_song_end_min=album_data['last_song_end_min']
     )
 @app.route('/get_album_stats/<album_id>')
 def get_album_stats(album_id):
@@ -1326,7 +1326,7 @@ def get_album_data(artist_name, album_name, album_id):
             'score': row['Ranking'],
             'delta_7d': delta_7d,
             'score_history_str': "; ".join([f"{d}: {s:.2f}" for d, s in score_history]),
-            'start_sec': start_sec,
+            'start_min': start_sec/60,
             'global_rank': global_rank,
         })
     artist_songs_df = main_df[
@@ -1348,8 +1348,7 @@ def get_album_data(artist_name, album_name, album_id):
     print("Album songs times:")
     for song in album_songs:
         print(song['title'], song['start_sec'], song['score'])
-    last_song_end_sec = album_songs[-1]['start_sec'] + (
-        album_songs_df.iloc[-1]['duration_sec'] if not album_songs_df.empty else 0)
+    last_song_end_min = (album_songs[-1]['start_sec'] + (album_songs_df.iloc[-1]['duration_sec'] if not album_songs_df.empty else 0)) / 60
 
 
     album_data = {
@@ -1371,7 +1370,7 @@ def get_album_data(artist_name, album_name, album_id):
         'global_avg_song_score': global_avg_song_score,
         'album_ranking_timeline': album_ranking_timeline,
         'album_ranking_delta': 0,
-        'last_song_end_sec':last_song_end_sec,
+        'last_song_end_min':last_song_end_min,
         "global_album_rank": global_album_rank,
         'album_songs': album_songs,
     }

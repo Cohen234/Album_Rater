@@ -408,7 +408,7 @@
                 label: "Song Score by Album Runtime",
                 data: [
                     {% for song in album_songs %}
-                    { x: {{ song.start_sec }}, y: {{ "%.2f"|format(song.score) }}, song: "{{ song.title|escape }}" }{% if not loop.last %},{% endif %}
+                    { x: {{ song.start_min }}, y: {{ "%.2f"|format(song.score) }}, song: "{{ song.title|escape }}" }{% if not loop.last %},{% endif %}
                     {% endfor %}
                 ],
                 borderColor: "#1DB954",
@@ -422,8 +422,8 @@
         // Get the largest x value from your data (the last song's start, or album_length_sec if present)
         const listenTimePoints = listenTimeData.datasets[0].data;
         const minX = Math.min(...listenTimePoints.map(pt => pt.x));
-        const lastSongEnd = {{ last_song_end_sec }};
-        const paddedMaxX = lastSongEnd + 10; // add margin
+        const lastSongEnd = {{ last_song_end_min }};
+        const paddedMaxX = lastSongEnd + 1; // add 1 minute for margin
 
         new Chart(listenTimeCtx, {
             type: 'line',
@@ -455,8 +455,8 @@
                         ticks: {
                             color: "#b3b3b3",
                             callback: function(val) {
-                                let mins = Math.floor(val/60);
-                                let secs = Math.round(val%60).toString().padStart(2,"0");
+                                let mins = Math.floor(val);
+                                let secs = Math.round((val-mins)*60).toString().padStart(2,"0");
                                 return mins + ":" + secs;
                             }
                         },
