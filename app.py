@@ -1348,7 +1348,12 @@ def get_album_data(artist_name, album_name, album_id):
     print("Album songs times:")
     for song in album_songs:
         print(song['title'], song['start_min'], song['score'])
-    last_song_end_min = (album_songs[-1]['start_sec'] + (album_songs_df.iloc[-1]['duration_sec'] if not album_songs_df.empty else 0)) / 60
+    # Calculate last song's start in minutes (already stored)
+    last_song_start_min = album_songs[-1]['start_min']
+    # Calculate last song's duration in minutes
+    last_song_duration_min = album_songs_df.iloc[-1]['duration_sec'] / 60 if not album_songs_df.empty else 0
+    # The end of the album in minutes
+    last_song_end_min = last_song_start_min + last_song_duration_min
 
 
     album_data = {
