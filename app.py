@@ -1411,6 +1411,10 @@ def search_albums():
             "album_cover_url": row.get("album_cover_url", ""),
         })
     return jsonify(albums)
+@app.route('/compare')
+def compare_page():
+    # Render your compare page template
+    return render_template('compare_albums.html')
 @app.route('/prelim_success')
 def prelim_success():
     dominant_color = request.args.get('dominant_color', '#121212')
