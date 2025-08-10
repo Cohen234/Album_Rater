@@ -312,6 +312,7 @@
             </tr>`;
         }
     }
+    console.log("Album points for chart", albums.map(a => a.points));
     function renderCompareRuntimeChart(albums) {
         const datasets = albums.map(album => ({
             label: album.name,
@@ -333,6 +334,7 @@
                 plugins: { legend: { display: true } },
                 scales: {
                     x: {
+                        type: 'linear',
                         min: 0,
                         max: maxX,
                         title: { display: true, text: "Album Runtime (min:sec)" },
