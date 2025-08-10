@@ -7,7 +7,13 @@
     <!-- Chart.js boxplot plugin -->
     <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-box-and-violin@4.1.0/dist/chartjs-chart-box-and-violin.min.js"></script>
     <script>
-        Chart.register(...chartjsChartBoxAndViolin.ChartBoxPlot.registerables);
+        Chart.register(
+            ChartBoxPlot.BoxPlotController,
+            ChartBoxPlot.BoxAndWhiskers,
+            ChartBoxPlot.BoxPlotChart,
+            ChartBoxPlot.BoxPlotElement,
+            ChartBoxPlot.BoxPlotScale
+        );
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
