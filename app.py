@@ -1504,6 +1504,7 @@ def compare_albums():
                 "length": album_data['album_length'],
                 "color": colors[i % len(colors)],
                 "points": points,
+                "album_length_sec": album_data['album_length_sec'],
                 "song_scores": song_scores,
                 "best_song": {"title": best_song['title'], "score": best_song['score']} if best_song else {"title": "", "score": None},
                 "worst_song": {"title": worst_song['title'], "score": worst_song['score']} if worst_song else {"title": "", "score": None},

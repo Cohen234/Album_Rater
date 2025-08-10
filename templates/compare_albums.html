@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>Compare Albums</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@4.0.0"></script>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -135,18 +136,27 @@
             text-align: center;
         }
         .chart-card {
+            height: auto;           /* let it grow with content */
+            min-height: 540px;      /* match the chart height if you want */
             background-color: var(--surface-color);
             border-radius: 8px;
             padding: 25px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.16);
             margin-bottom: 0;
-            position:relative;
+            position: relative;
         }
         .chart-card h3 { margin-top: 0; margin-bottom: 18px;}
         .chart-container {
             width: 100%;
-            height: 340px;
-            min-height: 260px;
+            height: 540px;
+            min-height: 540px;
+            max-height: 80vh;
+        }
+
+        .chart-container canvas {
+            width: 100% !important;
+            height: 100% !important;
+            display: block;
         }
         .boxplot-container {
             width: 100%;
@@ -314,24 +324,106 @@
     }
     console.log("Album points for chart", albums.map(a => a.points));
     function renderCompareRuntimeChart(albums) {
-        const datasets = albums.map(album => ({
-            label: album.name,
-            data: album.points,
-            borderColor: album.color,
-            backgroundColor: album.color,
-            pointRadius: 7,
-            pointHoverRadius: 12,
-            showLine: true,
-            tension: 0.45,
-        }));
-        const maxX = Math.max(...albums.map(a => Math.max(...a.points.map(p => p.x)))) + 1;
+
+        const annotations = {};
+
+        // Process datasets and add custom point styles
+        const datasets = albums.map(album => {
+            // Find best/worst song indices
+            const bestIdx = album.points.findIndex(
+                p => p.song === album.best_song.title && Math.abs(p.y - album.best_song.score) < 0.01
+            );
+            const worstIdx = album.points.findIndex(
+                p => p.song === album.worst_song.title && Math.abs(p.y - album.worst_song.score) < 0.01
+            );
+
+            // For song length bars: push a segment line for each song from start to end
+            const segments = album.points.map((point, i) => {
+                let nextStart = (album.points[i + 1] && album.points[i + 1].x) || album.album_length_sec / 60;
+                return {
+                    x: [point.x, nextStart],
+                    y: point.y,
+                };
+            });
+
+            // Custom point styles
+            const pointStyles = album.points.map((p, i) => {
+                if (i === bestIdx) return 'star';
+                if (i === worstIdx) return 'rectRot'; // diamond
+                return 'circle';
+            });
+            const pointRadii = album.points.map((p, i) => {
+                if (i === bestIdx || i === worstIdx) return 11;
+                return 7;
+            });
+
+            // Add album end annotation (vertical line)
+            annotations[`${album.name}-end`] = {
+                type: 'line',
+                xMin: album.album_length_sec / 60,
+                xMax: album.album_length_sec / 60,
+                borderColor: album.color,
+                borderWidth: 2,
+                label: {
+                    enabled: true,
+                    content: `${album.name} End`,
+                    position: 'start',
+                    backgroundColor: album.color,
+                    color: 'white',
+                    font: { weight: 'bold', size: 12 }
+                }
+            };
+            // Add fade box after end
+            annotations[`${album.name}-fade`] = {
+                type: 'box',
+                xMin: album.album_length_sec / 60,
+                xMax: Math.max(...albums.map(a => a.album_length_sec / 60)) + 1,
+                yMin: 0,
+                yMax: 10,
+                backgroundColor: album.color + '33', // semi-transparent
+                borderWidth: 0,
+            };
+
+            return {
+                label: album.name,
+                data: album.points,
+                borderColor: album.color,
+                backgroundColor: album.color,
+                pointStyle: pointStyles,
+                pointRadius: pointRadii,
+                pointHoverRadius: 14,
+                showLine: true,
+                tension: 0.45,
+            };
+        });
+
+        const maxX = Math.max(...albums.map(a => a.album_length_sec / 60)) + 3;
+
         if (window.compareRuntimeChart) window.compareRuntimeChart.destroy();
         window.compareRuntimeChart = new Chart(document.getElementById("compare-runtime-chart").getContext("2d"), {
             type: 'line',
             data: { datasets },
             options: {
                 responsive: true,
-                plugins: { legend: { display: true } },
+                plugins: {
+                    legend: { display: true },
+                    annotation: {
+                        annotations: annotations
+                    },
+                    tooltip: {
+                        callbacks: {
+                            title: function(context) {
+                                let song = context[0].raw.song;
+                                let mins = Math.floor(context[0].raw.x);
+                                let secs = Math.round((context[0].raw.x-mins)*60).toString().padStart(2,"0");
+                                return song + " (" + mins + ":" + secs + ")";
+                            },
+                            label: function(context) {
+                                return "Score: " + context.raw.y.toFixed(2);
+                            }
+                        }
+                    }
+                },
                 scales: {
                     x: {
                         type: 'linear',
@@ -359,21 +451,6 @@
                 interaction: {
                     mode: 'nearest',
                     intersect: false
-                },
-                plugins: {
-                    tooltip: {
-                        callbacks: {
-                            title: function(context) {
-                                let song = context[0].raw.song;
-                                let mins = Math.floor(context[0].raw.x);
-                                let secs = Math.round((context[0].raw.x-mins)*60).toString().padStart(2,"0");
-                                return song + " (" + mins + ":" + secs + ")";
-                            },
-                            label: function(context) {
-                                return "Score: " + context.raw.y.toFixed(2);
-                            }
-                        }
-                    }
                 }
             }
         });
