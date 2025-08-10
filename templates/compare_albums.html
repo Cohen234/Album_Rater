@@ -325,28 +325,63 @@
     console.log("Album points for chart", albums.map(a => a.points));
     function renderCompareRuntimeChart(albums) {
 
+        function hexToRGBA(hex, alpha = 0.18) {
+            let c = hex.replace('#', '');
+            if (c.length === 3) c = c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
+            let r = parseInt(c.substring(0,2), 16);
+            let g = parseInt(c.substring(2,4), 16);
+            let b = parseInt(c.substring(4,6), 16);
+            return `rgba(${r},${g},${b},${alpha})`;
+        }
+
         const annotations = {};
 
-        // Process datasets and add custom point styles
+        // Calculate max end for X axis and fade box
+        const maxEndMin = Math.max(...albums.map(a => a.album_length_sec / 60)) + 3;
+
+        albums.forEach(album => {
+            if (!album.album_length_sec) return; // Defensive
+
+            // Album end in minutes
+            const albumEndMin = album.album_length_sec / 60;
+
+            // Album end vertical line
+            annotations[album.name + '-end'] = {
+                type: 'line',
+                xMin: albumEndMin,
+                xMax: albumEndMin,
+                borderColor: album.color,
+                borderWidth: 2,
+                label: {
+                    display: true,
+                    enabled: true,
+                    content: `${album.name} End`,
+                    position: 'start',
+                    backgroundColor: album.color,
+                    color: '#fff',
+                    font: { weight: 'bold', size: 12 }
+                }
+            };
+            // Fade box after album end
+            annotations[album.name + '-fade'] = {
+                type: 'box',
+                xMin: albumEndMin,
+                xMax: maxEndMin,
+                yMin: 0,
+                yMax: 10,
+                backgroundColor: hexToRGBA(album.color, 0.18),
+                borderWidth: 0,
+            };
+        });
+
+        // Custom point styles (best/worst)
         const datasets = albums.map(album => {
-            // Find best/worst song indices
             const bestIdx = album.points.findIndex(
                 p => p.song === album.best_song.title && Math.abs(p.y - album.best_song.score) < 0.01
             );
             const worstIdx = album.points.findIndex(
                 p => p.song === album.worst_song.title && Math.abs(p.y - album.worst_song.score) < 0.01
             );
-
-            // For song length bars: push a segment line for each song from start to end
-            const segments = album.points.map((point, i) => {
-                let nextStart = (album.points[i + 1] && album.points[i + 1].x) || album.album_length_sec / 60;
-                return {
-                    x: [point.x, nextStart],
-                    y: point.y,
-                };
-            });
-
-            // Custom point styles
             const pointStyles = album.points.map((p, i) => {
                 if (i === bestIdx) return 'star';
                 if (i === worstIdx) return 'rectRot'; // diamond
@@ -356,34 +391,6 @@
                 if (i === bestIdx || i === worstIdx) return 11;
                 return 7;
             });
-
-            // Add album end annotation (vertical line)
-            annotations[`${album.name}-end`] = {
-                type: 'line',
-                xMin: album.album_length_sec / 60,
-                xMax: album.album_length_sec / 60,
-                borderColor: album.color,
-                borderWidth: 2,
-                label: {
-                    enabled: true,
-                    content: `${album.name} End`,
-                    position: 'start',
-                    backgroundColor: album.color,
-                    color: 'white',
-                    font: { weight: 'bold', size: 12 }
-                }
-            };
-            // Add fade box after end
-            annotations[`${album.name}-fade`] = {
-                type: 'box',
-                xMin: album.album_length_sec / 60,
-                xMax: Math.max(...albums.map(a => a.album_length_sec / 60)) + 1,
-                yMin: 0,
-                yMax: 10,
-                backgroundColor: album.color + '33', // semi-transparent
-                borderWidth: 0,
-            };
-
             return {
                 label: album.name,
                 data: album.points,
@@ -397,7 +404,7 @@
             };
         });
 
-        const maxX = Math.max(...albums.map(a => a.album_length_sec / 60)) + 3;
+        const maxX = maxEndMin;
 
         if (window.compareRuntimeChart) window.compareRuntimeChart.destroy();
         window.compareRuntimeChart = new Chart(document.getElementById("compare-runtime-chart").getContext("2d"), {
@@ -407,9 +414,7 @@
                 responsive: true,
                 plugins: {
                     legend: { display: true },
-                    annotation: {
-                        annotations: annotations
-                    },
+                    annotation: { annotations },
                     tooltip: {
                         callbacks: {
                             title: function(context) {
