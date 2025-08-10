@@ -1425,51 +1425,73 @@ def prelim_success():
         album_cover_url=request.args.get('album_cover_url'),
         dominant_color=dominant_color
     )
+from flask import request, jsonify
+
 @app.route("/compare_albums", methods=["GET"])
 def compare_albums():
-    album_ids = request.args.getlist("album_ids")
-    all_data = []
-    colors = ["#1DB954", "#e74c3c", "#3498db", "#ffd700"]
+    try:
+        album_ids = request.args.getlist("album_ids")
+        print("Compare called with:", album_ids)  # Log input!
+        all_data = []
+        colors = ["#1DB954", "#e74c3c", "#3498db", "#ffd700"]
 
-    averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
-    for i, album_id in enumerate(album_ids[:4]):
-        album_row = averages_df[averages_df['album_id'].astype(str) == str(album_id)]
-        if album_row.empty:
-            continue
-        album_row = album_row.iloc[0]
-        artist_name = album_row['artist_name']
-        album_name = album_row['album_name']
+        averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
+        print("Averages DF shape:", averages_df.shape)
+        for i, album_id in enumerate(album_ids[:4]):
+            album_row = averages_df[averages_df['album_id'].astype(str) == str(album_id)]
+            if album_row.empty:
+                print(f"Album ID not found: {album_id}")
+                continue
+            album_row = album_row.iloc[0]
+            artist_name = album_row['artist_name']
+            album_name = album_row['album_name']
 
-        album_data = get_album_data(artist_name, album_name, album_id)
-        points = [
-            {
-                "x": song['start_min'],
-                "y": song['score'],
-                "song": song['title'],
-                "album": album_data['album_name'],
-            }
-            for song in album_data['album_songs']
-        ]
-        song_scores = [song['score'] for song in album_data['album_songs']]
-        best_song = max(album_data['album_songs'], key=lambda s: s['score'])
-        worst_song = min(album_data['album_songs'], key=lambda s: s['score'])
-        all_data.append({
-            "id": album_id,
-            "name": album_data['album_name'],
-            "artist": album_data['artist_name'],
-            "release_date": album_data['release_date'],
-            "album_score": album_data['album_score'],
-            "avg_song_score": album_data['avg_song_score'],
-            "placement": album_data['global_album_rank'],
-            "std_dev": album_data['std_song_score'],
-            "length": album_data['album_length'],
-            "color": colors[i],
-            "points": points,
-            "song_scores": song_scores,
-            "best_song": {"title": best_song['title'], "score": best_song['score']},
-            "worst_song": {"title": worst_song['title'], "score": worst_song['score']},
-        })
-    return jsonify({"albums": all_data})
+            album_data = get_album_data(artist_name, album_name, album_id)
+            if not album_data:
+                print(f"get_album_data failed for: {album_name} ({album_id})")
+                continue
+
+            # Runtime graph points: one point per song (x=start_min, y=score)
+            points = [
+                {
+                    "x": song['start_min'],
+                    "y": song['score'],
+                    "song": song['title'],
+                    "album": album_data['album_name'],
+                }
+                for song in album_data['album_songs']
+            ]
+
+            # Boxplot data: all song scores
+            song_scores = [song['score'] for song in album_data['album_songs']]
+
+            # Best/worst song
+            best_song = max(album_data['album_songs'], key=lambda s: s['score']) if album_data['album_songs'] else None
+            worst_song = min(album_data['album_songs'], key=lambda s: s['score']) if album_data['album_songs'] else None
+
+            # Package everything for frontend
+            all_data.append({
+                "id": album_id,
+                "name": album_data['album_name'],
+                "artist": album_data['artist_name'],
+                "album_cover_url": album_data['album_cover_url'],
+                "release_date": album_data['release_date'],
+                "album_score": album_data['album_score'],
+                "avg_song_score": album_data['avg_song_score'],
+                "placement": album_data['global_album_rank'],
+                "std_dev": album_data['std_song_score'],
+                "length": album_data['album_length'],
+                "color": colors[i % len(colors)],
+                "points": points,
+                "song_scores": song_scores,
+                "best_song": {"title": best_song['title'], "score": best_song['score']} if best_song else {"title": "", "score": None},
+                "worst_song": {"title": worst_song['title'], "score": worst_song['score']} if worst_song else {"title": "", "score": None},
+            })
+        print("Compare result:", all_data)
+        return jsonify({"albums": all_data})
+    except Exception as e:
+        print(f"Error in /compare_albums: {e}")  # Print traceback!
+        return jsonify({"error": str(e)}), 500
 @app.route('/rerank_success')
 def rerank_success():
     # Get all the data passed from the redirect
