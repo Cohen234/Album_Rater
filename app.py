@@ -1431,7 +1431,7 @@ from flask import request, jsonify
 def compare_albums():
     try:
         album_ids = request.args.getlist("album_ids")
-        print("Compare called with:", album_ids)  # Log input!
+        print("Compare called with:", album_ids)
         all_data = []
         colors = ["#1DB954", "#e74c3c", "#3498db", "#ffd700"]
 
@@ -1451,6 +1451,26 @@ def compare_albums():
                 print(f"get_album_data failed for: {album_name} ({album_id})")
                 continue
 
+            # --- Fix: Calculate each song's start_min ---
+            # Assume album_data['album_songs'] is a list of dicts with 'length' (as "min:sec" string or seconds int)
+            songs_with_start = []
+            cumulative_seconds = 0
+            for song in album_data['album_songs']:
+                # If length is a string "3:22"
+                if isinstance(song['length'], str) and ':' in song['length']:
+                    mins, secs = map(int, song['length'].split(":"))
+                    song_seconds = mins * 60 + secs
+                else:
+                    # If it's already in seconds
+                    song_seconds = int(song['length'])
+
+                start_min = cumulative_seconds / 60
+                # Add start_min to song dict
+                song_with_start = song.copy()
+                song_with_start['start_min'] = start_min
+                songs_with_start.append(song_with_start)
+                cumulative_seconds += song_seconds
+
             # Runtime graph points: one point per song (x=start_min, y=score)
             points = [
                 {
@@ -1459,15 +1479,15 @@ def compare_albums():
                     "song": song['title'],
                     "album": album_data['album_name'],
                 }
-                for song in album_data['album_songs']
+                for song in songs_with_start
             ]
 
             # Boxplot data: all song scores
-            song_scores = [song['score'] for song in album_data['album_songs']]
+            song_scores = [song['score'] for song in songs_with_start]
 
             # Best/worst song
-            best_song = max(album_data['album_songs'], key=lambda s: s['score']) if album_data['album_songs'] else None
-            worst_song = min(album_data['album_songs'], key=lambda s: s['score']) if album_data['album_songs'] else None
+            best_song = max(songs_with_start, key=lambda s: s['score']) if songs_with_start else None
+            worst_song = min(songs_with_start, key=lambda s: s['score']) if songs_with_start else None
 
             # Package everything for frontend
             all_data.append({
@@ -1490,7 +1510,7 @@ def compare_albums():
         print("Compare result:", all_data)
         return jsonify({"albums": all_data})
     except Exception as e:
-        print(f"Error in /compare_albums: {e}")  # Print traceback!
+        print(f"Error in /compare_albums: {e}")
         return jsonify({"error": str(e)}), 500
 @app.route('/rerank_success')
 def rerank_success():
