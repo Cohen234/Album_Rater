@@ -274,18 +274,22 @@
     };
     // --- Comparison Fetch and Render ---
     document.getElementById("run-comparison").onclick = async function() {
-        document.getElementById("compare-error").style.display = "none";
-        if (selectedAlbums.length < 2) {
-            document.getElementById("compare-error").style.display = "inline";
-            document.getElementById("compare-error").textContent = "Please select at least 2 albums to compare.";
-            return;
-        }
-        document.getElementById("loading").style.display = "block";
+    document.getElementById("compare-error").style.display = "none";
+    if (selectedAlbums.length < 2) {
+        document.getElementById("compare-error").style.display = "inline";
+        document.getElementById("compare-error").textContent = "Please select at least 2 albums to compare.";
+        return;
+    }
+    document.getElementById("loading").style.display = "block";
         document.getElementById("comparison-results").style.display = "none";
         try {
             const albumIds = selectedAlbums.map(a => a.album_id);
             const resp = await fetch("/compare_albums?" + albumIds.map(id => `album_ids=${id}`).join("&"));
             const data = await resp.json();
+            console.log("Compare API result:", data);   // <-- ADD THIS LINE
+            if (!data.albums || !data.albums.length) {  // Defensive: no albums returned
+                throw new Error("No albums returned");
+            }
             renderCompareStats(data.albums);
             renderCompareRuntimeChart(data.albums);
             renderCompareBoxplot(data.albums);
@@ -295,6 +299,7 @@
             document.getElementById("compare-error").style.display = "inline";
             document.getElementById("compare-error").textContent = "Error fetching comparison data.";
             document.getElementById("loading").style.display = "none";
+            console.error("Compare error:", e);         // <-- ADD THIS LINE
         }
     };
     function renderCompareStats(albums) {
