@@ -1356,6 +1356,7 @@ def get_album_data(artist_name, album_name, album_id):
     last_song_end_min = last_song_start_min + last_song_duration_min
 
 
+
     album_data = {
         'album_name': album_row['album_name'],
         'artist_name': album_row['artist_name'],
@@ -1380,6 +1381,36 @@ def get_album_data(artist_name, album_name, album_id):
         'album_songs': album_songs,
     }
     return album_data
+@app.route("/search_albums", methods=["GET"])
+def search_albums():
+    """
+    AJAX endpoint for album search.
+    Accepts ?q=search_term and returns up to 10 albums with: album_id, album_name, artist_name, album_cover_url
+    """
+    query = request.args.get("q", "").strip().lower()
+    if not query or len(query) < 2:
+        return jsonify([])  # Empty for short/no query
+
+    # Load album averages df
+    all_albums_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
+    all_albums_df = all_albums_df.dropna(subset=["album_id", "album_name", "artist_name"])
+
+    # Match by album_name or artist_name substring (case insensitive)
+    mask = (
+        all_albums_df["album_name"].astype(str).str.lower().str.contains(query)
+        | all_albums_df["artist_name"].astype(str).str.lower().str.contains(query)
+    )
+    results = all_albums_df[mask].head(10)  # Limit to top 10 results
+
+    albums = []
+    for _, row in results.iterrows():
+        albums.append({
+            "album_id": str(row["album_id"]),
+            "album_name": row["album_name"],
+            "artist_name": row["artist_name"],
+            "album_cover_url": row.get("album_cover_url", ""),
+        })
+    return jsonify(albums)
 @app.route('/prelim_success')
 def prelim_success():
     dominant_color = request.args.get('dominant_color', '#121212')
@@ -1390,6 +1421,51 @@ def prelim_success():
         album_cover_url=request.args.get('album_cover_url'),
         dominant_color=dominant_color
     )
+@app.route("/compare_albums", methods=["GET"])
+def compare_albums():
+    album_ids = request.args.getlist("album_ids")
+    all_data = []
+    colors = ["#1DB954", "#e74c3c", "#3498db", "#ffd700"]
+
+    averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
+    for i, album_id in enumerate(album_ids[:4]):
+        album_row = averages_df[averages_df['album_id'].astype(str) == str(album_id)]
+        if album_row.empty:
+            continue
+        album_row = album_row.iloc[0]
+        artist_name = album_row['artist_name']
+        album_name = album_row['album_name']
+
+        album_data = get_album_data(artist_name, album_name, album_id)
+        points = [
+            {
+                "x": song['start_min'],
+                "y": song['score'],
+                "song": song['title'],
+                "album": album_data['album_name'],
+            }
+            for song in album_data['album_songs']
+        ]
+        song_scores = [song['score'] for song in album_data['album_songs']]
+        best_song = max(album_data['album_songs'], key=lambda s: s['score'])
+        worst_song = min(album_data['album_songs'], key=lambda s: s['score'])
+        all_data.append({
+            "id": album_id,
+            "name": album_data['album_name'],
+            "artist": album_data['artist_name'],
+            "release_date": album_data['release_date'],
+            "album_score": album_data['album_score'],
+            "avg_song_score": album_data['avg_song_score'],
+            "placement": album_data['global_album_rank'],
+            "std_dev": album_data['std_song_score'],
+            "length": album_data['album_length'],
+            "color": colors[i],
+            "points": points,
+            "song_scores": song_scores,
+            "best_song": {"title": best_song['title'], "score": best_song['score']},
+            "worst_song": {"title": worst_song['title'], "score": worst_song['score']},
+        })
+    return jsonify({"albums": all_data})
 @app.route('/rerank_success')
 def rerank_success():
     # Get all the data passed from the redirect

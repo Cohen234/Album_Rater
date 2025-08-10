@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Compare Albums</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chart.js boxplot plugin -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-box-and-violin@4.1.0/dist/chartjs-chart-box-and-violin.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #121212;
+            --surface-color: #181818;
+            --primary-text: #ffffff;
+            --secondary-text: #b3b3b3;
+            --border-color: #282828;
+            --spotify-green: #1DB954;
+            --gold: #ffd700;
+            --silver: #c0c0c0;
+            --bronze: #cd7f32;
+        }
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--primary-text);
+            margin: 0;
+            padding: 25px;
+        }
+        h1 {
+            font-size: 2.1em;
+            margin-bottom: 24px;
+            font-weight: 800;
+        }
+        .compare-selector {
+            background: var(--surface-color);
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 32px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.11);
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 18px;
+        }
+        .album-search-bar {
+            display: flex;
+            gap: 12px;
+            width: 100%;
+        }
+        .album-search-bar input {
+            flex: 1;
+            padding: 12px 18px;
+            border-radius: 7px;
+            border: 1px solid var(--border-color);
+            font-size: 1.13em;
+            background: #232323;
+            color: var(--primary-text);
+        }
+        .album-search-bar button {
+            background: var(--spotify-green);
+            color: #fff;
+            border: none;
+            border-radius: 7px;
+            padding: 0 22px;
+            font-weight: 700;
+            font-size: 1.13em;
+            cursor: pointer;
+            height: 44px;
+        }
+        #selected-albums {
+            display: flex;
+            gap: 18px;
+            margin-top: 6px;
+            flex-wrap: wrap;
+        }
+        .selected-album {
+            background: #232323;
+            border-radius: 7px;
+            padding: 10px 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.07em;
+        }
+        .selected-album img {
+            width: 42px;
+            height: 42px;
+            border-radius: 7px;
+            object-fit: cover;
+        }
+        .remove-album-btn {
+            background: #e74c3c;
+            color: #fff;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            font-size: 1.15em;
+            font-weight: bold;
+            cursor: pointer;
+            margin-left: 6px;
+        }
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 38px;
+            margin-top: 18px;
+        }
+        .compare-table-wrapper {
+            overflow-x: auto;
+            background: var(--surface-color);
+            border-radius: 8px;
+            padding: 20px 8px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: none;
+            margin-bottom: 18px;
+        }
+        th, td {
+            padding: 14px 10px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 1.07em;
+        }
+        th {
+            color: var(--secondary-text);
+            text-transform: uppercase;
+            font-size: 0.94em;
+            font-weight: 700;
+            background: var(--surface-color);
+        }
+        td {
+            color: var(--primary-text);
+            background: none;
+            vertical-align: middle;
+            text-align: center;
+        }
+        .chart-card {
+            background-color: var(--surface-color);
+            border-radius: 8px;
+            padding: 25px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.16);
+            margin-bottom: 0;
+            position:relative;
+        }
+        .chart-card h3 { margin-top: 0; margin-bottom: 18px;}
+        .chart-container {
+            width: 100%;
+            height: 340px;
+            min-height: 260px;
+        }
+        .boxplot-container {
+            width: 100%;
+            height: 320px;
+            min-height: 220px;
+        }
+        @media (max-width: 900px) {
+            .main-grid { gap: 22px; }
+            .chart-container { height: 210px; }
+            .boxplot-container { height: 160px; }
+        }
+        .loading-indicator {
+            margin: 32px auto;
+            color: var(--secondary-text);
+            text-align: center;
+            font-size: 1.19em;
+        }
+    </style>
+</head>
+<body>
+    <h1>Compare Albums</h1>
+    <!-- Album Selection UI -->
+    <div class="compare-selector">
+        <div class="album-search-bar">
+            <input type="text" id="album-search" placeholder="Search for album (type album or artist name)" autocomplete="off" />
+            <button id="add-album-btn">Add</button>
+        </div>
+        <div id="album-search-results"></div>
+        <div id="selected-albums"></div>
+        <button id="run-comparison" style="margin-top:12px;">Compare Selected Albums</button>
+        <span style="color:#e74c3c;display:none;" id="compare-error"></span>
+    </div>
+    <div class="main-grid">
+        <div id="comparison-results" style="display:none;">
+            <div class="compare-table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Album</th>
+                            <th>Artist</th>
+                            <th>Release Date</th>
+                            <th>Score</th>
+                            <th>Avg Song</th>
+                            <th>Placement</th>
+                            <th>Std Dev</th>
+                            <th>Best Song</th>
+                            <th>Worst Song</th>
+                            <th>Length</th>
+                        </tr>
+                    </thead>
+                    <tbody id="compare-table-body"></tbody>
+                </table>
+            </div>
+            <div class="chart-card">
+                <h3>Album Runtime Graph</h3>
+                <div class="chart-container">
+                    <canvas id="compare-runtime-chart"></canvas>
+                </div>
+            </div>
+            <div class="chart-card">
+                <h3>Song Score Distribution (Boxplot)</h3>
+                <div class="boxplot-container">
+                    <canvas id="compare-boxplot-chart"></canvas>
+                </div>
+            </div>
+        </div>
+        <div id="loading" class="loading-indicator" style="display:none;">Loading...</div>
+    </div>
+    <script>
+    // --- Album Search/Selection Logic ---
+    let selectedAlbums = [];
+    let albumSearchResults = [];
+    // Dummy search: you should implement AJAX to your backend
+    function searchAlbums(query) {
+        // Replace with actual backend call that returns [{album_id, album_name, artist_name, album_cover_url}]
+        return []; // placeholder
+    }
+    document.getElementById("album-search").oninput = async function() {
+        let query = this.value.trim();
+        if (query.length < 2) {
+            document.getElementById("album-search-results").innerHTML = "";
+            return;
+        }
+        // Fetch from backend
+        let resp = await fetch("/search_albums?q=" + encodeURIComponent(query));
+        albumSearchResults = await resp.json();
+        let html = "";
+        for (const result of albumSearchResults) {
+            html += `<div style="padding:8px 0;cursor:pointer;" onclick="selectAlbum('${result.album_id}')">
+                <img src="${result.album_cover_url || 'https://placehold.co/42x42'}" style="width:32px;height:32px;border-radius:6px;vertical-align:middle;">
+                <span style="margin-left:9px;">${result.album_name} – <em>${result.artist_name}</em></span>
+            </div>`;
+        }
+        document.getElementById("album-search-results").innerHTML = html;
+    };
+    function selectAlbum(album_id) {
+        let album = albumSearchResults.find(a => a.album_id === album_id);
+        if (!album || selectedAlbums.length >= 4 || selectedAlbums.some(a => a.album_id === album_id)) return;
+        selectedAlbums.push(album);
+        renderSelectedAlbums();
+        document.getElementById("album-search-results").innerHTML = "";
+        document.getElementById("album-search").value = "";
+    }
+    function renderSelectedAlbums() {
+        let html = "";
+        for (const album of selectedAlbums) {
+            html += `<div class="selected-album">
+                <img src="${album.album_cover_url || 'https://placehold.co/42x42'}">
+                <span><b>${album.album_name}</b> <span style="color:#b3b3b3;">(${album.artist_name})</span></span>
+                <button class="remove-album-btn" onclick="removeAlbum('${album.album_id}')">&times;</button>
+            </div>`;
+        }
+        document.getElementById("selected-albums").innerHTML = html;
+    }
+    function removeAlbum(album_id) {
+        selectedAlbums = selectedAlbums.filter(a => a.album_id !== album_id);
+        renderSelectedAlbums();
+    }
+    document.getElementById("add-album-btn").onclick = function() {
+        if (albumSearchResults.length === 1) {
+            selectAlbum(albumSearchResults[0].album_id);
+        }
+    };
+    // --- Comparison Fetch and Render ---
+    document.getElementById("run-comparison").onclick = async function() {
+        document.getElementById("compare-error").style.display = "none";
+        if (selectedAlbums.length < 2) {
+            document.getElementById("compare-error").style.display = "inline";
+            document.getElementById("compare-error").textContent = "Please select at least 2 albums to compare.";
+            return;
+        }
+        document.getElementById("loading").style.display = "block";
+        document.getElementById("comparison-results").style.display = "none";
+        try {
+            const albumIds = selectedAlbums.map(a => a.album_id);
+            const resp = await fetch("/compare_albums?" + albumIds.map(id => `album_ids=${id}`).join("&"));
+            const data = await resp.json();
+            renderCompareStats(data.albums);
+            renderCompareRuntimeChart(data.albums);
+            renderCompareBoxplot(data.albums);
+            document.getElementById("comparison-results").style.display = "block";
+            document.getElementById("loading").style.display = "none";
+        } catch (e) {
+            document.getElementById("compare-error").style.display = "inline";
+            document.getElementById("compare-error").textContent = "Error fetching comparison data.";
+            document.getElementById("loading").style.display = "none";
+        }
+    };
+    function renderCompareStats(albums) {
+        const tbody = document.getElementById("compare-table-body");
+        tbody.innerHTML = "";
+        for (const album of albums) {
+            tbody.innerHTML += `<tr>
+                <td>${album.name}</td>
+                <td>${album.artist}</td>
+                <td>${album.release_date}</td>
+                <td>${album.album_score ? album.album_score.toFixed(2) : '-'}</td>
+                <td>${album.avg_song_score ? album.avg_song_score.toFixed(2) : '-'}</td>
+                <td>${album.placement || '-'}</td>
+                <td>${album.std_dev ? album.std_dev.toFixed(2) : '-'}</td>
+                <td>${album.best_song.title} (${album.best_song.score.toFixed(2)})</td>
+                <td>${album.worst_song.title} (${album.worst_song.score.toFixed(2)})</td>
+                <td>${album.length}</td>
+            </tr>`;
+        }
+    }
+    function renderCompareRuntimeChart(albums) {
+        const datasets = albums.map(album => ({
+            label: album.name,
+            data: album.points,
+            borderColor: album.color,
+            backgroundColor: album.color,
+            pointRadius: 7,
+            pointHoverRadius: 12,
+            showLine: true,
+            tension: 0.45,
+        }));
+        const maxX = Math.max(...albums.map(a => Math.max(...a.points.map(p => p.x)))) + 1;
+        if (window.compareRuntimeChart) window.compareRuntimeChart.destroy();
+        window.compareRuntimeChart = new Chart(document.getElementById("compare-runtime-chart").getContext("2d"), {
+            type: 'line',
+            data: { datasets },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: true } },
+                scales: {
+                    x: {
+                        min: 0,
+                        max: maxX,
+                        title: { display: true, text: "Album Runtime (min:sec)" },
+                        ticks: {
+                            color: "#b3b3b3",
+                            callback: function(val) {
+                                let mins = Math.floor(val);
+                                let secs = Math.round((val-mins)*60).toString().padStart(2,"0");
+                                return mins + ":" + secs;
+                            }
+                        },
+                        grid: { color: "#282828" }
+                    },
+                    y: {
+                        min: 0,
+                        max: 10,
+                        title: { display: true, text: "Song Score" },
+                        ticks: { color: "#b3b3b3" },
+                        grid: { color: "#282828" }
+                    }
+                },
+                interaction: {
+                    mode: 'nearest',
+                    intersect: false
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            title: function(context) {
+                                let song = context[0].raw.song;
+                                let mins = Math.floor(context[0].raw.x);
+                                let secs = Math.round((context[0].raw.x-mins)*60).toString().padStart(2,"0");
+                                return song + " (" + mins + ":" + secs + ")";
+                            },
+                            label: function(context) {
+                                return "Score: " + context.raw.y.toFixed(2);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+    function renderCompareBoxplot(albums) {
+        // Chart.js Boxplot plugin required!
+        const boxplotData = {
+            labels: albums.map(a => a.name),
+            datasets: [{
+                label: "Song Score Distribution",
+                backgroundColor: albums.map(a => a.color),
+                borderColor: albums.map(a => a.color),
+                outlierColor: "#e74c3c",
+                data: albums.map(a => a.song_scores)
+            }]
+        };
+        if (window.compareBoxplotChart) window.compareBoxplotChart.destroy();
+        window.compareBoxplotChart = new Chart(document.getElementById("compare-boxplot-chart").getContext("2d"), {
+            type: 'boxplot',
+            data: boxplotData,
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: {
+                        min: 0,
+                        max: 10,
+                        title: { display: true, text: "Song Score" },
+                        ticks: { color: "#b3b3b3" },
+                        grid: { color: "#282828" }
+                    }
+                }
+            }
+        });
+    }
+    </script>
+</body>
+</html>
