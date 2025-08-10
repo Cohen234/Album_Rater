@@ -481,6 +481,20 @@
             margin-bottom: 0;
             padding: 0 0 18px 0;
         }
+        .chart-card.leaderboard-card h3 {
+            padding-top: 22px;
+            padding-bottom: 8px;
+            margin: 0;
+            text-align: center;
+            font-size: 1.28em;
+            color: var(--secondary-text);
+            font-weight: 800;
+            letter-spacing: 1.1px;
+            background: var(--surface-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
 
         .leaderboard-table-wrapper {
             max-height: 500px;
@@ -550,11 +564,11 @@
 
         /* --- Song/Album Cell (with Flex for name & art) --- */
         .lb-table-album-cell, .lb-table-song-cell {
-            display: flex;
+            gap: 7px;
+            padding-left: 0;
+            padding-right: 0;
             align-items: center;
-            gap: 10px;
             min-width: 0;
-            background: none;
         }
 
         .lb-table-album-img, .lb-table-song-img {
@@ -570,12 +584,12 @@
         }
 
         .lb-table-album-name, .lb-table-song-name {
-            display: block;
+            max-width: 130px; /* Tweak as needed for layout */
+            min-width: 0;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
             flex: 1 1 0;
-            min-width: 0;
             cursor: pointer;
             position: relative;
             font-size: 1.07em;
@@ -621,6 +635,7 @@
             th:nth-child(2), td:nth-child(2) { max-width: 180px; }
             th:nth-child(3), td:nth-child(3) { width: 60px; }
             .global-rank, th:last-child { min-width: 40px; }
+            .lb-table-album-name, .lb-table-song-name { max-width: 70px; }
         }
 
         /* Hide overflowed rows for "See More" button */
@@ -642,6 +657,10 @@
         }
         .progress-bar-bg {height:8px;}
         .progress-bar-fill {height:8px;}
+        th, td { padding: 10px 8px; }
+        tr { border-bottom: 1px solid var(--border-color); }
+        .lb-medal { vertical-align: middle; margin-right: 2px; }
+        td:first-child { vertical-align: middle; }
     </style>
 </head>
 <body>
