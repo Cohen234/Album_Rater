@@ -1327,6 +1327,7 @@ def get_album_data(artist_name, album_name, album_id):
             'delta_7d': delta_7d,
             'score_history_str': "; ".join([f"{d}: {s:.2f}" for d, s in score_history]),
             'start_min': start_sec/60,
+            'length': row['duration_sec'],
             'global_rank': global_rank,
         })
     artist_songs_df = main_df[
