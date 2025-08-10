@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <title>Compare Albums</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-box-and-violin@3.3.0/dist/chartjs-chart-box-and-violin.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -207,12 +206,6 @@
                     <canvas id="compare-runtime-chart"></canvas>
                 </div>
             </div>
-            <div class="chart-card">
-                <h3>Song Score Distribution (Boxplot)</h3>
-                <div class="boxplot-container">
-                    <canvas id="compare-boxplot-chart"></canvas>
-                </div>
-            </div>
         </div>
         <div id="loading" class="loading-indicator" style="display:none;">Loading...</div>
     </div>
@@ -291,7 +284,7 @@
             }
             renderCompareStats(data.albums);
             renderCompareRuntimeChart(data.albums);
-            renderCompareBoxplot(data.albums);
+
             document.getElementById("comparison-results").style.display = "block";
             document.getElementById("loading").style.display = "none";
         } catch (e) {
@@ -378,37 +371,6 @@
                                 return "Score: " + context.raw.y.toFixed(2);
                             }
                         }
-                    }
-                }
-            }
-        });
-    }
-    function renderCompareBoxplot(albums) {
-        // Chart.js Boxplot plugin required!
-        const boxplotData = {
-            labels: albums.map(a => a.name),
-            datasets: [{
-                label: "Song Score Distribution",
-                backgroundColor: albums.map(a => a.color),
-                borderColor: albums.map(a => a.color),
-                outlierColor: "#e74c3c",
-                data: albums.map(a => a.song_scores)
-            }]
-        };
-        if (window.compareBoxplotChart) window.compareBoxplotChart.destroy();
-        window.compareBoxplotChart = new Chart(document.getElementById("compare-boxplot-chart").getContext("2d"), {
-            type: 'boxplot',
-            data: boxplotData,
-            options: {
-                responsive: true,
-                plugins: { legend: { display: false } },
-                scales: {
-                    y: {
-                        min: 0,
-                        max: 10,
-                        title: { display: true, text: "Song Score" },
-                        ticks: { color: "#b3b3b3" },
-                        grid: { color: "#282828" }
                     }
                 }
             }
