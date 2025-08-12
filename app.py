@@ -202,7 +202,7 @@ def get_dominant_color(image_url):
         rgb = color_thief.get_color(quality=1)
         return f"rgb({rgb[0]}, {rgb[1]}, {rgb[2]})"
     except Exception as e:
-        print(f"ERROR: Failed to get dominant color for {image_url}: {e}")
+
         return "#ffffff"
 def get_ordinal_suffix(n):
     """Converts a number to its ordinal form (e.g., 1 -> 1st, 2 -> 2nd)."""
@@ -343,8 +343,7 @@ def artist_page_v2(artist_name):
 
         # --- Duplicate check for debugging ---
         dupes = all_songs_df[all_songs_df.duplicated(subset=['Song_Name', 'Artist_Name'], keep=False)]
-        print("Duplicates:\n", dupes[['Song_Name', 'Artist_Name', 'Ranking_Status', 'Ranked_Date']])
-        print("Num duplicates:", len(dupes))
+
 
         # --- Sort albums and assign Global Rank ---
         all_albums_df = all_albums_df.sort_values(by='weighted_average_score', ascending=False)
@@ -361,7 +360,7 @@ def artist_page_v2(artist_name):
             return redirect(url_for('load_albums_by_artist_route', artist_name=artist_name))
 
         artist_songs_df.columns = [c.replace(' ', '_') for c in artist_songs_df.columns]
-        actual_songs_df = artist_songs_df[artist_songs_df['Rank_Group_Str'] != "I"]
+        actual_songs_df = artist_songs_df[artist_songs_df['Rank_Group'] != "I"]
 
         # 2. --- Calculate New Stats ----
 
@@ -485,9 +484,7 @@ def artist_page_v2(artist_name):
             'data': polar_data_series.values.tolist()
         }
 
-        print("Filtered all_songs_df shape:", all_songs_df.shape)
-        print("First 5 rows:\n", all_songs_df.head())
-        print("Filtered artist_songs_df shape:", artist_songs_df.shape)
+
 
         average_song_score = actual_songs_df['Ranking'].mean() if not actual_songs_df.empty else 0
         median_song_score = actual_songs_df['Ranking'].median() if not actual_songs_df.empty else 0
@@ -695,10 +692,7 @@ def artist_page_v2(artist_name):
         arrow_delta = recent_avg - old_avg
         arrow_direction = "up" if arrow_delta > 0 else "down" if arrow_delta < 0 else "flat"
 
-        print(songs_sorted['Album_Name'].unique())
-        print(album_boundaries)
-        print(album_labels)
-        print(album_arts)
+
         song_scores = artist_songs_df['Ranking'].tolist()
         from datetime import datetime
 
@@ -766,7 +760,7 @@ from urllib.parse import unquote
 @app.route("/artist/<artist_name>/album/<path:album_name>/<album_id>")
 def album_page(artist_name, album_name, album_id):
     album_name = unquote(album_name)
-    print(f"Album name from URL: '{album_name}'")
+
     album_data = get_album_data(artist_name, album_name, album_id)
     if not album_data:
         print("ALBUM DATA NOT FOUND!")
