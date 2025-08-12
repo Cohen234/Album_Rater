@@ -1233,7 +1233,16 @@ def get_album_data(artist_name, album_name, album_id):
 
     # ---- ADD THIS Fallback for Release Date ----
     if not release_date or release_date == "":
-        release_date = album_row.get('release_date', "")  # Use spreadsheet value if present
+        # Try album_row
+        release_date = (
+                album_row.get('release_date', "") or
+                album_row.get('Release_Date', "") or
+                album_row.get('releaseDate', "")
+        )
+        # Try release date lookup from artist page logic
+        if not release_date:
+            release_dates_map = get_album_release_dates(sp, [album_id])
+            release_date = release_dates_map.get(album_id, "")  # Use spreadsheet value if present
 
     # Fallback album length calculation from your main sheet if not found above
     if not album_length or album_length_sec == 0:
