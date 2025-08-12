@@ -361,6 +361,7 @@ def artist_page_v2(artist_name):
             return redirect(url_for('load_albums_by_artist_route', artist_name=artist_name))
 
         artist_songs_df.columns = [c.replace(' ', '_') for c in artist_songs_df.columns]
+        actual_songs_df = artist_songs_df[artist_songs_df['Rank_Group_Str'] != "I"]
 
         # 2. --- Calculate New Stats ----
 
@@ -474,11 +475,11 @@ def artist_page_v2(artist_name):
 
         # For polar chart
         all_rank_groups = [f"{i / 2:.1f}" for i in range(2, 21)]
-        artist_songs_df['Rank_Group_Str'] = artist_songs_df['Rank_Group'].astype(str) if 'Rank_Group' in artist_songs_df else ""
-        song_counts = artist_songs_df['Rank_Group_Str'].value_counts() if 'Rank_Group_Str' in artist_songs_df else pd.Series()
-        polar_data_series = pd.Series(index=all_rank_groups, dtype=int).fillna(0)
+        # For pie chart on artist page
+        artist_songs_df['Rank_Group_Str'] = artist_songs_df['Rank_Group'].astype(str)
+        polar_data_series = pd.Series(index=all_rank_groups + ['I'], dtype=int).fillna(0)
+        song_counts = artist_songs_df['Rank_Group_Str'].value_counts()
         polar_data_series.update(song_counts)
-        polar_data_series = polar_data_series.sort_index(key=lambda x: pd.to_numeric(x))
         polar_chart_data = {
             'labels': polar_data_series.index.tolist(),
             'data': polar_data_series.values.tolist()
@@ -488,22 +489,25 @@ def artist_page_v2(artist_name):
         print("First 5 rows:\n", all_songs_df.head())
         print("Filtered artist_songs_df shape:", artist_songs_df.shape)
 
-        average_song_score = artist_songs_df['Ranking'].mean() if not artist_songs_df.empty else 0
-        median_song_score = artist_songs_df['Ranking'].median() if not artist_songs_df.empty else 0
-        std_song_score = artist_songs_df['Ranking'].std() if not artist_songs_df.empty else 0
+        average_song_score = actual_songs_df['Ranking'].mean() if not actual_songs_df.empty else 0
+        median_song_score = actual_songs_df['Ranking'].median() if not actual_songs_df.empty else 0
+        std_song_score = actual_songs_df['Ranking'].std() if not actual_songs_df.empty else 0
 
-        # Highest and lowest ranked songs
-        if not artist_songs_df.empty:
-            top_song_row = artist_songs_df.loc[artist_songs_df['Ranking'].idxmax()]
-            low_song_row = artist_songs_df.loc[artist_songs_df['Ranking'].idxmin()]
+        if not actual_songs_df.empty:
+            top_song_row = actual_songs_df.loc[actual_songs_df['Ranking'].idxmax()]
+            low_song_row = actual_songs_df.loc[actual_songs_df['Ranking'].idxmin()]
             top_song_name = top_song_row['Song_Name']
             top_song_score = top_song_row['Ranking']
             top_song_cover = top_song_row.get('album_cover_url', '')
-            top_song_link = url_for('view_album', album_id=top_song_row.get('Spotify_Album_ID', '')) if top_song_row.get('Spotify_Album_ID') else "#"
+            top_song_link = url_for('view_album',
+                                    album_id=top_song_row.get('Spotify_Album_ID', '')) if top_song_row.get(
+                'Spotify_Album_ID') else "#"
             low_song_name = low_song_row['Song_Name']
             low_song_score = low_song_row['Ranking']
             low_song_cover = low_song_row.get('album_cover_url', '')
-            low_song_link = url_for('view_album', album_id=low_song_row.get('Spotify_Album_ID', '')) if low_song_row.get('Spotify_Album_ID') else "#"
+            low_song_link = url_for('view_album',
+                                    album_id=low_song_row.get('Spotify_Album_ID', '')) if low_song_row.get(
+                'Spotify_Album_ID') else "#"
         else:
             top_song_name = top_song_score = top_song_cover = top_song_link = ''
             low_song_name = low_song_score = low_song_cover = low_song_link = ''
@@ -1192,6 +1196,10 @@ def get_album_data(artist_name, album_name, album_id):
         (main_df['Album Name'].str.strip().str.lower() == album_name_clean) &
         (main_df['Artist Name'].str.strip().str.lower() == artist_name_clean)
     ].copy()
+    actual_songs_df = album_songs_df[album_songs_df['Rank_Group'] != "I"].copy()
+    interlude_songs_df = album_songs_df[album_songs_df['Rank_Group'] == "I"].copy()
+    actual_songs_df['Ranking'] = pd.to_numeric(actual_songs_df['Ranking'], errors='coerce')
+    actual_songs_df = actual_songs_df[actual_songs_df['Ranking'].notnull()]
 
 
     release_date = None
@@ -1255,17 +1263,19 @@ def get_album_data(artist_name, album_name, album_id):
     album_songs_df['Ranking'] = pd.to_numeric(album_songs_df['Ranking'], errors='coerce')
     album_songs_df = album_songs_df[album_songs_df['Ranking'].notnull()]
 
-    avg_song_score = album_songs_df['Ranking'].mean() if not album_songs_df.empty else 0
-    median_song_score = album_songs_df['Ranking'].median() if not album_songs_df.empty else 0
-    std_song_score = album_songs_df['Ranking'].std() if not album_songs_df.empty else 0
+    avg_song_score = actual_songs_df['Ranking'].mean() if not actual_songs_df.empty else 0
+    median_song_score = actual_songs_df['Ranking'].median() if not actual_songs_df.empty else 0
+    std_song_score = actual_songs_df['Ranking'].std() if not actual_songs_df.empty else 0
 
     # Top/lowest 3 songs
-    top_3_songs = album_songs_df.sort_values('Ranking', ascending=False).head(3)[['Song Name', 'Ranking']].to_dict('records')
+    top_3_songs = actual_songs_df.sort_values('Ranking', ascending=False).head(3)[['Song Name', 'Ranking']].to_dict(
+        'records')
     for song in top_3_songs:
         song['title'] = song.pop('Song Name')
         song['score'] = song.pop('Ranking')
-    lowest_row = album_songs_df.sort_values('Ranking', ascending=True).head(1)
-    lowest_song = {'title': lowest_row.iloc[0]['Song Name'], 'score': lowest_row.iloc[0]['Ranking']} if not lowest_row.empty else None
+    lowest_row = actual_songs_df.sort_values('Ranking', ascending=True).head(1)
+    lowest_song = {'title': lowest_row.iloc[0]['Song Name'],
+                   'score': lowest_row.iloc[0]['Ranking']} if not lowest_row.empty else None
 
     most_improved_song = {'title': '', 'delta': 0}
     worst_improved_song = None
@@ -1308,6 +1318,7 @@ def get_album_data(artist_name, album_name, album_id):
     all_songs_df['global_rank'] = all_songs_df.index + 1
     album_songs = []
     for (idx, row), start_sec in zip(album_songs_df.iterrows(), song_starts):
+        is_interlude = (row.get('Rank_Group', row.get('Rank Group', "")) == "I")
         song_name = row['Song Name']
         track_number = int(row.get('Position In Group', idx + 1))
         # Find global rank for this song (and artist to be safe)
@@ -1339,6 +1350,7 @@ def get_album_data(artist_name, album_name, album_id):
             'start_min': start_sec/60,
             'length': row['duration_sec'],
             'global_rank': global_rank,
+            'is_interlude': is_interlude,
         })
     artist_songs_df = main_df[
         (main_df['Artist Name'].str.strip().str.lower() == artist_name_clean)
