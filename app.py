@@ -1193,7 +1193,7 @@ def get_album_data(artist_name, album_name, album_id):
         (main_df['Artist Name'].str.strip().str.lower() == artist_name_clean)
     ].copy()
 
-    # Try to get release date and album length from your Spotify lookups if needed
+
     release_date = None
     album_length = ""
     album_length_sec = 0
@@ -1202,13 +1202,12 @@ def get_album_data(artist_name, album_name, album_id):
         track_order_map = {}
         if album_info and 'songs' in album_info:
             for i, song in enumerate(album_info['songs']):
-                song_name = song['song_name'].strip().lower()  # Use correct key!
-                track_order_map[song_name] = i + 1  # 1-based
+                song_name = song['song_name'].strip().lower()
+                track_order_map[song_name] = i + 1
 
         album_songs_df['track_order'] = album_songs_df['Song Name'].str.strip().str.lower().map(track_order_map)
 
         if album_songs_df['track_order'].isnull().any():
-            # Fill missing values with Position In Group or index (1-based)
             if 'Position In Group' in album_songs_df.columns:
                 album_songs_df['track_order'] = album_songs_df['track_order'].fillna(
                     album_songs_df['Position In Group'])
@@ -1220,11 +1219,9 @@ def get_album_data(artist_name, album_name, album_id):
 
         release_date = album_info.get('release_date', None)
         # Album length calculation from Spotify...
-        # Album length calculation from Spotify
         if album_info.get('songs'):
             total_duration_ms = 0
             for song in album_info['songs']:
-                # If you have duration_ms field, use it
                 if 'duration_ms' in song:
                     total_duration_ms += int(song['duration_ms'])
             album_length_sec = total_duration_ms // 1000
@@ -1233,6 +1230,10 @@ def get_album_data(artist_name, album_name, album_id):
             album_cover_url = album_info.get('album_cover_url')
     except Exception:
         pass
+
+    # ---- ADD THIS Fallback for Release Date ----
+    if not release_date or release_date == "":
+        release_date = album_row.get('release_date', "")  # Use spreadsheet value if present
 
     # Fallback album length calculation from your main sheet if not found above
     if not album_length or album_length_sec == 0:
@@ -1362,7 +1363,7 @@ def get_album_data(artist_name, album_name, album_id):
         'album_name': album_row['album_name'],
         'artist_name': album_row['artist_name'],
         'album_cover_url': album_cover_url,
-        'release_date': release_date or "",  # Provide something always
+        'release_date': release_date or "Unknown",  # Provide something always
         'album_length': album_length or "",
         'album_length_sec': album_length_sec or 0,
         'album_score': album_row.get('weighted_average_score', 0),
