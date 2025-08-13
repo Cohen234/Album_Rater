@@ -446,8 +446,8 @@ def artist_page_v2(artist_name):
             era_history_data = artist_albums_df
 
         # Calculate SEM and mean
-        sd_by_album = artist_songs_df.groupby('Album_Name')['Ranking'].std()
-        mean_by_album = artist_songs_df.groupby('Album_Name')['Ranking'].mean()
+        sd_by_album = actual_songs_df.groupby('Album_Name')['Ranking'].std()
+        mean_by_album = actual_songs_df.groupby('Album_Name')['Ranking'].mean()
 
         # Get album metadata
         album_info = artist_albums_df.set_index('album_name')
@@ -590,21 +590,21 @@ def artist_page_v2(artist_name):
 
         # For song leaderboard
         song_leaderboard_clean = []
-        for row in artist_songs_df.to_dict('records'):
+        for row in actual_songs_df.to_dict('records'):
             row['Song Name'] = clean_title(row.get('Song_Name', ''))  # Ensure this key is present
             row['Universal Rank'] = row.get('Universal_Rank', '')
             row['Artist Rank'] = row.get('Artist_Rank', '')
             song_leaderboard_clean.append(row)
         # For album leaderboard
         album_leaderboard_clean = []
-        for row in artist_albums_df.to_dict('records'):
+        for row in actual_songs_df.to_dict('records'):
             row['album_name'] = clean_title(row['album_name'])
             row['Global Rank'] = row.get('Global_Rank', '')
             row['Artist Rank'] = row.get('Artist_Rank', '')  # <-- make sure you include this!
             album_leaderboard_clean.append(row)
 
         # --- First/last album ranked info ---
-        if not artist_songs_df.empty and 'Ranked_Date' in artist_songs_df.columns:
+        if not actual_songs_df.empty and 'Ranked_Date' in artist_songs_df.columns:
             artist_songs_df['Ranked_Date'] = pd.to_datetime(artist_songs_df['Ranked_Date'], errors='coerce')
             # Approach 2: Get the earliest and latest ranked date per album
             album_dates = (
@@ -693,7 +693,7 @@ def artist_page_v2(artist_name):
         arrow_direction = "up" if arrow_delta > 0 else "down" if arrow_delta < 0 else "flat"
 
 
-        song_scores = artist_songs_df['Ranking'].tolist()
+        song_scores = actual_songs_df['Ranking'].tolist()
         from datetime import datetime
 
         def safe_date(val):
