@@ -302,6 +302,16 @@ def artist_page_v2(artist_name):
     import json
     from jinja2 import Undefined
 
+    def standardize_columns(df):
+        df.columns = [c.replace(' ', '_') for c in df.columns]
+        if 'Rank_Group' not in df.columns and 'Rank_Group' in df.columns:
+            pass
+        elif 'Rank_Group' not in df.columns and 'Rank_Group' not in df.columns and 'Rank_Group' in df.columns:
+            df['Rank_Group'] = df['Rank_Group']
+        elif 'Rank_Group' not in df.columns and 'Rank_Group' not in df.columns and 'Rank_Group' not in df.columns and 'Rank Group' in df.columns:
+            df['Rank_Group'] = df['Rank Group']
+        return df
+
     try:
         logging.info(f"--- Loading Artist Stats Page for: {artist_name} ---")
 
@@ -311,8 +321,8 @@ def artist_page_v2(artist_name):
         all_albums_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
 
         # --- Normalize columns: spaces to underscores everywhere ---
-        all_songs_df.columns = [c.replace(' ', '_') for c in all_songs_df.columns]
-        all_albums_df.columns = [c.replace(' ', '_') for c in all_albums_df.columns]
+        all_songs_df = standardize_columns(all_songs_df)
+        all_albums_df = standardize_columns(all_albums_df)
 
         # --- Type conversions ---
         all_songs_df['Ranking'] = pd.to_numeric(all_songs_df['Ranking'], errors='coerce')
@@ -344,7 +354,6 @@ def artist_page_v2(artist_name):
         # --- Duplicate check for debugging ---
         dupes = all_songs_df[all_songs_df.duplicated(subset=['Song_Name', 'Artist_Name'], keep=False)]
 
-
         # --- Sort albums and assign Global Rank ---
         all_albums_df = all_albums_df.sort_values(by='weighted_average_score', ascending=False)
         all_albums_df['Global_Rank'] = range(1, len(all_albums_df) + 1)
@@ -359,8 +368,14 @@ def artist_page_v2(artist_name):
         if artist_songs_df.empty and artist_albums_df.empty:
             return redirect(url_for('load_albums_by_artist_route', artist_name=artist_name))
 
-        artist_songs_df.columns = [c.replace(' ', '_') for c in artist_songs_df.columns]
-        actual_songs_df = artist_songs_df[artist_songs_df['Rank_Group'] != "I"]
+        # Standardize columns for artist_songs_df
+        artist_songs_df = standardize_columns(artist_songs_df)
+
+        # --- FILTER OUT INTERLUDES EVERYWHERE ---
+        # If for any reason Rank_Group isn't there, try to build it from "Rank Group"
+        if 'Rank_Group' not in artist_songs_df.columns and 'Rank Group' in artist_songs_df.columns:
+            artist_songs_df['Rank_Group'] = artist_songs_df['Rank Group']
+        actual_songs_df = artist_songs_df[artist_songs_df['Rank_Group'] != "I"].copy()
 
         # 2. --- Calculate New Stats ----
 
@@ -382,8 +397,8 @@ def artist_page_v2(artist_name):
         album_percentile = ((total_albums - artist_albums_df['Global_Rank'].mean()) / total_albums) * 100 if total_albums > 0 and not artist_albums_df.empty else 0
         song_percentile = ((total_songs - artist_songs_df['Universal_Rank'].mean()) / total_songs) * 100 if total_songs > 0 and not artist_songs_df.empty else 0
         artist_score = (album_percentile * 0.6) + (song_percentile * 0.4) if ranked_albums_count > 0 else 0
+
         # 1. Clean names in all DataFrames (do this as early as possible)
-        # Clean names in all DataFrames
         all_songs_df['album_name_clean'] = all_songs_df['Album_Name'].astype(str).str.strip().str.lower()
         all_albums_df['album_name_clean'] = all_albums_df['album_name'].astype(str).str.strip().str.lower()
 
@@ -445,7 +460,7 @@ def artist_page_v2(artist_name):
         else:
             era_history_data = artist_albums_df
 
-        # Calculate SEM and mean
+        # Calculate SEM and mean (ONLY ACTUAL SONGS)
         sd_by_album = actual_songs_df.groupby('Album_Name')['Ranking'].std()
         mean_by_album = actual_songs_df.groupby('Album_Name')['Ranking'].mean()
 
@@ -464,7 +479,6 @@ def artist_page_v2(artist_name):
                     'image': row.get('album_cover_url', '')
                 })
 
-
         # --- Prepare Leaderboard and other stats ---
         artist_songs_df.sort_values(by='Ranking', ascending=False, inplace=True)
         artist_songs_df['Artist_Rank'] = range(1, len(artist_songs_df) + 1)
@@ -474,7 +488,6 @@ def artist_page_v2(artist_name):
 
         # For polar chart
         all_rank_groups = [f"{i / 2:.1f}" for i in range(2, 21)]
-        # For pie chart on artist page
         artist_songs_df['Rank_Group_Str'] = artist_songs_df['Rank_Group'].astype(str)
         polar_data_series = pd.Series(index=all_rank_groups + ['I'], dtype=int).fillna(0)
         song_counts = artist_songs_df['Rank_Group_Str'].value_counts()
@@ -484,8 +497,7 @@ def artist_page_v2(artist_name):
             'data': polar_data_series.values.tolist()
         }
 
-
-
+        # Use only actual songs for ALL STATS and song_score_distribution!
         average_song_score = actual_songs_df['Ranking'].mean() if not actual_songs_df.empty else 0
         median_song_score = actual_songs_df['Ranking'].median() if not actual_songs_df.empty else 0
         std_song_score = actual_songs_df['Ranking'].std() if not actual_songs_df.empty else 0
@@ -529,9 +541,9 @@ def artist_page_v2(artist_name):
         most_improved_song_name = ""
         most_improved_song_delta = 0
 
-        if not artist_songs_df.empty and 'Song_Name' in artist_songs_df.columns and 'Ranking' in artist_songs_df.columns:
+        if not actual_songs_df.empty and 'Song_Name' in actual_songs_df.columns and 'Ranking' in actual_songs_df.columns:
             improvement_data = []
-            for song_name, group in artist_songs_df.groupby('Song_Name'):
+            for song_name, group in actual_songs_df.groupby('Song_Name'):
                 group_sorted = group.sort_values('Ranked_Date')
                 if len(group_sorted) > 1:
                     first_rank = group_sorted.iloc[0]['Ranking']
@@ -561,54 +573,31 @@ def artist_page_v2(artist_name):
             }]
         }
 
-        if not artist_songs_df.empty and "Ranked_Date" in artist_songs_df.columns:
-            artist_songs_df['Ranked_Date'] = pd.to_datetime(artist_songs_df['Ranked_Date'], errors='coerce')
-            if artist_songs_df['Ranked_Date'].nunique() > 2:
-                grouped = artist_songs_df.groupby(artist_songs_df['Ranked_Date'].dt.to_period('M'))
-                for period, group in grouped:
-                    label = str(period)
-                    avg_score = safe_float(group['Ranking'].mean())
-                    ranking_trajectory_data['labels'].append(label)
-                    ranking_trajectory_data['datasets'][0]['data'].append(avg_score)
-            else:
-                sorted_rows = artist_songs_df.sort_values('Ranked_Date')
-                for _, row in sorted_rows.iterrows():
-                    label = row['Ranked_Date'].strftime('%b %d, %Y') if pd.notnull(row['Ranked_Date']) else ""
-                    avg_score = safe_float(row['Ranking'])
-                    ranking_trajectory_data['labels'].append(label)
-                    ranking_trajectory_data['datasets'][0]['data'].append(avg_score)
-        if not ranking_trajectory_data["labels"]:
-            ranking_trajectory_data = {
-                "labels": [],
-                "datasets": [{
-                    "label": "Avg Song Score",
-                    "data": [],
-                    "borderColor": "rgba(29, 185, 84, 1)",
-                    "backgroundColor": "rgba(29, 185, 84, 0.2)",
-                }]
-            }
+        # Only use actual_songs_df for song score distribution!
+        song_scores = actual_songs_df['Ranking'].tolist()
 
-        # For song leaderboard
+        # Song leaderboard: Only use actual_songs_df!
         song_leaderboard_clean = []
         for row in actual_songs_df.to_dict('records'):
             row['Song Name'] = clean_title(row.get('Song_Name', ''))  # Ensure this key is present
             row['Universal Rank'] = row.get('Universal_Rank', '')
             row['Artist Rank'] = row.get('Artist_Rank', '')
             song_leaderboard_clean.append(row)
-        # For album leaderboard
+
+        # For album leaderboard (not changed)
         album_leaderboard_clean = []
-        for row in actual_songs_df.to_dict('records'):
+        for row in artist_albums_df.to_dict('records'):
             row['album_name'] = clean_title(row['album_name'])
             row['Global Rank'] = row.get('Global_Rank', '')
             row['Artist Rank'] = row.get('Artist_Rank', '')  # <-- make sure you include this!
             album_leaderboard_clean.append(row)
 
         # --- First/last album ranked info ---
-        if not actual_songs_df.empty and 'Ranked_Date' in artist_songs_df.columns:
-            artist_songs_df['Ranked_Date'] = pd.to_datetime(artist_songs_df['Ranked_Date'], errors='coerce')
+        if not actual_songs_df.empty and 'Ranked_Date' in actual_songs_df.columns:
+            actual_songs_df['Ranked_Date'] = pd.to_datetime(actual_songs_df['Ranked_Date'], errors='coerce')
             # Approach 2: Get the earliest and latest ranked date per album
             album_dates = (
-                artist_songs_df.groupby('Album_Name')['Ranked_Date']
+                actual_songs_df.groupby('Album_Name')['Ranked_Date']
                 .agg(['min', 'max'])
                 .reset_index()
             )
@@ -638,8 +627,10 @@ def artist_page_v2(artist_name):
         last_album_ranked_name_display = clean_title(last_album_ranked_name)
 
         # --- Points and chart boundaries ---
-        songs_sorted = artist_songs_df.sort_values(['Album_Name', 'Ranked_Date'])
+        songs_sorted = actual_songs_df.sort_values(['Album_Name', 'Ranked_Date'])
         points = []
+
+        from datetime import datetime
 
         def safe_json_val(val):
             if isinstance(val, Undefined):
@@ -685,16 +676,12 @@ def artist_page_v2(artist_name):
 
         days = 7
         now = pd.Timestamp.now()
-        recent = artist_songs_df[artist_songs_df['Ranked_Date'] >= (now - pd.Timedelta(days=days))] if not artist_songs_df.empty else pd.DataFrame()
-        old = artist_songs_df[artist_songs_df['Ranked_Date'] < (now - pd.Timedelta(days=days))] if not artist_songs_df.empty else pd.DataFrame()
+        recent = actual_songs_df[actual_songs_df['Ranked_Date'] >= (now - pd.Timedelta(days=days))] if not actual_songs_df.empty else pd.DataFrame()
+        old = actual_songs_df[actual_songs_df['Ranked_Date'] < (now - pd.Timedelta(days=days))] if not actual_songs_df.empty else pd.DataFrame()
         recent_avg = recent['Ranking'].mean() if not recent.empty else 0
         old_avg = old['Ranking'].mean() if not old.empty else 0
         arrow_delta = recent_avg - old_avg
         arrow_direction = "up" if arrow_delta > 0 else "down" if arrow_delta < 0 else "flat"
-
-
-        song_scores = actual_songs_df['Ranking'].tolist()
-        from datetime import datetime
 
         def safe_date(val):
             try:
