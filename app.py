@@ -533,11 +533,11 @@ def artist_page_v2(artist_name):
             top_album_name = top_album_row['album_name']
             top_album_score = top_album_row['weighted_average_score']
             top_album_cover = top_album_row.get('album_cover_url', '')
-            top_album_link = url_for('album_page', album_id=top_album_row.get('album_id', '')) if top_album_row.get('album_id') else "#"
+            top_album_link = url_for('view_album', album_id=top_album_row.get('album_id', '')) if top_album_row.get('album_id') else "#"
             low_album_name = low_album_row['album_name']
             low_album_score = low_album_row['weighted_average_score']
             low_album_cover = low_album_row.get('album_cover_url', '')
-            low_album_link = url_for('album_page', album_id=low_album_row.get('album_id', '')) if low_album_row.get('album_id') else "#"
+            low_album_link = url_for('view_album', album_id=low_album_row.get('album_id', '')) if low_album_row.get('album_id') else "#"
         else:
             top_album_name = top_album_score = top_album_cover = top_album_link = ''
             low_album_name = low_album_score = low_album_cover = low_album_link = ''
