@@ -371,11 +371,16 @@ def artist_page_v2(artist_name):
         # Standardize columns for artist_songs_df
         artist_songs_df = standardize_columns(artist_songs_df)
 
-        # --- FILTER OUT INTERLUDES EVERYWHERE ---
-        # If for any reason Rank_Group isn't there, try to build it from "Rank Group"
+
         if 'Rank_Group' not in artist_songs_df.columns and 'Rank Group' in artist_songs_df.columns:
             artist_songs_df['Rank_Group'] = artist_songs_df['Rank Group']
+
+        # Filter out interludes
         actual_songs_df = artist_songs_df[artist_songs_df['Rank_Group'] != "I"].copy()
+
+        # Recompute contiguous artist rank AFTER filtering (so no gaps)
+        actual_songs_df = actual_songs_df.sort_values(by='Ranking', ascending=False).reset_index(drop=True)
+        actual_songs_df['Artist_Rank'] = actual_songs_df.index + 1
 
         # 2. --- Calculate New Stats ----
 
