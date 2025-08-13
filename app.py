@@ -513,15 +513,21 @@ def artist_page_v2(artist_name):
             top_song_name = top_song_row['Song_Name']
             top_song_score = top_song_row['Ranking']
             top_song_cover = top_song_row.get('album_cover_url', '')
-            top_song_link = url_for('album_page',
-                                    album_id=top_song_row.get('Spotify_Album_ID', '')) if top_song_row.get(
-                'Spotify_Album_ID') else "#"
+            top_song_link = url_for(
+                'album_page',
+                artist_name=artist_name,
+                album_name=quote_plus(top_song_row['album_name']),
+                album_id=top_song_row['album_id']
+            ) if top_song_row.get('album_id') else "#"
             low_song_name = low_song_row['Song_Name']
             low_song_score = low_song_row['Ranking']
             low_song_cover = low_song_row.get('album_cover_url', '')
-            low_song_link = url_for('album_page',
-                                    album_id=low_song_row.get('Spotify_Album_ID', '')) if low_song_row.get(
-                'Spotify_Album_ID') else "#"
+            low_song_link = url_for(
+                'album_page',
+                artist_name=artist_name,
+                album_name=quote_plus(low_song_row['album_name']),
+                album_id=low_song_row['album_id']
+            ) if low_song_row.get('album_id') else "#"
         else:
             top_song_name = top_song_score = top_song_cover = top_song_link = ''
             low_song_name = low_song_score = low_song_cover = low_song_link = ''
