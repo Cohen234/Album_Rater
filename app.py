@@ -1440,6 +1440,8 @@ def search_albums():
             "album_cover_url": row.get("album_cover_url", ""),
         })
     return jsonify(albums)
+from urllib.parse import quote_plus
+
 @app.route('/compare')
 def compare_page():
     # Render your compare page template
@@ -1575,7 +1577,6 @@ def index():
     return render_template('index.html')
 @app.route('/ranking_success')
 def ranking_success():
-    # Get all the data passed from the redirect
     album_name = request.args.get('album_name')
     artist_name = request.args.get('artist_name')
     album_cover_url = request.args.get('album_cover_url')
@@ -1583,6 +1584,7 @@ def ranking_success():
     final_rank = int(request.args.get('final_rank', 1))
     total_albums = int(request.args.get('total_albums', 1))
     dominant_color = request.args.get('dominant_color', '#121212')
+    album_id = request.args.get('album_id')   # <-- ADD THIS LINE
 
     # Determine the color for the score text
     if final_score >= 7:
@@ -1592,7 +1594,6 @@ def ranking_success():
     else:
         score_color = 'red'
 
-    # The animation should start counting from the bottom rank
     start_rank = total_albums
 
     return render_template(
@@ -1605,7 +1606,8 @@ def ranking_success():
         total_albums=total_albums,
         dominant_color=dominant_color,
         score_color=score_color,
-        start_rank=start_rank
+        start_rank=start_rank,
+        album_id=album_id        # <-- AND THIS
     )
 @app.route('/search', methods=['POST'])
 def search_artist():
