@@ -513,13 +513,13 @@ def artist_page_v2(artist_name):
             top_song_name = top_song_row['Song_Name']
             top_song_score = top_song_row['Ranking']
             top_song_cover = top_song_row.get('album_cover_url', '')
-            top_song_link = url_for('view_album',
+            top_song_link = url_for('album_page',
                                     album_id=top_song_row.get('Spotify_Album_ID', '')) if top_song_row.get(
                 'Spotify_Album_ID') else "#"
             low_song_name = low_song_row['Song_Name']
             low_song_score = low_song_row['Ranking']
             low_song_cover = low_song_row.get('album_cover_url', '')
-            low_song_link = url_for('view_album',
+            low_song_link = url_for('album_page',
                                     album_id=low_song_row.get('Spotify_Album_ID', '')) if low_song_row.get(
                 'Spotify_Album_ID') else "#"
         else:
@@ -533,11 +533,11 @@ def artist_page_v2(artist_name):
             top_album_name = top_album_row['album_name']
             top_album_score = top_album_row['weighted_average_score']
             top_album_cover = top_album_row.get('album_cover_url', '')
-            top_album_link = url_for('view_album', album_id=top_album_row.get('album_id', '')) if top_album_row.get('album_id') else "#"
+            top_album_link = url_for('album_page', album_id=top_album_row.get('album_id', '')) if top_album_row.get('album_id') else "#"
             low_album_name = low_album_row['album_name']
             low_album_score = low_album_row['weighted_average_score']
             low_album_cover = low_album_row.get('album_cover_url', '')
-            low_album_link = url_for('view_album', album_id=low_album_row.get('album_id', '')) if low_album_row.get('album_id') else "#"
+            low_album_link = url_for('album_page', album_id=low_album_row.get('album_id', '')) if low_album_row.get('album_id') else "#"
         else:
             top_album_name = top_album_score = top_album_cover = top_album_link = ''
             low_album_name = low_album_score = low_album_cover = low_album_link = ''
