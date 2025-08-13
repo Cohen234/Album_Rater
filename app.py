@@ -1141,9 +1141,14 @@ def submit_rankings():
                 return jsonify({
                     'status': 'success',
                     'animation_data': {
-                        'album_name': album_name, 'artist_name': artist_name, 'album_cover_url': album_cover_url,
-                        'final_score': new_score, 'final_rank': new_placement,
-                        'total_albums': total_albums, 'dominant_color': dominant_color
+                        'album_name': album_name,
+                        'artist_name': artist_name,
+                        'album_cover_url': album_cover_url,
+                        'final_score': new_score,
+                        'final_rank': new_placement,
+                        'total_albums': total_albums,
+                        'dominant_color': dominant_color,
+                        'album_id': album_id  # <--- ADD THIS LINE
                     }
                 })
         
