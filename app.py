@@ -1198,8 +1198,8 @@ def get_album_data(artist_name, album_name, album_id):
         (main_df['Album Name'].str.strip().str.lower() == album_name_clean) &
         (main_df['Artist Name'].str.strip().str.lower() == artist_name_clean)
     ].copy()
-    actual_songs_df = album_songs_df[album_songs_df['Rank_Group'] != "I"].copy()
-    interlude_songs_df = album_songs_df[album_songs_df['Rank_Group'] == "I"].copy()
+    actual_songs_df = album_songs_df[album_songs_df['Rank Group'] != "I"].copy()
+    interlude_songs_df = album_songs_df[album_songs_df['Rank Group'] == "I"].copy()
     actual_songs_df['Ranking'] = pd.to_numeric(actual_songs_df['Ranking'], errors='coerce')
     actual_songs_df = actual_songs_df[actual_songs_df['Ranking'].notnull()]
 
@@ -1320,7 +1320,7 @@ def get_album_data(artist_name, album_name, album_id):
     all_songs_df['global_rank'] = all_songs_df.index + 1
     album_songs = []
     for (idx, row), start_sec in zip(album_songs_df.iterrows(), song_starts):
-        is_interlude = (row.get('Rank_Group', row.get('Rank Group', "")) == "I")
+        is_interlude = (row.get('Rank Group', row.get('Rank Group', "")) == "I")
         song_name = row['Song Name']
         track_number = int(row.get('Position In Group', idx + 1))
         # Find global rank for this song (and artist to be safe)
