@@ -1358,10 +1358,14 @@ def get_album_data(artist_name, album_name, album_id):
         (main_df['Artist Name'].str.strip().str.lower() == artist_name_clean)
     ]
     artist_songs_df['Ranking'] = pd.to_numeric(artist_songs_df['Ranking'], errors='coerce')
-    artist_avg_song_score = artist_songs_df['Ranking'].mean() if not artist_songs_df.empty else 0
+    artist_actual_songs_df = artist_songs_df[artist_songs_df['Rank Group'] != "I"].copy()
+    artist_actual_songs_df = artist_actual_songs_df[artist_actual_songs_df['Ranking'].notnull()]
+    artist_avg_song_score = artist_actual_songs_df['Ranking'].mean() if not artist_actual_songs_df.empty else 0
 
     main_df['Ranking'] = pd.to_numeric(main_df['Ranking'], errors='coerce')
-    global_avg_song_score = main_df['Ranking'].mean() if not main_df.empty else 0
+    global_actual_songs_df = main_df[main_df['Rank Group'] != "I"].copy()
+    global_actual_songs_df = global_actual_songs_df[global_actual_songs_df['Ranking'].notnull()]
+    global_avg_song_score = global_actual_songs_df['Ranking'].mean() if not global_actual_songs_df.empty else 0
 
     # Album ranking timeline
     rerank_history = album_row.get('rerank_history', '[]')
