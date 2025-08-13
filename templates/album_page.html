@@ -427,7 +427,7 @@
             datasets: [{
                 label: "Song Score by Album Runtime",
                 data: [
-                    {% for song in album_songs %}
+                    {% for song in album_songs if not song.is_interlude %}
                     { x: {{ song.start_min }}, y: {{ "%.2f"|format(song.score) }}, song: "{{ song.title|escape }}" }{% if not loop.last %},{% endif %}
                     {% endfor %}
                 ],
