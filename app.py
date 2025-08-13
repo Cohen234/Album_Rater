@@ -1124,6 +1124,16 @@ def submit_rankings():
             new_placement = int(new_placement_series[0] + 1) if not new_placement_series.empty else 1
             total_albums = len(averages_df_after)
             dominant_color = get_dominant_color(album_cover_url)
+            print("Returning animation_data:", {
+                'album_name': album_name,
+                'artist_name': artist_name,
+                'album_cover_url': album_cover_url,
+                'final_score': new_score,
+                'final_rank': new_placement,
+                'total_albums': total_albums,
+                'dominant_color': dominant_color,
+                'album_id': album_id
+            })
 
             # --- 6. Return the correct JSON for the frontend ---
             if is_rerank:

@@ -53,6 +53,7 @@
         .then(result => {
             if (result.status === "success") {
                 const data = result.animation_data;
+                console.log("animation_data:", data); // <--- this is correct!
                 // Build the URL including album_id!
                 const params = new URLSearchParams({
                     album_name: data.album_name,
