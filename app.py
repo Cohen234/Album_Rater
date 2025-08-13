@@ -1500,7 +1500,10 @@ def compare_albums():
                 songs_with_start.append(song_with_start)
                 cumulative_seconds += song_seconds
 
-            # Runtime graph points: one point per song (x=start_min, y=score)
+            # Filter out interludes for graph and stats
+            main_songs = [song for song in songs_with_start if not song.get('is_interlude', False)]
+
+            # Runtime graph points: only main songs
             points = [
                 {
                     "x": song['start_min'],
@@ -1508,15 +1511,15 @@ def compare_albums():
                     "song": song['title'],
                     "album": album_data['album_name'],
                 }
-                for song in songs_with_start
+                for song in main_songs
             ]
 
-            # Boxplot data: all song scores
-            song_scores = [song['score'] for song in songs_with_start]
+            # Boxplot data: only main songs
+            song_scores = [song['score'] for song in main_songs]
 
-            # Best/worst song
-            best_song = max(songs_with_start, key=lambda s: s['score']) if songs_with_start else None
-            worst_song = min(songs_with_start, key=lambda s: s['score']) if songs_with_start else None
+            # Best/worst song: only main songs
+            best_song = max(main_songs, key=lambda s: s['score']) if main_songs else None
+            worst_song = min(main_songs, key=lambda s: s['score']) if main_songs else None
 
             # Package everything for frontend
             all_data.append({
