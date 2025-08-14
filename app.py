@@ -1656,9 +1656,9 @@ def deduplicate_by_track_overlap(albums):
 
     albums_to_exclude = set()
     for album_id, tracks in album_tracks.items():
-        # For each track, count if it appears in two or more other albums
+        # For each track, count if it appears in at least 1 other album
         tracks_in_multiple_albums = sum(
-            1 for track in tracks if len(track_to_albums[track] - {album_id}) >= 2
+            1 for track in tracks if len(track_to_albums[track] - {album_id}) >= 1
         )
         percent_shared = tracks_in_multiple_albums / len(tracks) if tracks else 0
 
