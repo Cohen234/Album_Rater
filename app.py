@@ -1670,16 +1670,30 @@ def deduplicate_by_track_overlap(albums):
 
 def is_live_album(album_tracks):
     """
-    Returns True if 80% or more of the album's tracks have BOTH a venue and a year after a dash,
-    e.g., 'Jumpin' Jack Flash - MSG 1969' or 'Street Fighting Man - BBC 1971'.
+    Returns True if 80% or more of tracks have 'live' after a dash,
+    OR have a dash, then words (not 'remaster', 'mix', etc), then a year.
     """
+    # Terms that are *not* live descriptors
+    NON_LIVE_TERMS = {'remaster', 'remastered', 'mix', 'mono', 'edit', 'version'}
     live_count = 0
-    # This regex looks for: dash, some venue name, and a year (4 digits)
-    pattern = re.compile(r'-\s*[\w\s\.\'&]+?\s+\d{4}$', re.IGNORECASE)
     for t in album_tracks:
-        name = t['name']
-        if pattern.search(name):
-            live_count += 1
+        name = t['name'].lower()
+        # Check for dash
+        if '-' in name:
+            # Split after first dash
+            after_dash = name.split('-', 1)[1].strip()
+            # If "live" is in the first few words after the dash, call it live
+            if re.match(r'(live(\s|$))', after_dash):
+                live_count += 1
+                continue
+            # Otherwise, if the first word is not in NON_LIVE_TERMS and there's a year
+            words = after_dash.split()
+            if words:
+                first_term = words[0]
+                # Look for a 4-digit year at end
+                if (first_term not in NON_LIVE_TERMS and
+                    re.search(r'\b\d{4}\b', after_dash)):
+                    live_count += 1
     return live_count >= 0.8 * len(album_tracks) if album_tracks else False
 @app.route("/load_albums_by_artist", methods=["GET", "POST"])
 def load_albums_by_artist_route():
