@@ -1700,7 +1700,10 @@ def load_albums_by_artist_route():
             album_id_spotify = album_data.get("id")
 
             # Create a "base name" by removing phrases in parentheses like (Deluxe), (Remastered), etc.
-            base_name = re.sub(r'\s*\(.*\)\s*$', '', full_name).strip()
+            base_name = full_name
+            base_name = re.sub(r'[\s\-]*(\[[^\]]*\]|\([^\)]*\))[\s\-]*$', '', base_name).strip()
+            while re.search(r'(\[[^\]]*\]|\([^\)]*\))[\s\-]*$', base_name):
+                base_name = re.sub(r'[\s\-]*(\[[^\]]*\]|\([^\)]*\))[\s\-]*$', '', base_name).strip()
 
             # Get stats for this specific edition
             metadata = album_metadata.get(album_id_spotify, {})
