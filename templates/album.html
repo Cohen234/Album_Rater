@@ -553,7 +553,13 @@
                         {% endfor %}
                     {% else %}
                         {% for song in album.songs %}
-                            {% if not song.get('already_ranked') %}
+                            {% if song.already_ranked %}
+                                <li class="song-item ranked" style="opacity:0.5; filter:blur(1px);" title="Already ranked">
+                                    <span class="song-name">{{ song.song_name }}</span>
+                                    <span class="previous-rank-display" title="Previous Score">{{ song.existing_score or "Ranked" }}</span>
+                                    <span class="checkmark">✓</span>
+                                </li>
+                            {% else %}
                                 <li class="song-item"
                                     draggable="true"
                                     data-song-id="{{ song.song_id }}"

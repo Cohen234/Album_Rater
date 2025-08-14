@@ -1635,13 +1635,16 @@ def search_artist():
         flash("Please enter an artist name.")
         return redirect(url_for('index'))
 def deduplicate_by_track_overlap(albums):
-    """
-    Removes likely compilations/collections by track overlap.
-    If 80% or more of an album's tracks appear in at least 2 other distinct albums, mark as compilation.
-    """
-    # Build a mapping of album_id to set of track names (lowercased)
+    import re
+
+    def normalize_track_name(name):
+        # Remove parentheticals and dashes, lowercase
+        name = re.sub(r'\(.*?\)', '', name)
+        name = re.sub(r'-.*$', '', name)
+        return name.strip().lower()
+
     album_tracks = {
-        a['id']: set(t['name'].strip().lower() for t in a['tracks'])
+        a['id']: set(normalize_track_name(t['name']) for t in a['tracks'])
         for a in albums
     }
 
@@ -1666,8 +1669,16 @@ def deduplicate_by_track_overlap(albums):
     return [a for a in albums if a['id'] not in albums_to_exclude]
 
 def is_live_album(album_tracks):
-    # If 80% or more of tracks have 'live' in the name, call it a live album
-    live_count = sum(1 for t in album_tracks if "live" in t['name'].lower())
+    # Count tracks that have 'live', a year, or venue-like strings after a dash
+    live_count = 0
+    for t in album_tracks:
+        name = t['name'].lower()
+        # If 'live' in name OR dash followed by a year or venue
+        if ('live' in name
+            or re.search(r'-\s*\d{4}', name)  # dash and year
+            or re.search(r'-\s*[a-z ]{2,}', name)  # dash and venue/description
+           ):
+            live_count += 1
     return live_count >= 0.8 * len(album_tracks) if album_tracks else False
 @app.route("/load_albums_by_artist", methods=["GET", "POST"])
 def load_albums_by_artist_route():
@@ -1888,6 +1899,24 @@ def view_album():
             except Exception as e:
                 print(f"WARNING: Error parsing row for JS: {row.to_dict()} - {e}")
 
+        def normalize_song_name(name):
+            # Remove parentheticals and dashes, lowercase
+            name = re.sub(r'\(.*?\)', '', name)
+            name = re.sub(r'-.*$', '', name)
+            return name.strip().lower()
+
+        ranked_song_name_artist = set()
+        ranked_song_scores = {}  # <--- Add this
+
+        if not all_final_ranks_df.empty:
+            for _, row in all_final_ranks_df.iterrows():
+                song_name = str(row.get('Song Name', '')).strip()
+                artist_name = str(row.get('Artist Name', '')).strip()
+                if song_name and artist_name:
+                    normalized = (normalize_song_name(song_name), artist_name.lower())
+                    ranked_song_name_artist.add(normalized)
+                    ranked_song_scores[normalized] = row.get('Ranking')  # <--- Add this for score lookup
+
         # 5. Prepare the left panel (songs for the current album)
         songs_for_left_panel = []
         if is_rerank_mode:
@@ -1945,9 +1974,16 @@ def view_album():
 
             for song in album_data['songs']:
                 song_id = str(song['song_id'])
+                song_name = song.get('song_name', '').strip()
+                artist_name = album_data.get('artist_name', '').strip()
+                norm = (normalize_song_name(song_name), artist_name.lower())
+                already_ranked = norm in ranked_song_name_artist
+                existing_score = ranked_song_scores.get(norm, '')
+
                 songs_for_left_panel.append({
                     **song,
-                    'already_ranked': song_id in globally_ranked_ids,
+                    'already_ranked': already_ranked,
+                    'existing_score': existing_score,
                     'prelim_rank': existing_prelim_ranks.get(song_id, '')
                 })
 
