@@ -5,6 +5,7 @@
     <title>Compare Albums</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@4.0.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-box-and-violin-plot@3.4.0/build/Chart.BoxPlot.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -215,6 +216,12 @@
                 <div class="chart-container">
                     <canvas id="compare-runtime-chart"></canvas>
                 </div>
+                <div class="chart-card">
+                    <h3>Album Song Score Boxplot</h3>
+                    <div class="boxplot-container">
+                        <canvas id="compare-boxplot"></canvas>
+                    </div>
+                </div>
             </div>
         </div>
         <div id="loading" class="loading-indicator" style="display:none;">Loading...</div>
@@ -294,6 +301,7 @@
             }
             renderCompareStats(data.albums);
             renderCompareRuntimeChart(data.albums);
+            renderCompareBoxplot(data.albums);
 
             document.getElementById("comparison-results").style.display = "block";
             document.getElementById("loading").style.display = "none";
@@ -322,13 +330,13 @@
             </tr>`;
         }
     }
-    console.log("Album points for chart", albums.map(a => a.points));
+
     function renderCompareRuntimeChart(albums) {
         const annotations = {};
 
-        // Process datasets and add custom point styles
+        // Prepare datasets for the runtime chart
         const datasets = albums.map(album => {
-            // Find best/worst song indices
+            // Find best/worst song indices for special styling
             const bestIdx = album.points.findIndex(
                 p => p.song === album.best_song.title && Math.abs(p.y - album.best_song.score) < 0.01
             );
@@ -336,19 +344,10 @@
                 p => p.song === album.worst_song.title && Math.abs(p.y - album.worst_song.score) < 0.01
             );
 
-            // For song length bars: push a segment line for each song from start to end
-            const segments = album.points.map((point, i) => {
-                let nextStart = (album.points[i + 1] && album.points[i + 1].x) || album.album_length_sec / 60;
-                return {
-                    x: [point.x, nextStart],
-                    y: point.y,
-                };
-            });
-
-            // Custom point styles
+            // Point styles and radii
             const pointStyles = album.points.map((p, i) => {
                 if (i === bestIdx) return 'star';
-                if (i === worstIdx) return 'rectRot'; // diamond
+                if (i === worstIdx) return 'rectRot';
                 return 'circle';
             });
             const pointRadii = album.points.map((p, i) => {
@@ -356,7 +355,7 @@
                 return 7;
             });
 
-            // Add album end annotation (vertical line)
+            // Add album end annotation
             annotations[`${album.name}-end`] = {
                 type: 'line',
                 xMin: album.album_length_sec / 60,
@@ -372,7 +371,7 @@
                     font: { weight: 'bold', size: 12 }
                 }
             };
-            // Add fade box after end
+            // Add fade box after album end
             annotations[`${album.name}-fade`] = {
                 type: 'box',
                 xMin: album.album_length_sec / 60,
@@ -406,15 +405,13 @@
                 responsive: true,
                 plugins: {
                     legend: { display: true },
-                    annotation: {
-                        annotations: annotations
-                    },
+                    annotation: { annotations: annotations },
                     tooltip: {
                         callbacks: {
                             title: function(context) {
                                 let song = context[0].raw.song;
                                 let mins = Math.floor(context[0].raw.x);
-                                let secs = Math.round((context[0].raw.x-mins)*60).toString().padStart(2,"0");
+                                let secs = Math.round((context[0].raw.x - mins) * 60).toString().padStart(2, "0");
                                 return song + " (" + mins + ":" + secs + ")";
                             },
                             label: function(context) {
@@ -433,7 +430,7 @@
                             color: "#b3b3b3",
                             callback: function(val) {
                                 let mins = Math.floor(val);
-                                let secs = Math.round((val-mins)*60).toString().padStart(2,"0");
+                                let secs = Math.round((val - mins) * 60).toString().padStart(2, "0");
                                 return mins + ":" + secs;
                             }
                         },
@@ -450,6 +447,44 @@
                 interaction: {
                     mode: 'nearest',
                     intersect: false
+                }
+            }
+        });
+    }
+
+    function renderCompareBoxplot(albums) {
+        const labels = albums.map(album => album.name);
+        const datasets = [{
+            label: 'Song Score Distribution',
+            backgroundColor: albums.map(a => a.color),
+            borderColor: albums.map(a => a.color),
+            borderWidth: 2,
+            outlierColor: '#e74c3c',
+            itemRadius: 2,
+            data: albums.map(album => album.song_scores)
+        }];
+
+        if (window.compareBoxplotChart) window.compareBoxplotChart.destroy();
+        window.compareBoxplotChart = new Chart(document.getElementById("compare-boxplot").getContext("2d"), {
+            type: 'boxplot',
+            data: { labels, datasets },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        min: 0,
+                        max: 10,
+                        title: { display: true, text: "Song Score" },
+                        ticks: { color: "#b3b3b3" },
+                        grid: { color: "#282828" }
+                    },
+                    x: {
+                        ticks: { color: "#b3b3b3" },
+                        grid: { color: "#282828" }
+                    }
                 }
             }
         });
