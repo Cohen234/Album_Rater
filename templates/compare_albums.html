@@ -5,7 +5,6 @@
     <title>Compare Albums</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@4.0.0"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-box-and-violin-plot@3.4.0/build/Chart.BoxPlot.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -179,7 +178,6 @@
 </head>
 <body>
     <h1>Compare Albums</h1>
-    <canvas id="myBoxplot" width="600" height="400"></canvas>
     <!-- Album Selection UI -->
     <div class="compare-selector">
         <div class="album-search-bar">
@@ -217,12 +215,7 @@
                 <div class="chart-container">
                     <canvas id="compare-runtime-chart"></canvas>
                 </div>
-                <div class="chart-card">
-                    <h3>Album Song Score Boxplot</h3>
-                    <div class="boxplot-container">
-                        <canvas id="compare-boxplot"></canvas>
-                    </div>
-                </div>
+
             </div>
         </div>
         <div id="loading" class="loading-indicator" style="display:none;">Loading...</div>
@@ -302,7 +295,7 @@
             }
             renderCompareStats(data.albums);
             renderCompareRuntimeChart(data.albums);
-            renderCompareBoxplot(data.albums);
+
 
             document.getElementById("comparison-results").style.display = "block";
             document.getElementById("loading").style.display = "none";
@@ -453,56 +446,6 @@
         });
     }
 
-    function renderCompareBoxplot(albums) {
-        const labels = albums.map(album => album.name);
-        const datasets = [{
-            label: 'Song Score Distribution',
-            backgroundColor: albums.map(a => a.color),
-            borderColor: albums.map(a => a.color),
-            borderWidth: 2,
-            outlierColor: '#e74c3c',
-            itemRadius: 2,
-            data: albums.map(album => album.song_scores)
-        }];
-
-        if (window.compareBoxplotChart) window.compareBoxplotChart.destroy();
-        window.compareBoxplotChart = new Chart(document.getElementById("compare-boxplot").getContext("2d"), {
-            type: 'boxplot',
-            data: { labels, datasets },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: { display: false }
-                },
-                scales: {
-                    y: {
-                        min: 0,
-                        max: 10,
-                        title: { display: true, text: "Song Score" },
-                        ticks: { color: "#b3b3b3" },
-                        grid: { color: "#282828" }
-                    },
-                    x: {
-                        ticks: { color: "#b3b3b3" },
-                        grid: { color: "#282828" }
-                    }
-                }
-            }
-        });
-    }
-    new Chart(document.getElementById('myBoxplot').getContext('2d'), {
-    type: 'boxplot',
-    data: {
-      labels: ['A', 'B'],
-      datasets: [{
-        label: 'Demo',
-        data: [
-          [1,2,3,5,7,9,10],
-          [2,4,6,8,10]
-        ]
-      }]
-    }
-  });
 
     </script>
 </body>
