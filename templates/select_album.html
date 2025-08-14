@@ -542,7 +542,6 @@
         }
 
         function populateAndShowModal(editions) {
-            // FIX #2: Use the correct variable name 'modalEditionList'
             modalEditionList.innerHTML = '';
             editions.forEach(edition => {
                 const button = document.createElement('button');
@@ -551,8 +550,11 @@
                     <img src="${edition.image}" alt="${edition.full_name}">
                     <p>${edition.full_name}</p>
                 `;
-                button.addEventListener('click', () => submitFormWithEdition(edition));
-                // FIX #2: Use the correct variable name 'modalEditionList'
+                // Add the debug log here:
+                button.addEventListener('click', () => {
+                    console.log('SUBMITTING THIS EDITION:', edition);
+                    submitFormWithEdition(edition);
+                });
                 modalEditionList.appendChild(button);
             });
             editionModal.style.display = 'flex';

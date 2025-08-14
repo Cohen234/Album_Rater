@@ -1921,6 +1921,7 @@ def view_album():
 
         album_data_for_template = {**album_data, 'album_id': album_id, 'songs': songs_for_left_panel,
                                    'is_rerank_mode': is_rerank_mode}
+        print("Album ID received for ranking:", album_id)
         return render_template('album.html', album=album_data_for_template, rank_groups=rank_groups_for_js)
 
     except Exception as e:
