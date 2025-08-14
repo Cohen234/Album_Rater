@@ -1649,46 +1649,25 @@ def deduplicate_by_track_overlap(albums):
 
     # Keywords for exclusion
     EXCLUDE_KEYWORDS = [
-        'anthology', 'alternate', 'deluxe', 'bonus', 'edition', 'remix', 'karaoke',
+        'anthology', 'alternate', 'bonus', 'remix', 'karaoke',
         'commentary', 'version', 'expanded', 'world', 'instrumental', 'voice memo',
-        'demo', 'live', 'soundtrack', 'tour', 'surprise', 'original motion picture',
-        'motion picture', 'score', 'session'
+        'demo', 'soundtrack', 'tour', 'surprise', 'original motion picture',
+        'motion picture', 'score', 'session', 'introduction', 'bbc', 'compilation'
     ]
 
     def should_exclude_by_title(title):
         title = title.lower()
         if any(kw in title for kw in EXCLUDE_KEYWORDS):
             return True
-        if re.search(r'\b(live|tour|soundtrack|session|karaoke|score|surprise)\b', title):
+        if re.search(r'\b(live|tour|soundtrack|session|karaoke|score|surprise|compilation)\b', title):
             return True
         return False
 
-    def is_live_album(album_tracks):
-        NON_LIVE_TERMS = {'remaster', 'remastered', 'mix', 'mono', 'edit', 'version'}
-        live_count = 0
-        for t in album_tracks:
-            name = t['name'].lower()
-            if '-' in name:
-                after_dash = name.split('-', 1)[1].strip()
-                if re.match(r'(live(\s|$))', after_dash):
-                    live_count += 1
-                    continue
-                words = after_dash.split()
-                if words:
-                    first_term = words[0]
-                    if (first_term not in NON_LIVE_TERMS and
-                        re.search(r'\b\d{4}\b', after_dash)):
-                        live_count += 1
-        return live_count >= 0.8 * len(album_tracks) if album_tracks else False
-
-    # Step 1: Pre-filter by title and live status
+    # Step 1: Pre-filter by title only (live album filtering should be done outside)
     filtered_albums = []
     for album in albums:
         title = album.get('name', '')
-        tracks = album.get('tracks', [])
         if should_exclude_by_title(title):
-            continue
-        if is_live_album(tracks):
             continue
         filtered_albums.append(album)
     albums = filtered_albums
@@ -1721,8 +1700,8 @@ def deduplicate_by_track_overlap(albums):
         if percent_first < 0.3:
             albums_to_exclude.add(album_id)
 
-    # Step 5: For each normalized album title, select canonical album:
-    # Prefer original (no "remaster", "deluxe", etc.), then earliest by date.
+    # Step 5: For each normalized album title, select canonical albums:
+    # Keep earliest 'original', remaster, and deluxe if present
     albums_by_title = defaultdict(list)
     for a in albums:
         norm_title = normalize_album_title(a.get('name', ''))
@@ -1730,49 +1709,50 @@ def deduplicate_by_track_overlap(albums):
 
     canonical_album_ids = set()
     for norm_title, title_albums in albums_by_title.items():
-        # Sort: originals first, then by release_date
-        def album_sort_key(album):
-            title = album.get('name', '').lower()
-            penalty = 0
-            # Penalize remaster/deluxe/edition in title, so originals come first
-            if any(kw in title for kw in ['remaster', 'deluxe', 'edition']):
-                penalty += 1000
-            # Use release date for tie-breaker (earlier is better)
-            date = album.get('release_date', '9999-12-31')
-            if len(date) == 4:
-                date = date + '-01-01'
-            return (penalty, date)
-        canonical_album = min(title_albums, key=album_sort_key)
-        canonical_album_ids.add(canonical_album['id'])
+        groups = {'original': [], 'remaster': [], 'deluxe': []}
+        for album in title_albums:
+            name = album.get('name', '').lower()
+            if 'deluxe' in name or 'edition' in name:
+                groups['deluxe'].append(album)
+            elif 'remaster' in name:
+                groups['remaster'].append(album)
+            else:
+                groups['original'].append(album)
+        for group in groups.values():
+            if group:
+                def get_date(album):
+                    date = album.get('release_date', '9999-12-31')
+                    if len(date) == 4:
+                        date = date + '-01-01'
+                    return date
+                canonical_album = min(group, key=get_date)
+                canonical_album_ids.add(canonical_album['id'])
+        if not canonical_album_ids & set(a['id'] for a in title_albums):
+            def get_date(album):
+                date = album.get('release_date', '9999-12-31')
+                if len(date) == 4:
+                    date = date + '-01-01'
+                return date
+            canonical_album = min(title_albums, key=get_date)
+            canonical_album_ids.add(canonical_album['id'])
 
-    # Step 6: Return only canonical or non-compilation albums
-    return [
-        a for a in albums
-        if (a['id'] not in albums_to_exclude) or (a['id'] in canonical_album_ids)
-    ]
+    # Step 6: Return all canonical albums
+    return [a for a in albums if a['id'] in canonical_album_ids]
+
+
 def is_live_album(album_tracks):
-    """
-    Returns True if 80% or more of tracks have 'live' after a dash,
-    OR have a dash, then words (not 'remaster', 'mix', etc), then a year.
-    """
-    # Terms that are *not* live descriptors
     NON_LIVE_TERMS = {'remaster', 'remastered', 'mix', 'mono', 'edit', 'version'}
     live_count = 0
     for t in album_tracks:
         name = t['name'].lower()
-        # Check for dash
         if '-' in name:
-            # Split after first dash
             after_dash = name.split('-', 1)[1].strip()
-            # If "live" is in the first few words after the dash, call it live
             if re.match(r'(live(\s|$))', after_dash):
                 live_count += 1
                 continue
-            # Otherwise, if the first word is not in NON_LIVE_TERMS and there's a year
             words = after_dash.split()
             if words:
                 first_term = words[0]
-                # Look for a 4-digit year at end
                 if (first_term not in NON_LIVE_TERMS and
                     re.search(r'\b\d{4}\b', after_dash)):
                     live_count += 1
