@@ -1636,6 +1636,7 @@ def search_artist():
         return redirect(url_for('index'))
 def deduplicate_by_track_overlap(albums):
     import re
+    from collections import defaultdict
 
     def normalize_track_name(name):
         # Remove parentheticals and dashes, lowercase
@@ -1643,31 +1644,38 @@ def deduplicate_by_track_overlap(albums):
         name = re.sub(r'-.*$', '', name)
         return name.strip().lower()
 
-    album_tracks = {
-        a['id']: set(normalize_track_name(t['name']) for t in a['tracks'])
-        for a in albums
-    }
+    # Build map: track_name -> list of (release_date, album_id)
+    track_appearances = defaultdict(list)
+    for a in albums:
+        release_date = a.get('release_date', '1900-01-01')
+        # Use only year if that's all you have
+        if len(release_date) == 4:
+            release_date = release_date + '-01-01'
+        for t in a['tracks']:
+            norm = normalize_track_name(t['name'])
+            track_appearances[norm].append((release_date, a['id']))
 
-    # Build a mapping of track name to set of album_ids containing it
-    track_to_albums = {}
-    for album_id, tracks in album_tracks.items():
-        for track in tracks:
-            track_to_albums.setdefault(track, set()).add(album_id)
+    # For each track, find the album with the earliest release date
+    track_to_earliest_album = {}
+    for track, appearances in track_appearances.items():
+        earliest_album = min(appearances, key=lambda x: x[0])[1]
+        track_to_earliest_album[track] = earliest_album
 
+    # For each album, count how many of its tracks are their first appearance
     albums_to_exclude = set()
-    for album_id, tracks in album_tracks.items():
-        # For each track, count if it appears in at least 1 other album
-        tracks_in_multiple_albums = sum(
-            1 for track in tracks if len(track_to_albums[track] - {album_id}) >= 1
-        )
-        percent_shared = tracks_in_multiple_albums / len(tracks) if tracks else 0
-
-        if percent_shared >= 0.8:
+    for a in albums:
+        album_id = a['id']
+        tracks = [normalize_track_name(t['name']) for t in a['tracks']]
+        if not tracks:
+            continue
+        # Count tracks for which this album is the earliest
+        num_first_appearance = sum(1 for t in tracks if track_to_earliest_album[t] == album_id)
+        percent_first = num_first_appearance / len(tracks)
+        # Exclude if less than 30% of tracks are original to this album
+        if percent_first < 0.3:
             albums_to_exclude.add(album_id)
 
-    # Return list of albums not marked as compilations
     return [a for a in albums if a['id'] not in albums_to_exclude]
-
 def is_live_album(album_tracks):
     """
     Returns True if 80% or more of tracks have 'live' after a dash,
