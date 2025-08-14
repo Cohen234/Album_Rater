@@ -1644,25 +1644,54 @@ def deduplicate_by_track_overlap(albums):
         return name.strip().lower()
 
     def normalize_album_title(title):
-        # Remove parentheticals for matching
         return re.sub(r'\(.*?\)', '', title).strip().lower()
 
-    # Keywords to filter out
+    # Add more keywords for exclusion
     EXCLUDE_KEYWORDS = [
         'anthology', 'alternate', 'deluxe', 'bonus', 'edition', 'remix', 'karaoke',
         'commentary', 'version', 'expanded', 'world', 'instrumental', 'voice memo',
-        'demo', 'live'
+        'demo', 'live', 'soundtrack', 'tour', 'surprise', 'original motion picture', 'motion picture', 'score', 'session'
     ]
 
-    # Filter out albums with exclude keywords in title
+    # Helper: exclude album by title pattern
+    def should_exclude_by_title(title):
+        title = title.lower()
+        if any(kw in title for kw in EXCLUDE_KEYWORDS):
+            return True
+        # Pattern match for "live", "tour", "soundtrack", etc. as whole words
+        if re.search(r'\b(live|tour|soundtrack|session|karaoke|score|surprise)\b', title):
+            return True
+        return False
+
+    # Helper: is the album a live album by tracklist?
+    def is_live_album(album_tracks):
+        NON_LIVE_TERMS = {'remaster', 'remastered', 'mix', 'mono', 'edit', 'version'}
+        live_count = 0
+        for t in album_tracks:
+            name = t['name'].lower()
+            if '-' in name:
+                after_dash = name.split('-', 1)[1].strip()
+                if re.match(r'(live(\s|$))', after_dash):
+                    live_count += 1
+                    continue
+                words = after_dash.split()
+                if words:
+                    first_term = words[0]
+                    if (first_term not in NON_LIVE_TERMS and
+                        re.search(r'\b\d{4}\b', after_dash)):
+                        live_count += 1
+        return live_count >= 0.8 * len(album_tracks) if album_tracks else False
+
     filtered_albums = []
     for album in albums:
-        title = album.get('name', '').lower()
-        # Exclude weird editions
-        if any(kw in title for kw in EXCLUDE_KEYWORDS):
+        title = album.get('name', '')
+        tracks = album.get('tracks', [])
+        # Exclude by title or if album is live
+        if should_exclude_by_title(title):
+            continue
+        if is_live_album(tracks):
             continue
         filtered_albums.append(album)
-
     albums = filtered_albums
 
     # Build map: track_name -> list of (release_date, album_id)
@@ -1690,7 +1719,6 @@ def deduplicate_by_track_overlap(albums):
             continue
         num_first_appearance = sum(1 for t in tracks if track_to_earliest_album[t] == album_id)
         percent_first = num_first_appearance / len(tracks)
-        # Exclude if less than 30% of tracks are original to this album
         if percent_first < 0.3:
             albums_to_exclude.add(album_id)
 
@@ -1706,9 +1734,6 @@ def deduplicate_by_track_overlap(albums):
 
     albums_to_keep = set(id for (date, id) in title_to_earliest_album.values())
 
-    # Return list of albums:
-    # - not marked as compilation
-    # - or is the earliest with its title
     return [a for a in albums if (a['id'] not in albums_to_exclude) or (a['id'] in albums_to_keep)]
 def is_live_album(album_tracks):
     """
