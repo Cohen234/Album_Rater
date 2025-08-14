@@ -1634,8 +1634,41 @@ def search_artist():
     else:
         flash("Please enter an artist name.")
         return redirect(url_for('index'))
+def deduplicate_by_track_overlap(albums):
+    """
+    Removes likely compilations/collections by track overlap.
+    If 80% or more of an album's tracks appear in at least 2 other distinct albums, mark as compilation.
+    """
+    # Build a mapping of album_id to set of track names (lowercased)
+    album_tracks = {
+        a['id']: set(t['name'].strip().lower() for t in a['tracks'])
+        for a in albums
+    }
 
+    # Build a mapping of track name to set of album_ids containing it
+    track_to_albums = {}
+    for album_id, tracks in album_tracks.items():
+        for track in tracks:
+            track_to_albums.setdefault(track, set()).add(album_id)
 
+    albums_to_exclude = set()
+    for album_id, tracks in album_tracks.items():
+        # For each track, count if it appears in two or more other albums
+        tracks_in_multiple_albums = sum(
+            1 for track in tracks if len(track_to_albums[track] - {album_id}) >= 2
+        )
+        percent_shared = tracks_in_multiple_albums / len(tracks) if tracks else 0
+
+        if percent_shared >= 0.8:
+            albums_to_exclude.add(album_id)
+
+    # Return list of albums not marked as compilations
+    return [a for a in albums if a['id'] not in albums_to_exclude]
+
+def is_live_album(album_tracks):
+    # If 80% or more of tracks have 'live' in the name, call it a live album
+    live_count = sum(1 for t in album_tracks if "live" in t['name'].lower())
+    return live_count >= 0.8 * len(album_tracks) if album_tracks else False
 @app.route("/load_albums_by_artist", methods=["GET", "POST"])
 def load_albums_by_artist_route():
     artist_name = request.form.get("artist_name") or request.args.get("artist_name")
@@ -1646,24 +1679,32 @@ def load_albums_by_artist_route():
 
     logging.info(f"\n--- LOADING ALBUM LIST FOR ARTIST: {artist_name} ---")
     try:
-        albums_from_spotify = get_albums_by_artist(artist_name) # Renamed variable for clarity
+        albums_from_spotify = get_albums_by_artist(artist_name)
 
-        # --- DEBUG: Raw albums from Spotify API ---
-        logging.debug("Raw albums from Spotify API:")  # Changed print to logging.debug
-        if albums_from_spotify:
-            for i, album_data in enumerate(albums_from_spotify[:3]):
-                logging.debug(f"  Album {i + 1}: {album_data}")
-        else:
-            logging.debug("  No albums returned from Spotify API.")
-        # --- END DEBUG ---
+        # Fetch tracks and filter out live albums
+        filtered_albums = []
+        for album_data in albums_from_spotify:
+            full_name = album_data.get("name")
+            album_id_spotify = album_data.get("id")
+            try:
+                tracks = sp.album_tracks(album_id_spotify)['items']
+                if is_live_album(tracks):
+                    continue  # Skip "live" albums
+                album_data['tracks'] = tracks
+                filtered_albums.append(album_data)
+            except Exception as e:
+                logging.warning(f"Could not fetch tracks for {full_name}: {e}")
+
+        # Remove compilations by track overlap
+        studio_albums = deduplicate_by_track_overlap(filtered_albums)
 
         try:
             album_averages_df = get_album_averages_df(client, SPREADSHEET_ID, "Album Averages")
-
         except Exception as e:
             logging.error(f"Error loading Album Averages DataFrame: {e}", exc_info=True)
             flash(f"Error loading album averages data: {e}", "error")
             return redirect(url_for('index'))
+
         prelim_ranked_albums_ids = set()
         try:
             prelim_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(PRELIM_SHEET_NAME)
@@ -1682,20 +1723,17 @@ def load_albums_by_artist_route():
         except Exception as e:
             logging.error(f"Error loading preliminary ranks: {e}", exc_info=True)
 
-
         # Create a dictionary for quick lookup of averages/times ranked
         album_metadata = {}
         if not album_averages_df.empty:
             for _, row in album_averages_df.iterrows():
                 album_id_from_sheet = str(row.get("album_id", "")).strip()
                 if album_id_from_sheet:
-                    # THE FIX: Use .to_dict() to include ALL columns from the sheet,
-                    # including 'rerank_history' and 'original_weighted_score'.
                     album_metadata[album_id_from_sheet] = row.to_dict()
 
         grouped_albums = {}
         today = datetime.now()
-        for album_data in albums_from_spotify:
+        for album_data in studio_albums:  # <--- USE studio_albums HERE!
             full_name = album_data.get("name")
             album_id_spotify = album_data.get("id")
 
@@ -1720,11 +1758,9 @@ def load_albums_by_artist_route():
                 elif (next_rerank_date - today).days <= 5:
                     rerank_status = 'due'
 
-            # --- NEW: Streak Logic ---
             streak_status = 'none'
             if metadata:
                 try:
-                    # THE FIX: Use the new 'score_history' column
                     history = json.loads(metadata.get('score_history', '[]'))
                     streak_status = calculate_streak(history)
                 except (json.JSONDecodeError, TypeError, ValueError) as e:
@@ -1740,19 +1776,13 @@ def load_albums_by_artist_route():
                 "times_ranked": metadata.get("times_ranked"),
                 "last_ranked_date": metadata.get("last_ranked_date"),
                 "has_prelim_ranks": has_prelim_ranks,
-                "rerank_status": rerank_status,  # <-- New flag for date icon
+                "rerank_status": rerank_status,
                 "streak_status": streak_status
             }
 
-            # If we haven't seen this base name before, create a new list for it
             if base_name not in grouped_albums:
                 grouped_albums[base_name] = []
-
-                # Add the current edition to the list for its base name
             grouped_albums[base_name].append(edition_data)
-
-
-
 
         return render_template("select_album.html", artist_name=artist_name, grouped_albums=grouped_albums)
 
@@ -1760,6 +1790,7 @@ def load_albums_by_artist_route():
         logging.error(f"Error in load_albums_by_artist_route for {artist_name}: {e}", exc_info=True)
         flash("Could not load album list for that artist.", "error")
         return redirect(url_for('index'))
+
 @app.route("/ranking_page")
 def ranking_page():
     sheet_rows = load_google_sheet_data()
