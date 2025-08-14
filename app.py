@@ -1669,15 +1669,16 @@ def deduplicate_by_track_overlap(albums):
     return [a for a in albums if a['id'] not in albums_to_exclude]
 
 def is_live_album(album_tracks):
-    # Count tracks that have 'live', a year, or venue-like strings after a dash
+    """
+    Returns True if 80% or more of the album's tracks have BOTH a venue and a year after a dash,
+    e.g., 'Jumpin' Jack Flash - MSG 1969' or 'Street Fighting Man - BBC 1971'.
+    """
     live_count = 0
+    # This regex looks for: dash, some venue name, and a year (4 digits)
+    pattern = re.compile(r'-\s*[\w\s\.\'&]+?\s+\d{4}$', re.IGNORECASE)
     for t in album_tracks:
-        name = t['name'].lower()
-        # If 'live' in name OR dash followed by a year or venue
-        if ('live' in name
-            or re.search(r'-\s*\d{4}', name)  # dash and year
-            or re.search(r'-\s*[a-z ]{2,}', name)  # dash and venue/description
-           ):
+        name = t['name']
+        if pattern.search(name):
             live_count += 1
     return live_count >= 0.8 * len(album_tracks) if album_tracks else False
 @app.route("/load_albums_by_artist", methods=["GET", "POST"])
