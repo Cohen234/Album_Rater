@@ -6,6 +6,10 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@4.0.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-box-and-violin-plot@3.4.0/build/Chart.BoxPlot.js"></script>
+    <script>
+        // Fix: Register boxplot controllers for Chart.js v3+
+        Chart.register(...Object.values(window['chartjs-chart-box-and-violin-plot']));
+    </script>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
