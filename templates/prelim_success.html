@@ -38,7 +38,7 @@
         <div class="album-art"><img src="{{ album_cover_url }}" alt="Album Art"></div>
         <h1 class="album-title">{{ album_name }}</h1>
         <h2 class="subtitle">...to be continued...</h2>
-        <a href="{{ url_for('artist_page', artist_name=artist_name) }}" class="action-btn">Return to Artist Page</a>
+        <a href="{{ url_for('artist_page_v2', artist_name=artist_name) }}" class="action-btn">Return to Artist Page</a>
     </div>
     <script>
         document.body.style.background = `radial-gradient(circle at top, {{ dominant_color|safe }} 0%, #000000 80%)`;
