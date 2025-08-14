@@ -6,10 +6,6 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@4.0.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-box-and-violin-plot@3.4.0/build/Chart.BoxPlot.js"></script>
-    <script>
-        // Correct registration for the UMD build:
-        Chart.register(BoxPlotChart);
-    </script>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -183,6 +179,7 @@
 </head>
 <body>
     <h1>Compare Albums</h1>
+    <canvas id="myBoxplot" width="600" height="400"></canvas>
     <!-- Album Selection UI -->
     <div class="compare-selector">
         <div class="album-search-bar">
@@ -493,6 +490,20 @@
             }
         });
     }
+    new Chart(document.getElementById('myBoxplot').getContext('2d'), {
+    type: 'boxplot',
+    data: {
+      labels: ['A', 'B'],
+      datasets: [{
+        label: 'Demo',
+        data: [
+          [1,2,3,5,7,9,10],
+          [2,4,6,8,10]
+        ]
+      }]
+    }
+  });
+
     </script>
 </body>
 </html>
