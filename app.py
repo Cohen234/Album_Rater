@@ -1644,26 +1644,25 @@ def deduplicate_by_track_overlap(albums):
         return name.strip().lower()
 
     def normalize_album_title(title):
+        # Normalize for grouping (strip parentheticals and whitespace)
         return re.sub(r'\(.*?\)', '', title).strip().lower()
 
-    # Add more keywords for exclusion
+    # Keywords for exclusion
     EXCLUDE_KEYWORDS = [
         'anthology', 'alternate', 'deluxe', 'bonus', 'edition', 'remix', 'karaoke',
         'commentary', 'version', 'expanded', 'world', 'instrumental', 'voice memo',
-        'demo', 'live', 'soundtrack', 'tour', 'surprise', 'original motion picture', 'motion picture', 'score', 'session'
+        'demo', 'live', 'soundtrack', 'tour', 'surprise', 'original motion picture',
+        'motion picture', 'score', 'session'
     ]
 
-    # Helper: exclude album by title pattern
     def should_exclude_by_title(title):
         title = title.lower()
         if any(kw in title for kw in EXCLUDE_KEYWORDS):
             return True
-        # Pattern match for "live", "tour", "soundtrack", etc. as whole words
         if re.search(r'\b(live|tour|soundtrack|session|karaoke|score|surprise)\b', title):
             return True
         return False
 
-    # Helper: is the album a live album by tracklist?
     def is_live_album(album_tracks):
         NON_LIVE_TERMS = {'remaster', 'remastered', 'mix', 'mono', 'edit', 'version'}
         live_count = 0
@@ -1682,11 +1681,11 @@ def deduplicate_by_track_overlap(albums):
                         live_count += 1
         return live_count >= 0.8 * len(album_tracks) if album_tracks else False
 
+    # Step 1: Pre-filter by title and live status
     filtered_albums = []
     for album in albums:
         title = album.get('name', '')
         tracks = album.get('tracks', [])
-        # Exclude by title or if album is live
         if should_exclude_by_title(title):
             continue
         if is_live_album(tracks):
@@ -1694,7 +1693,7 @@ def deduplicate_by_track_overlap(albums):
         filtered_albums.append(album)
     albums = filtered_albums
 
-    # Build map: track_name -> list of (release_date, album_id)
+    # Step 2: Prepare track appearance data
     track_appearances = defaultdict(list)
     for a in albums:
         release_date = a.get('release_date', '1900-01-01')
@@ -1704,13 +1703,13 @@ def deduplicate_by_track_overlap(albums):
             norm = normalize_track_name(t['name'])
             track_appearances[norm].append((release_date, a['id']))
 
-    # For each track, find the album with the earliest release date
+    # Step 3: For each track, find the album with the earliest release date
     track_to_earliest_album = {}
     for track, appearances in track_appearances.items():
         earliest_album = min(appearances, key=lambda x: x[0])[1]
         track_to_earliest_album[track] = earliest_album
 
-    # For each album, count how many of its tracks are their first appearance
+    # Step 4: Mark albums as compilations if <30% of tracks are "first appearance"
     albums_to_exclude = set()
     for a in albums:
         album_id = a['id']
@@ -1722,19 +1721,35 @@ def deduplicate_by_track_overlap(albums):
         if percent_first < 0.3:
             albums_to_exclude.add(album_id)
 
-    # Always keep the earliest album for each unique normalized album title
-    title_to_earliest_album = {}
+    # Step 5: For each normalized album title, select canonical album:
+    # Prefer original (no "remaster", "deluxe", etc.), then earliest by date.
+    albums_by_title = defaultdict(list)
     for a in albums:
-        title = normalize_album_title(a.get('name', ''))
-        release_date = a.get('release_date', '1900-01-01')
-        if len(release_date) == 4:
-            release_date = release_date + '-01-01'
-        if title not in title_to_earliest_album or release_date < title_to_earliest_album[title][0]:
-            title_to_earliest_album[title] = (release_date, a['id'])
+        norm_title = normalize_album_title(a.get('name', ''))
+        albums_by_title[norm_title].append(a)
 
-    albums_to_keep = set(id for (date, id) in title_to_earliest_album.values())
+    canonical_album_ids = set()
+    for norm_title, title_albums in albums_by_title.items():
+        # Sort: originals first, then by release_date
+        def album_sort_key(album):
+            title = album.get('name', '').lower()
+            penalty = 0
+            # Penalize remaster/deluxe/edition in title, so originals come first
+            if any(kw in title for kw in ['remaster', 'deluxe', 'edition']):
+                penalty += 1000
+            # Use release date for tie-breaker (earlier is better)
+            date = album.get('release_date', '9999-12-31')
+            if len(date) == 4:
+                date = date + '-01-01'
+            return (penalty, date)
+        canonical_album = min(title_albums, key=album_sort_key)
+        canonical_album_ids.add(canonical_album['id'])
 
-    return [a for a in albums if (a['id'] not in albums_to_exclude) or (a['id'] in albums_to_keep)]
+    # Step 6: Return only canonical or non-compilation albums
+    return [
+        a for a in albums
+        if (a['id'] not in albums_to_exclude) or (a['id'] in canonical_album_ids)
+    ]
 def is_live_album(album_tracks):
     """
     Returns True if 80% or more of tracks have 'live' after a dash,
