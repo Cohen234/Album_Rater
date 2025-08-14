@@ -1747,8 +1747,9 @@ def load_albums_by_artist_route():
             # If we haven't seen this base name before, create a new list for it
             if base_name not in grouped_albums:
                 grouped_albums[base_name] = []
-            for base, eds in grouped_albums.items():
-                print(f"{base}: {[e['full_name'] for e in eds]}")
+
+                # Add the current edition to the list for its base name
+            grouped_albums[base_name].append(edition_data)
 
 
 
