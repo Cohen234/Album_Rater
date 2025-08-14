@@ -1750,14 +1750,8 @@ def load_albums_by_artist_route():
             for base, eds in grouped_albums.items():
                 print(f"{base}: {[e['full_name'] for e in eds]}")
 
-            # Add the current edition to the list for its base name
-            grouped_albums[base_name].append(edition_data)
-            for base, editions in grouped_albums.items():
-                # Move the "normal" edition to the front if present
-                normal_index = next((i for i, ed in enumerate(editions) if ed['full_name'].lower() == base.lower()),
-                                    None)
-                if normal_index is not None and normal_index != 0:
-                    editions.insert(0, editions.pop(normal_index))
+
+
 
         return render_template("select_album.html", artist_name=artist_name, grouped_albums=grouped_albums)
 

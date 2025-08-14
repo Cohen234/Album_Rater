@@ -50,9 +50,7 @@ import re  # Make sure 're' is imported at the top of your file
 
 def get_albums_by_artist(artist_name):
     """
-    Fetches all studio albums for a given artist, using a regex to filter out unwanted variants.
-    Keeps Deluxe, Extended, Edition, Bonus, Super Deluxe, etc.
-    Removes Remaster, Live, Instrumental, Acoustic, Clean, Explicit, Karaoke, Demo, etc.
+    Fetches all studio albums for a given artist, using a regex to filter out live albums and singles.
     """
     results = sp.search(q=f"artist:{artist_name}", type="artist", limit=1)
     items = results.get('artists', {}).get('items', [])
@@ -60,22 +58,10 @@ def get_albums_by_artist(artist_name):
         return []
     artist_id = items[0]['id']
 
-    # Exclude only these types of albums (case insensitive, at end of name or in parenthesis/brackets)
-    exclude_keywords = [
-        r'remaster', r'remastered', r'live', r'instrumental', r'acoustic',
-        r'karaoke', r'clean', r'explicit', r'commentary', r'demo',
-        r'edit', r'edit version', r'b-side', r'remix', r'single',
-        r'cover', r'performance', r'voice memo', r'voice notes'
-    ]
-    # Build a pattern that matches (Remastered), [Live], (Instrumental), etc at end
-    pattern = re.compile(
-        r'[\(\[\{][^)\]\}]*(' + '|'.join(exclude_keywords) + r')[^)\]\}]*[\)\]\}]$',
-        re.IGNORECASE
-    )
-    # Also exclude if keyword appears at end (not in parenthesis)
-    pattern2 = re.compile(
-        r'(' + '|'.join(exclude_keywords) + r')\s*$', re.IGNORECASE
-    )
+    # THE FIX: Use a single, powerful regular expression.
+    # \b ensures we match "live" as a whole word, not as part of another word.
+    # re.IGNORECASE makes the search case-insensitive (catches 'Live' and 'live').
+    live_pattern = re.compile(r'\blive\b|unplugged|sessions|live licks|flashpoint', re.IGNORECASE)
 
     all_api_albums = []
     offset = 0
@@ -88,23 +74,22 @@ def get_albums_by_artist(artist_name):
 
     album_list = []
     for album in all_api_albums:
-        name = album['name']
-        # Filter out only if the pattern matches
-        if not pattern.search(name) and not pattern2.search(name):
+        # Check if the regex pattern is found anywhere in the album name
+        if not live_pattern.search(album['name']):
             album_list.append({
-                'name': name,
+                'name': album['name'],
                 'id': album['id'],
                 'url': album['external_urls']['spotify'],
                 'image': album['images'][0]['url'] if album['images'] else ""
             })
 
-    # De-duplication logic: allow multiple editions (deluxe, extended, bonus, etc) to remain!
-    # Only dedupe exact matches (case-insensitive)
+    # De-duplication logic remains the same
     unique_albums = []
-    seen_ids = set()
-    for album in album_list:
-        if album['id'] not in seen_ids:
+    seen_names = set()
+    for album in reversed(album_list):
+        cleaned_name = re.sub(r'\s*\([^)]*\)$', '', album['name']).strip()
+        if cleaned_name.lower() not in seen_names:
             unique_albums.append(album)
-            seen_ids.add(album['id'])
+            seen_names.add(cleaned_name.lower())
 
     return unique_albums
