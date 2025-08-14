@@ -1211,8 +1211,9 @@ def get_album_data(artist_name, album_name, album_id):
     # Get all songs for this album
     album_songs_df = main_df[
         (main_df['Album Name'].str.strip().str.lower() == album_name_clean) &
-        (main_df['Artist Name'].str.strip().str.lower() == artist_name_clean)
-    ].copy()
+        (main_df['Artist Name'].str.strip().str.lower() == artist_name_clean) &
+        (main_df['Ranking Status'].astype(str).str.lower() == 'final')  # <-- add this filter
+        ].copy()
     actual_songs_df = album_songs_df[album_songs_df['Rank Group'] != "I"].copy()
     interlude_songs_df = album_songs_df[album_songs_df['Rank Group'] == "I"].copy()
     actual_songs_df['Ranking'] = pd.to_numeric(actual_songs_df['Ranking'], errors='coerce')
