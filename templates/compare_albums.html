@@ -8,7 +8,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-box-and-violin-plot@3.4.0/build/Chart.BoxPlot.js"></script>
     <script>
         // Fix: Register boxplot controllers for Chart.js v3+
-        Chart.register(...Object.values(window['chartjs-chart-box-and-violin-plot']));
+        Chart.register(Chart.BoxPlotController, Chart.BoxPlotElement, Chart.BoxPlot);
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
