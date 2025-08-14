@@ -44,29 +44,7 @@
             background: linear-gradient(to right, transparent 0%, transparent 40%, var(--sheen-color) 50%, transparent 60%, transparent 100%);
             transform: rotate(-45deg); animation: sheen 2s ease-in-out forwards;
         }
-        fetch("/submit_rankings", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(yourDataObject)
-        })
-        .then(response => response.json())
-        .then(result => {
-            if (result.status === "success") {
-                const data = result.animation_data;
-                console.log("animation_data:", data); // <--- this is correct!
-                // Build the URL including album_id!
-                const params = new URLSearchParams({
-                    album_name: data.album_name,
-                    artist_name: data.artist_name,
-                    album_cover_url: data.album_cover_url,
-                    final_score: data.final_score,
-                    final_rank: data.final_rank,
-                    total_albums: data.total_albums,
-                    dominant_color: data.dominant_color,
-                    album_id: data.album_id   // <--- Don't forget this!
-                });
-                window.location.href = `/ranking_success?${params.toString()}`;
-            }
+
         @keyframes sheen {
             0% { transform: rotate(-45deg) translateX(-250%) translateY(-250%); }
             100% { transform: rotate(-45deg) translateX(250%) translateY(250%); }

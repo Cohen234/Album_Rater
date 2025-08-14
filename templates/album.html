@@ -471,6 +471,7 @@
             transform: translateY(-2px);
         }
 
+
         ::-webkit-scrollbar {
             width: 10px;
         }
@@ -1155,10 +1156,14 @@
                         // Handle first-time rank animation
                         const animData = data.animation_data;
                         const params = new URLSearchParams({
-                            album_name: animData.album_name, artist_name: animData.artist_name,
-                            album_cover_url: animData.album_cover_url, final_score: animData.final_score,
-                            final_rank: animData.final_rank, total_albums: animData.total_albums,
-                            dominant_color: animData.dominant_color
+                            album_name: animData.album_name,
+                            artist_name: animData.artist_name,
+                            album_cover_url: animData.album_cover_url,
+                            final_score: animData.final_score,
+                            final_rank: animData.final_rank,
+                            total_albums: animData.total_albums,
+                            dominant_color: animData.dominant_color,
+                            album_id: animData.album_id
                         });
                         window.location.href = `/ranking_success?${params.toString()}`;
                     } else {
