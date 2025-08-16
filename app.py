@@ -1708,21 +1708,21 @@ def deduplicate_by_track_overlap(albums):
 
     canonical_album_ids = set()
     for norm_title, title_albums in albums_by_title.items():
-        # Prefer originals, else fall back to earliest available
-        originals = [album for album in title_albums if
-                     not re.search(r'deluxe|remaster|edition', album.get('name', '').lower())]
-        candidates = originals if originals else title_albums
-
+        # Only originals (not deluxe or remaster or edition)
+        originals = [album for album in title_albums if not re.search(r'deluxe|remaster|edition', album.get('name', '').lower())]
         def get_date(album):
             date = album.get('release_date', '9999-12-31')
             if len(date) == 4:
                 date = date + '-01-01'
             return date
-
-        canonical_album = min(candidates, key=get_date)
-        canonical_album_ids.add(canonical_album['id'])
-
-    # If there is no original, don't add any version for that title
+        if originals:
+            # Pick the earliest original by release date, IGNORE all deluxe/remaster/edition
+            canonical_album = min(originals, key=get_date)
+            canonical_album_ids.add(canonical_album['id'])
+        else:
+            # No original, pick the earliest available (deluxe/remaster/edition)
+            canonical_album = min(title_albums, key=get_date)
+            canonical_album_ids.add(canonical_album['id'])
 
     # Step 6: Return only canonical albums that aren't compilations
     return [a for a in albums if a['id'] in canonical_album_ids]
