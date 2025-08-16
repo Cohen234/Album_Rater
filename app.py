@@ -1652,14 +1652,14 @@ def deduplicate_by_track_overlap(albums):
         'anthology', 'alternate', 'bonus', 'remix', 'karaoke',
         'commentary', 'version', 'expanded', 'world', 'instrumental', 'voice memo',
         'demo', 'soundtrack', 'tour', 'surprise', 'original motion picture',
-        'motion picture', 'score', 'session', 'introduction', 'bbc', 'compilation'
+        'motion picture', 'score', 'session', 'introduction', 'bbc', 'compilation', 'mothership'
     ]
 
     def should_exclude_by_title(title):
         title = title.lower()
         if any(kw in title for kw in EXCLUDE_KEYWORDS):
             return True
-        if re.search(r'\b(live|tour|soundtrack|session|karaoke|score|surprise|compilation)\b', title):
+        if re.search(r'\b(live|tour|soundtrack|session|karaoke|score|surprise|compilation|mothership)\b', title):
             return True
         return False
 
@@ -1700,8 +1700,7 @@ def deduplicate_by_track_overlap(albums):
         if percent_first < 0.3:
             albums_to_exclude.add(album_id)
 
-    # Step 5: For each normalized album title, select canonical albums:
-    # Keep earliest 'original', remaster, and deluxe if present
+    # Step 5: For each normalized album title, select only the original (not deluxe/remaster/edition)
     albums_by_title = defaultdict(list)
     for a in albums:
         norm_title = normalize_album_title(a.get('name', ''))
@@ -1709,34 +1708,20 @@ def deduplicate_by_track_overlap(albums):
 
     canonical_album_ids = set()
     for norm_title, title_albums in albums_by_title.items():
-        groups = {'original': [], 'remaster': [], 'deluxe': []}
-        for album in title_albums:
-            name = album.get('name', '').lower()
-            if 'deluxe' in name or 'edition' in name:
-                groups['deluxe'].append(album)
-            elif 'remaster' in name:
-                groups['remaster'].append(album)
-            else:
-                groups['original'].append(album)
-        for group in groups.values():
-            if group:
-                def get_date(album):
-                    date = album.get('release_date', '9999-12-31')
-                    if len(date) == 4:
-                        date = date + '-01-01'
-                    return date
-                canonical_album = min(group, key=get_date)
-                canonical_album_ids.add(canonical_album['id'])
-        if not canonical_album_ids & set(a['id'] for a in title_albums):
+        # Only originals (not deluxe or remaster or edition)
+        originals = [album for album in title_albums if not re.search(r'deluxe|remaster|edition', album.get('name', '').lower())]
+        if originals:
+            # Pick the earliest original by release date
             def get_date(album):
                 date = album.get('release_date', '9999-12-31')
                 if len(date) == 4:
                     date = date + '-01-01'
                 return date
-            canonical_album = min(title_albums, key=get_date)
+            canonical_album = min(originals, key=get_date)
             canonical_album_ids.add(canonical_album['id'])
+        # If there is no original, don't add any version for that title
 
-    # Step 6: Return all canonical albums
+    # Step 6: Return only canonical albums that aren't compilations
     return [a for a in albums if a['id'] in canonical_album_ids]
 
 
