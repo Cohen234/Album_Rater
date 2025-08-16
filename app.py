@@ -1661,7 +1661,6 @@ def deduplicate_by_track_overlap(albums):
             return True
         return False
 
-    # Step 1: Pre-filter by title only
     filtered_albums = []
     for album in albums:
         title = album.get('name', '')
@@ -1670,7 +1669,6 @@ def deduplicate_by_track_overlap(albums):
         filtered_albums.append(album)
     albums = filtered_albums
 
-    # Step 2: Prepare track appearance data
     track_appearances = defaultdict(list)
     for a in albums:
         release_date = a.get('release_date', '1900-01-01')
@@ -1680,13 +1678,11 @@ def deduplicate_by_track_overlap(albums):
             norm = normalize_track_name(t['name'])
             track_appearances[norm].append((release_date, a['id']))
 
-    # Step 3: For each track, find the album with the earliest release date
     track_to_earliest_album = {}
     for track, appearances in track_appearances.items():
         earliest_album = min(appearances, key=lambda x: x[0])[1]
         track_to_earliest_album[track] = earliest_album
 
-    # Step 4: Mark albums as compilations if <30% of tracks are "first appearance"
     albums_to_exclude = set()
     for a in albums:
         album_id = a['id']
@@ -1698,7 +1694,6 @@ def deduplicate_by_track_overlap(albums):
         if percent_first < 0.3:
             albums_to_exclude.add(album_id)
 
-    # Step 5: For each normalized album title, always prefer original (no deluxe/remaster/edition) if present
     albums_by_title = defaultdict(list)
     for a in albums:
         norm_title = normalize_album_title(a.get('name', ''))
@@ -1706,10 +1701,21 @@ def deduplicate_by_track_overlap(albums):
 
     canonical_album_ids = set()
     for norm_title, title_albums in albums_by_title.items():
-        # Only true originals (no deluxe/remaster/edition anywhere in the name)
+        # 1. True original (not deluxe, remaster, edition)
         originals = [
             album for album in title_albums
             if not re.search(r'(deluxe|remaster|edition)', album.get('name', '').lower())
+        ]
+        # 2. Remaster only (not deluxe/edition)
+        remasters = [
+            album for album in title_albums
+            if 'remaster' in album.get('name', '').lower()
+            and not re.search(r'deluxe|edition', album.get('name', '').lower())
+        ]
+        # 3. Deluxe/Edition as last resort
+        deluxe_editions = [
+            album for album in title_albums
+            if re.search(r'deluxe|edition', album.get('name', '').lower())
         ]
 
         def get_date(album):
@@ -1720,11 +1726,14 @@ def deduplicate_by_track_overlap(albums):
 
         if originals:
             canonical_album = min(originals, key=get_date)
-            canonical_album_ids.add(canonical_album['id'])
+        elif remasters:
+            canonical_album = min(remasters, key=get_date)
+        elif deluxe_editions:
+            canonical_album = min(deluxe_editions, key=get_date)
         else:
-            # No original, pick the earliest available (deluxe/remaster/edition)
+            # Fallback: should not happen, but just in case
             canonical_album = min(title_albums, key=get_date)
-            canonical_album_ids.add(canonical_album['id'])
+        canonical_album_ids.add(canonical_album['id'])
 
     return [a for a in albums if a['id'] in canonical_album_ids]
 
