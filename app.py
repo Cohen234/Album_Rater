@@ -1644,10 +1644,8 @@ def deduplicate_by_track_overlap(albums):
         return name.strip().lower()
 
     def normalize_album_title(title):
-        # Normalize for grouping (strip parentheticals and whitespace)
         return re.sub(r'\(.*?\)', '', title).strip().lower()
 
-    # Keywords for exclusion
     EXCLUDE_KEYWORDS = [
         'anthology', 'alternate', 'bonus', 'remix', 'karaoke',
         'commentary', 'version', 'expanded', 'world', 'instrumental', 'voice memo',
@@ -1663,7 +1661,7 @@ def deduplicate_by_track_overlap(albums):
             return True
         return False
 
-    # Step 1: Pre-filter by title only (live album filtering should be done outside)
+    # Step 1: Pre-filter by title only
     filtered_albums = []
     for album in albums:
         title = album.get('name', '')
@@ -1700,7 +1698,7 @@ def deduplicate_by_track_overlap(albums):
         if percent_first < 0.3:
             albums_to_exclude.add(album_id)
 
-    # Step 5: For each normalized album title, select only the original (not deluxe/remaster/edition)
+    # Step 5: For each normalized album title, always prefer original (no deluxe/remaster/edition) if present
     albums_by_title = defaultdict(list)
     for a in albums:
         norm_title = normalize_album_title(a.get('name', ''))
@@ -1708,23 +1706,24 @@ def deduplicate_by_track_overlap(albums):
 
     canonical_album_ids = set()
     for norm_title, title_albums in albums_by_title.items():
-        # Only originals (not deluxe or remaster or edition)
-        originals = [album for album in title_albums if not re.search(r'deluxe|remaster|edition', album.get('name', '').lower())]
+        # Find all albums that are NOT deluxe or remaster or edition
+        originals = [
+            album for album in title_albums
+            if not re.search(r'\b(deluxe|remaster|edition)\b', album.get('name', '').lower())
+        ]
         def get_date(album):
             date = album.get('release_date', '9999-12-31')
             if len(date) == 4:
                 date = date + '-01-01'
             return date
         if originals:
-            # Pick the earliest original by release date, IGNORE all deluxe/remaster/edition
             canonical_album = min(originals, key=get_date)
             canonical_album_ids.add(canonical_album['id'])
         else:
-            # No original, pick the earliest available (deluxe/remaster/edition)
+            # If there is no original, fall back to earliest deluxe/remaster/edition
             canonical_album = min(title_albums, key=get_date)
             canonical_album_ids.add(canonical_album['id'])
 
-    # Step 6: Return only canonical albums that aren't compilations
     return [a for a in albums if a['id'] in canonical_album_ids]
 
 
