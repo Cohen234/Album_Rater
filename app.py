@@ -887,10 +887,18 @@ def get_album_stats(album_id):
         main_df['Ranking'] = pd.to_numeric(main_df['Ranking'], errors='coerce')
 
         # Only use songs with valid ranking, not interludes, and where the artist is present
+        album_artist = str(album_stats.get('artist_name', '')).strip()
+
+        def artist_matcher_field(x):
+            try:
+                return album_artist.lower().strip() in [a.strip().lower() for a in str(x).split(',')]
+            except Exception:
+                return False
+
         artist_songs_mask = (
-            (main_df['Rank Group'].astype(str) != 'I') &
-            (main_df['Ranking'].notnull()) &
-            (main_df['Artist Name'].str.lower().str.contains(album_artist.lower()))
+                (main_df['Rank Group'].astype(str) != 'I') &
+                (main_df['Ranking'].notnull()) &
+                (main_df['Artist Name'].apply(artist_matcher_field))
         )
         artist_songs_for_avg = main_df[artist_songs_mask]
         artist_avg = artist_songs_for_avg['Ranking'].mean() if not artist_songs_for_avg.empty else None
