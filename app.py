@@ -366,12 +366,13 @@ def artist_page_v2(artist_name):
         # --- Sort albums and assign Global Rank ---
         all_albums_df = all_albums_df.sort_values(by='weighted_average_score', ascending=False)
         all_albums_df['Global_Rank'] = range(1, len(all_albums_df) + 1)
-
+        artist_query = artist_name.lower().strip()
         # --- Filter for the current artist ---
         artist_songs_df = all_songs_df[
-            all_songs_df['Artist_Name'].astype(str).str.lower() == artist_name.lower()
+            all_songs_df['Artist_Name'].astype(str).str.lower().str.split(',')
+            .apply(lambda artists: artist_query in [a.strip() for a in artists])
         ].copy()
-        artist_query = artist_name.lower().strip()
+
         # Works for comma-separated lists, allowing arbitrary spaces
         artist_albums_df = all_albums_df[
             all_albums_df['artist_name'].astype(str).str.lower().str.split(',')
