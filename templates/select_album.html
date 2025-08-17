@@ -335,6 +335,10 @@
         <div class="spinner"></div>
     </div>
     <h1>{{ artist_name }}</h1>
+    <div style="text-align:center; margin-bottom: 20px;">
+        <button id="edit-albums-btn" style="padding: 8px 20px; font-size: 1.1em;">Edit Albums</button>
+        <span id="edit-mode-label" style="margin-left:12px; color:#FDD835; font-weight:600; display:none;">Edit Mode: Click album to delete</span>
+    </div>
 
     <div class="album-grid">
         {% for base_name, editions in grouped_albums.items() %}
@@ -362,6 +366,8 @@
 
                 <a href="{{ url_for('view_album', album_id=album.id) }}" class="album-card">
                     <div class="album-art-container">
+                        <button class="delete-album-btn" style="display: none; position:absolute; top:10px; left:10px; background:#E57373; color:white; border:none; border-radius:50%; width:32px; height:32px; font-size:1.1em; cursor:pointer; z-index:2;"
+                            onclick="deleteAlbum(event, '{{ album.id }}')">🗑️</button>
                         <img src="{{ album.image }}" alt="{{ album.full_name }}" class="{{ glow_class }}">
                         {% if album.rerank_status == 'due' %}<div class="top-left-icon due" title="Re-rank is due soon">⏰</div>
                         {% elif album.rerank_status == 'overdue' %}<div class="top-left-icon overdue" title="Re-rank is overdue!">⚠️</div>
@@ -393,6 +399,8 @@
                 {% set has_prelim = editions | selectattr('has_prelim_ranks', 'equalto', True) | list | length > 0 %}
                 <div class="album-card" data-editions='{{ editions | tojson | forceescape }}'>
                     <div class="album-art-container">
+                        <button class="delete-album-btn" style="display: none; position:absolute; top:10px; left:10px; background:#E57373; color:white; border:none; border-radius:50%; width:32px; height:32px; font-size:1.1em; cursor:pointer; z-index:2;"
+                            onclick="deleteAlbum(event, '{{ album.id }}')">🗑️</button>
                         <img src="{{ primary_edition.image }}" alt="{{ base_name }}">
                         {% if has_prelim %}<div class="top-right-icon pause-icon" title="Paused">||</div>{% endif %}
                     </div>
@@ -409,6 +417,8 @@
                 {% set album = editions[0] %}
                 <a href="{{ url_for('view_album', album_id=album.id) }}" class="album-card">
                     <div class="album-art-container">
+                        <button class="delete-album-btn" style="display: none; position:absolute; top:10px; left:10px; background:#E57373; color:white; border:none; border-radius:50%; width:32px; height:32px; font-size:1.1em; cursor:pointer; z-index:2;"
+                            onclick="deleteAlbum(event, '{{ album.id }}')">🗑️</button>
                         <img src="{{ album.image }}" alt="{{ album.full_name }}">
                         {% if album.has_prelim_ranks %}<div class="top-right-icon pause-icon" title="Paused">||</div>{% endif %}
                     </div>
@@ -576,6 +586,41 @@
             window.location.href = '{{ url_for('artist_page_v2', artist_name=artist_name) }}';
         }
     });
+    let editMode = false;
+
+    document.getElementById('edit-albums-btn').onclick = function() {
+        editMode = !editMode;
+        document.getElementById('edit-mode-label').style.display = editMode ? '' : 'none';
+        document.querySelectorAll('.delete-album-btn').forEach(btn => {
+            btn.style.display = editMode ? 'inline-block' : 'none';
+        });
+        // Optionally, disable album navigation in edit mode
+        document.querySelectorAll('.album-card').forEach(card => {
+            if(editMode) {
+                card.setAttribute('tabindex', '-1');
+            } else {
+                card.removeAttribute('tabindex');
+            }
+        });
+    };
+
+    function deleteAlbum(event, albumId) {
+        event.stopPropagation();
+        if(!confirm("Are you sure you want to permanently delete this album?")) return;
+        fetch('/delete_album', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: 'artist_name={{ artist_name }}&album_id=' + encodeURIComponent(albumId)
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.success) {
+                document.querySelectorAll(`[data-album-id="${albumId}"]`).forEach(elem => elem.remove());
+            } else {
+                alert("Failed to delete album.");
+            }
+        });
+    }
 </script>
 </body>
 </html>

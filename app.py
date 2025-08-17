@@ -301,6 +301,15 @@ def artist_page_v2(artist_name):
     import math
     import json
     from jinja2 import Undefined
+    from album_blocklist import get_visible_studio_albums_for_artist, load_blocklist_for_artist
+    visible_studio_albums = get_visible_studio_albums_for_artist(
+        artist_name,
+        spotify_client=sp,  # or whatever your Spotify client variable is called
+        blocklist_loader=load_blocklist_for_artist,  # your existing blocklist loader function
+        deduplicate_fn=deduplicate_by_track_overlap,  # your deduplication function
+        is_live_album_fn=is_live_album  # your live album filter function
+    )
+    visible_album_ids = set(a['id'] for a in visible_studio_albums)
 
     def standardize_columns(df):
         df.columns = [c.replace(' ', '_') for c in df.columns]
@@ -385,10 +394,14 @@ def artist_page_v2(artist_name):
         # 2. --- Calculate New Stats ----
 
         # ARTIST MASTERY
-        total_spotify_albums = len(get_albums_by_artist(artist_name))
+        # After all select-album-screen filtering and blocklist application
+
+        artist_albums_df = artist_albums_df[artist_albums_df['album_id'].isin(visible_album_ids)]
+
         ranked_albums_count = len(artist_albums_df)
-        mastery_points = artist_albums_df['times_ranked'].clip(upper=3).sum() if 'times_ranked' in artist_albums_df else 0
-        max_mastery_points = total_spotify_albums * 3
+        mastery_points = artist_albums_df['times_ranked'].clip(
+            upper=3).sum() if 'times_ranked' in artist_albums_df else 0
+        max_mastery_points = len(visible_album_ids) * 3
         mastery_percentage = (mastery_points / max_mastery_points) * 100 if max_mastery_points > 0 else 0
 
         # LEADERBOARD POINTS
@@ -765,6 +778,7 @@ def artist_page_v2(artist_name):
 
 from flask import abort
 from urllib.parse import unquote
+
 @app.route("/artist/<artist_name>/album/<path:album_name>/<album_id>")
 def album_page(artist_name, album_name, album_id):
     album_name = unquote(album_name)
@@ -1759,6 +1773,13 @@ def is_live_album(album_tracks):
                     re.search(r'\b\d{4}\b', after_dash)):
                     live_count += 1
     return live_count >= 0.8 * len(album_tracks) if album_tracks else False
+@app.route("/delete_album", methods=["POST"])
+def delete_album():
+    artist_name = request.form.get("artist_name")
+    album_id = request.form.get("album_id")
+    from album_blocklist import add_to_blocklist
+    add_to_blocklist(artist_name, album_id)
+    return jsonify(success=True)
 @app.route("/load_albums_by_artist", methods=["GET", "POST"])
 def load_albums_by_artist_route():
     artist_name = request.form.get("artist_name") or request.args.get("artist_name")
@@ -1787,6 +1808,11 @@ def load_albums_by_artist_route():
 
         # Remove compilations by track overlap
         studio_albums = deduplicate_by_track_overlap(filtered_albums)
+        # Add this after deduplication:
+        from album_blocklist import load_blocklist_for_artist
+
+        blocklist = load_blocklist_for_artist(artist_name)
+        studio_albums = [a for a in studio_albums if a['id'] not in blocklist]
 
         try:
             album_averages_df = get_album_averages_df(client, SPREADSHEET_ID, "Album Averages")
