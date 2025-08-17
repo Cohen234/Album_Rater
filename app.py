@@ -882,25 +882,44 @@ def get_album_stats(album_id):
             days_to_add = 45 if times_ranked > 1 else 15
             next_rerank_date = (last_ranked_date + pd.Timedelta(days=days_to_add)).strftime('%Y-%m-%d')
 
-        # --- KEY FIX: Artist Avg includes songs where artist is in ANY part of the artist field ---
-        main_df['Artist Name'] = main_df['Artist Name'].astype(str)
-        main_df['Ranking'] = pd.to_numeric(main_df['Ranking'], errors='coerce')
+        main_df.columns = [c.replace(' ', '_') for c in main_df.columns]
 
-        # Only use songs with valid ranking, not interludes, and where the artist is present
-        album_artist = str(album_stats.get('artist_name', '')).strip()
+        # Ensure proper types
+        main_df['Ranking'] = pd.to_numeric(main_df['Ranking'], errors='coerce')
+        main_df['Artist_Name'] = main_df['Artist_Name'].astype(str)
+
+        # Filter to only 'final' rankings if that column exists
+        if 'Ranking_Status' in main_df.columns:
+            main_df = main_df[main_df['Ranking_Status'].astype(str).str.lower() == 'final']
+
+        # Remove duplicates: keep only the latest by Ranked_Date, if columns exist
+        if all(col in main_df.columns for col in ['Song_Name', 'Artist_Name', 'Ranked_Date']):
+            main_df = main_df.sort_values('Ranked_Date').drop_duplicates(['Song_Name', 'Artist_Name'], keep='last')
+
+        # Filter valid entries (non-empty song/artist, and ranking)
+        main_df = main_df[
+            (main_df['Song_Name'].str.strip() != "") &
+            (main_df['Artist_Name'].str.strip() != "") &
+            (main_df['Ranking'].notnull())
+            ]
+
+        # Handle 'Rank_Group' column (create if only 'Rank Group' exists)
+        if 'Rank_Group' not in main_df.columns and 'Rank Group' in main_df.columns:
+            main_df['Rank_Group'] = main_df['Rank Group']
+
+        # Remove interludes
+        actual_songs_df = main_df[main_df['Rank_Group'] != "I"].copy()
+
+        # Artist filter: exact match in comma-separated list
+        album_artist = str(album_stats.get('artist_name', '')).strip().lower()
 
         def artist_matcher_field(x):
             try:
-                return album_artist.lower().strip() in [a.strip().lower() for a in str(x).split(',')]
+                return album_artist in [a.strip().lower() for a in str(x).split(',')]
             except Exception:
                 return False
 
-        artist_songs_mask = (
-                (main_df['Rank Group'].astype(str) != 'I') &
-                (main_df['Ranking'].notnull()) &
-                (main_df['Artist Name'].apply(artist_matcher_field))
-        )
-        artist_songs_for_avg = main_df[artist_songs_mask]
+        artist_songs_for_avg = actual_songs_df[actual_songs_df['Artist_Name'].apply(artist_matcher_field)]
         artist_avg = artist_songs_for_avg['Ranking'].mean() if not artist_songs_for_avg.empty else None
 
         response_data = {
