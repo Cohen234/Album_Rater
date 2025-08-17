@@ -882,42 +882,49 @@ def get_album_stats(album_id):
             days_to_add = 45 if times_ranked > 1 else 15
             next_rerank_date = (last_ranked_date + pd.Timedelta(days=days_to_add)).strftime('%Y-%m-%d')
 
+
         # 1. Standardize columns (spaces to underscores)
         main_df.columns = [c.replace(' ', '_') for c in main_df.columns]
-        main_df['Ranking'] = pd.to_numeric(main_df['Ranking'], errors='coerce')
-        main_df['Artist_Name'] = main_df['Artist_Name'].astype(str)
-        main_df['Song_Name'] = main_df['Song_Name'].astype(str)
-        main_df['Ranking_Status'] = main_df['Ranking_Status'].astype(str)
 
-        # 2. Only FINAL rankings
-        main_df = main_df[main_df['Ranking_Status'].str.lower() == 'final']
+        # 2. Coerce types
+        for col in ['Ranking', 'Artist_Name', 'Song_Name', 'Ranking_Status']:
+            if col in main_df.columns:
+                if col == 'Ranking':
+                    main_df[col] = pd.to_numeric(main_df[col], errors='coerce')
+                else:
+                    main_df[col] = main_df[col].astype(str)
 
-        # 3. Remove duplicates: keep only the latest by Ranked_Date
+        # 3. Only FINAL rankings
+        if 'Ranking_Status' in main_df.columns:
+            main_df = main_df[main_df['Ranking_Status'].str.lower() == 'final']
+
+        # 4. Remove duplicates: keep only the latest by Ranked_Date
         if all(col in main_df.columns for col in ['Song_Name', 'Artist_Name', 'Ranked_Date']):
             main_df = main_df.sort_values('Ranked_Date').drop_duplicates(['Song_Name', 'Artist_Name'], keep='last')
 
-        # 4. Filter valid entries
+        # 5. Filter valid entries
         main_df = main_df[
             (main_df['Song_Name'].str.strip() != "") &
             (main_df['Artist_Name'].str.strip() != "") &
             (main_df['Ranking'].notnull())
             ]
 
-        # 5. Handle 'Rank_Group' column
+        # 6. Handle 'Rank_Group' column (legacy compatibility)
         if 'Rank_Group' not in main_df.columns and 'Rank Group' in main_df.columns:
             main_df['Rank_Group'] = main_df['Rank Group']
 
-        # 6. Remove interludes
+        # 7. Remove interludes
         main_df = main_df[main_df['Rank_Group'] != "I"]
 
-
+        # 8. ARTIST MATCH: exact match in comma-separated list (case-insensitive)
         album_artist = str(album_stats.get('artist_name', '')).strip().lower()
 
         def artist_matcher_field(artists_string):
-            try:
-                return any(album_artist == a.strip().lower() for a in str(artists_string).split(','))
-            except Exception:
+            # Handles NaN, empty, etc
+            if not isinstance(artists_string, str):
                 return False
+            # Split by ',' and compare each, case-insensitive/trimmed
+            return any(album_artist == a.strip().lower() for a in artists_string.split(','))
 
         artist_songs_df = main_df[main_df['Artist_Name'].apply(artist_matcher_field)]
         artist_avg = artist_songs_df['Ranking'].mean() if not artist_songs_df.empty else None
