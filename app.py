@@ -339,6 +339,12 @@ def artist_page_v2(artist_name):
         all_songs_df = standardize_columns(all_songs_df)
         all_albums_df = standardize_columns(all_albums_df)
 
+        # --- Force artist and album columns to string to avoid type errors ---
+        all_songs_df['Artist_Name'] = all_songs_df['Artist_Name'].astype(str)
+        all_albums_df['artist_name'] = all_albums_df['artist_name'].astype(str)
+        all_songs_df['Album_Name'] = all_songs_df['Album_Name'].astype(str)
+        all_albums_df['album_name'] = all_albums_df['album_name'].astype(str)
+
         # --- Type conversions ---
         all_songs_df['Ranking'] = pd.to_numeric(all_songs_df['Ranking'], errors='coerce')
         all_albums_df['weighted_average_score'] = pd.to_numeric(all_albums_df['weighted_average_score'], errors='coerce')
