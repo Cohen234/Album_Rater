@@ -1701,15 +1701,15 @@ def deduplicate_by_track_overlap(albums):
 
     canonical_album_ids = set()
     for norm_title, title_albums in albums_by_title.items():
-        # 1. True original (not deluxe, remaster, edition)
+        # 1. True original (not deluxe, remaster, edition anywhere)
         originals = [
             album for album in title_albums
             if not re.search(r'(deluxe|remaster|edition)', album.get('name', '').lower())
         ]
-        # 2. Remaster only (not deluxe/edition)
+        # 2. Remaster only (must have remaster, but not deluxe or edition)
         remasters = [
             album for album in title_albums
-            if 'remaster' in album.get('name', '').lower()
+            if re.search(r'remaster', album.get('name', '').lower())
             and not re.search(r'deluxe|edition', album.get('name', '').lower())
         ]
         # 3. Deluxe/Edition as last resort
