@@ -425,22 +425,26 @@ def artist_page_v2(artist_name):
 
         # 1. Clean names in all DataFrames (do this as early as possible)
         all_songs_df['album_name_clean'] = all_songs_df['Album_Name'].astype(str).str.strip().str.lower()
+        # ...other setup...
+
+        # Assign album_name_clean
         all_albums_df['album_name_clean'] = all_albums_df['album_name'].astype(str).str.strip().str.lower()
 
-        # Compute first ranked date and score for each album
+        # Map ranking dates and scores
         album_first_ranked = all_songs_df.groupby('album_name_clean')['Ranked_Date'].min()
         album_first_score = all_songs_df.groupby('album_name_clean')['Ranking'].first()
-
-        # Map to albums DataFrame
         all_albums_df['first_ranked_date'] = all_albums_df['album_name_clean'].map(album_first_ranked)
         all_albums_df['first_score'] = all_albums_df['album_name_clean'].map(album_first_score)
         all_albums_df['first_ranked_date'] = pd.to_datetime(all_albums_df['first_ranked_date'], errors='coerce')
 
-        # Filter out albums never ranked (will have NaN first_ranked_date)
+        # Filter albums to only those ever ranked
         all_albums_df = all_albums_df[all_albums_df['first_ranked_date'].notnull()]
 
-        # NOW filter for the current artist (after mapping and filtering)
-
+        # Filter for current artist (multi-artist logic)
+        artist_albums_df = all_albums_df[
+            all_albums_df['artist_name'].astype(str).str.lower().str.split(',')
+            .apply(lambda artists: artist_query in [a.strip() for a in artists])
+        ].copy()
         artist_albums_df['album_name_clean'] = artist_albums_df['album_name'].astype(str).str.strip().str.lower()
 
         def get_album_placement_on_rank_date(album_id, rank_date, all_albums_df):
