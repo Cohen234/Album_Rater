@@ -606,6 +606,7 @@
 
     function deleteAlbum(event, albumId) {
         event.stopPropagation();
+        event.preventDefault();
         if(!confirm("Are you sure you want to permanently delete this album?")) return;
         fetch('/delete_album', {
             method: 'POST',
