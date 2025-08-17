@@ -564,11 +564,14 @@
 
         /* --- Song/Album Cell (with Flex for name & art) --- */
         .lb-table-album-cell, .lb-table-song-cell {
+            display: flex;
+            align-items: center;
+            min-width: 0;
+            width: 100%;
+            flex: 1 1 auto;
             gap: 7px;
             padding-left: 0;
             padding-right: 0;
-            align-items: center;
-            min-width: 0;
         }
 
         .lb-table-album-img, .lb-table-song-img {
@@ -599,17 +602,17 @@
 
         .lb-table-album-name:hover::after,
         .lb-table-song-name {
-            max-width: 260px; /* Adjust as desired */
-            min-width: 0;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
-            flex: 1 1 0;
-            cursor: pointer;
-            position: relative;
+            flex: 1 1 auto;
+            min-width: 0;
+            max-width: 100%;
             font-size: 1.07em;
             color: #fff;
             line-height: 1.35;
+            cursor: pointer;
+            position: relative;
         }
         .lb-table-song-name:hover::after {
             content: attr(data-full-title);
