@@ -440,9 +440,7 @@ def artist_page_v2(artist_name):
         all_albums_df = all_albums_df[all_albums_df['first_ranked_date'].notnull()]
 
         # NOW filter for the current artist (after mapping and filtering)
-        artist_albums_df = all_albums_df[
-            all_albums_df['artist_name'].astype(str).str.lower() == artist_name.lower()
-            ].copy()
+
         artist_albums_df['album_name_clean'] = artist_albums_df['album_name'].astype(str).str.strip().str.lower()
 
         def get_album_placement_on_rank_date(album_id, rank_date, all_albums_df):
