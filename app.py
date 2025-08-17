@@ -398,11 +398,13 @@ def artist_page_v2(artist_name):
 
         artist_albums_df = artist_albums_df[artist_albums_df['album_id'].isin(visible_album_ids)]
 
-        ranked_albums_count = len(artist_albums_df)
-        mastery_points = artist_albums_df['times_ranked'].clip(
-            upper=3).sum() if 'times_ranked' in artist_albums_df else 0
+        albums_ranked_at_least_once = artist_albums_df['times_ranked'].fillna(0).astype(int) >= 1
+        mastery_points = artist_albums_df['times_ranked'].fillna(0).astype(int).clip(upper=3).sum()
         max_mastery_points = len(visible_album_ids) * 3
         mastery_percentage = (mastery_points / max_mastery_points) * 100 if max_mastery_points > 0 else 0
+        print(artist_albums_df[['album_id', 'album_name', 'times_ranked']])
+        print("visible_album_ids:", visible_album_ids)
+        print("mastery_points:", mastery_points, "max:", max_mastery_points)
 
         # LEADERBOARD POINTS
         total_songs = len(all_songs_df)
@@ -410,6 +412,7 @@ def artist_page_v2(artist_name):
         song_points = artist_songs_df['Universal_Rank'].apply(lambda x: total_songs - x + 1).sum() if not artist_songs_df.empty else 0
         album_points = ((total_albums - artist_albums_df['Global_Rank'] + 1) * 10).sum() if not artist_albums_df.empty else 0
         total_leaderboard_points = song_points + album_points
+        ranked_albums_count = (artist_albums_df['times_ranked'].fillna(0).astype(int) >= 1).sum()
 
         # ARTIST SCORE
         album_percentile = ((total_albums - artist_albums_df['Global_Rank'].mean()) / total_albums) * 100 if total_albums > 0 and not artist_albums_df.empty else 0
