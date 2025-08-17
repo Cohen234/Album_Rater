@@ -910,12 +910,12 @@ def get_album_stats(album_id):
         # 6. Remove interludes
         main_df = main_df[main_df['Rank_Group'] != "I"]
 
-        # 7. Artist filter (exact match in comma-separated list)
+
         album_artist = str(album_stats.get('artist_name', '')).strip().lower()
 
-        def artist_matcher_field(x):
+        def artist_matcher_field(artists_string):
             try:
-                return album_artist in [a.strip().lower() for a in str(x).split(',')]
+                return any(album_artist == a.strip().lower() for a in str(artists_string).split(','))
             except Exception:
                 return False
 
