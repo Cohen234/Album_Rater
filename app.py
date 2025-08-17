@@ -372,7 +372,7 @@ def artist_page_v2(artist_name):
         # --- Sort albums and assign Global Rank ---
         all_albums_df = all_albums_df.sort_values(by='weighted_average_score', ascending=False)
         all_albums_df['Global_Rank'] = range(1, len(all_albums_df) + 1)
-        artist_songs_df = filter_df_by_artist(all_songs_df, 'Artist Name', artist_name)
+        artist_songs_df = filter_df_by_artist(all_songs_df, 'Artist_Name', artist_name)
         artist_albums_df = filter_df_by_artist(all_albums_df, 'artist_name', artist_name)
         if artist_songs_df.empty and artist_albums_df.empty:
             return redirect(url_for('load_albums_by_artist_route', artist_name=artist_name))
