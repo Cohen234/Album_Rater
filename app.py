@@ -363,21 +363,17 @@ def artist_page_v2(artist_name):
         # --- Duplicate check for debugging ---
         dupes = all_songs_df[all_songs_df.duplicated(subset=['Song_Name', 'Artist_Name'], keep=False)]
 
+        def filter_df_by_artist(df, artist_col, artist_name):
+            artist_query = artist_name.lower().strip()
+            return df[df[artist_col].apply(
+                lambda x: artist_query in [str(a).strip().lower() for a in str(x).split(',')]
+            )].copy()
+
         # --- Sort albums and assign Global Rank ---
         all_albums_df = all_albums_df.sort_values(by='weighted_average_score', ascending=False)
         all_albums_df['Global_Rank'] = range(1, len(all_albums_df) + 1)
-        artist_query = artist_name.lower().strip()
-        # --- Filter for the current artist ---
-        artist_songs_df = all_songs_df[
-            all_songs_df['Artist_Name'].astype(str).str.lower().str.split(',')
-            .apply(lambda artists: artist_query in [a.strip() for a in artists])
-        ].copy()
-
-        # Works for comma-separated lists, allowing arbitrary spaces
-        artist_albums_df = all_albums_df[
-            all_albums_df['artist_name'].astype(str).str.lower().str.split(',')
-            .apply(lambda artists: artist_query in [a.strip() for a in artists])
-        ].copy()
+        artist_songs_df = filter_df_by_artist(all_songs_df, 'Artist Name', artist_name)
+        artist_albums_df = filter_df_by_artist(all_albums_df, 'artist_name', artist_name)
         if artist_songs_df.empty and artist_albums_df.empty:
             return redirect(url_for('load_albums_by_artist_route', artist_name=artist_name))
 
@@ -441,10 +437,7 @@ def artist_page_v2(artist_name):
         all_albums_df = all_albums_df[all_albums_df['first_ranked_date'].notnull()]
 
         # Filter for current artist (multi-artist logic)
-        artist_albums_df = all_albums_df[
-            all_albums_df['artist_name'].astype(str).str.lower().str.split(',')
-            .apply(lambda artists: artist_query in [a.strip() for a in artists])
-        ].copy()
+
         artist_albums_df['album_name_clean'] = artist_albums_df['album_name'].astype(str).str.strip().str.lower()
 
         def get_album_placement_on_rank_date(album_id, rank_date, all_albums_df):
