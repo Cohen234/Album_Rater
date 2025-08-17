@@ -376,7 +376,6 @@
         .leaderboard-card { overflow: hidden; }
         .leaderboard-table-wrapper { max-height: 500px; overflow-y: auto; }
         table { width: 100%; border-collapse: collapse; }
-        th, td { text-align: left; padding: 12px; border-bottom: 1px solid var(--border-color); }
         th { color: var(--secondary-text); text-transform: uppercase; font-size: 0.8em; position: sticky; top: 0; background: var(--surface-color); z-index:2;}
         td:first-child, th:first-child { width: 50px; text-align: center; color: var(--secondary-text); }
         .global-rank {
@@ -509,11 +508,7 @@
             table-layout: auto;
             background: none;
         }
-        th, td {
-            padding: 14px 10px;
-            border-bottom: 1px solid var(--border-color);
-            font-size: 1.07em;
-        }
+
         th {
             color: var(--secondary-text);
             text-transform: uppercase;
@@ -562,8 +557,9 @@
             padding-right: 14px;
         }
 
-        /* --- Song/Album Cell (with Flex for name & art) --- */
-        .lb-table-album-cell, .lb-table-song-cell {
+
+        .lb-table-album-cell,
+        .lb-table-song-cell {
             display: flex;
             align-items: center;
             min-width: 0;
@@ -572,9 +568,13 @@
             gap: 7px;
             padding-left: 0;
             padding-right: 0;
+            height: 100%;
+            box-sizing: border-box;
         }
 
-        .lb-table-album-img, .lb-table-song-img {
+        /* Album and Song Image: Consistent Size */
+        .lb-table-album-img,
+        .lb-table-song-img {
             width: 32px;
             height: 32px;
             border-radius: 6px;
@@ -586,34 +586,26 @@
             background: #232323;
         }
 
-        .lb-table-album-name, .lb-table-song-name {
-            max-width: 160px; /* Tweak as needed for layout */
-            min-width: 0;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            flex: 1 1 0;
-            cursor: pointer;
-            position: relative;
-            font-size: 1.07em;
-            color: #fff;
-            line-height: 1.35;
-        }
-
-        .lb-table-album-name:hover::after,
+        /* Album and Song Name: Same max width, proper ellipsis, fills up to score */
+        .lb-table-album-name,
         .lb-table-song-name {
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            flex: 1 1 auto;
+            flex: 1 1 0;
             min-width: 0;
             max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
             font-size: 1.07em;
             color: #fff;
             line-height: 1.35;
             cursor: pointer;
             position: relative;
+            align-items: center;
+            display: inline-flex;
         }
+
+        /* Tooltip on hover for full name */
+        .lb-table-album-name:hover::after,
         .lb-table-song-name:hover::after {
             content: attr(data-full-title);
             position: absolute;
@@ -673,7 +665,15 @@
         }
         .progress-bar-bg {height:8px;}
         .progress-bar-fill {height:8px;}
-        th, td { padding: 10px 8px; }
+        th, td {
+            padding: 14px 10px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 1.07em;
+            text-align: left;
+            color: var(--primary-text); /* or use var(--secondary-text) for th if desired */
+            background: none;
+            vertical-align: middle;
+        }
         tr { border-bottom: 1px solid var(--border-color); }
         .lb-medal { vertical-align: middle; margin-right: 2px; }
         td:first-child { vertical-align: middle; }
