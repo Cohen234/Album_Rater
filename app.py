@@ -1637,7 +1637,6 @@ def search_artist():
 def deduplicate_by_track_overlap(albums):
     import re
     from collections import defaultdict
-    print(albums)
 
     def normalize_track_name(name):
         name = re.sub(r'\(.*?\)', '', name)
@@ -1669,6 +1668,9 @@ def deduplicate_by_track_overlap(albums):
             continue
         filtered_albums.append(album)
     albums = filtered_albums
+    print("All albums from Spotify for this artist:")
+    for album in albums:
+        print(f"- {album.get('name')} (ID: {album.get('id')})")
 
     track_appearances = defaultdict(list)
     for a in albums:
@@ -1696,7 +1698,7 @@ def deduplicate_by_track_overlap(albums):
             albums_to_exclude.add(album_id)
 
     albums_by_title = defaultdict(list)
-    print(albums_by_title)
+
     for a in albums:
         norm_title = normalize_album_title(a.get('name', ''))
         albums_by_title[norm_title].append(a)
