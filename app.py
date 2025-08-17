@@ -916,33 +916,36 @@ def get_album_stats(album_id):
 
         # 7. Remove interludes
         main_df = main_df[main_df['Rank_Group'] != "I"]
+        artist_canonical = album_artist.strip().lower()
         visible_studio_albums = get_visible_studio_albums_for_artist(
-            album_artist,  # use the artist from the album
+            artist_canonical,
             spotify_client=sp,
             blocklist_loader=load_blocklist_for_artist,
             deduplicate_fn=deduplicate_by_track_overlap,
             is_live_album_fn=is_live_album
         )
         visible_album_ids = set(a['id'] for a in visible_studio_albums)
-        # Try both possible column names
+
+        print("VISIBLE ALBUM IDS (album stats page):", visible_album_ids)  # DEBUG
+
+        # --- Restrict main_df to visible albums ---
         if 'Spotify_Album_ID' in main_df.columns:
             main_df = main_df[main_df['Spotify_Album_ID'].isin(visible_album_ids)]
         elif 'spotify_album_id' in main_df.columns:
             main_df = main_df[main_df['spotify_album_id'].isin(visible_album_ids)]
 
-        # 8. ARTIST MATCH: exact match in comma-separated list (case-insensitive)
-        album_artist = str(album_stats.get('artist_name', '')).strip().lower()
-
+        # --- Artist matcher: exact match in comma-separated list ---
         def artist_matcher_field(artists_string):
-            # Handles NaN, empty, etc
             if not isinstance(artists_string, str):
                 return False
-            # Split by ',' and compare each, case-insensitive/trimmed
-            return any(album_artist == a.strip().lower() for a in artists_string.split(','))
+            return any(artist_canonical == a.strip().lower() for a in artists_string.split(','))
 
         artist_songs_df = main_df[main_df['Artist_Name'].apply(artist_matcher_field)]
-        artist_avg = artist_songs_df['Ranking'].mean() if not artist_songs_df.empty else None
 
+        print("ARTIST SONGS DF (album stats page):",
+              artist_songs_df[['Song_Name', 'Ranking', 'Spotify_Album_ID']])  # DEBUG
+
+        artist_avg = artist_songs_df['Ranking'].mean() if not artist_songs_df.empty else None
 
         response_data = {
             'original_score': f"{original_score:.2f}" if pd.notna(original_score) else 'N/A',
