@@ -48,25 +48,23 @@ def load_album_data(spotify_url):
 import re  # Make sure 're' is imported at the top of your file
 
 
-def get_albums_by_artist(artist_name):
+def get_albums_by_artist(spotify_client, artist_name):
     """
     Fetches all studio albums for a given artist, using a regex to filter out live albums and singles.
+    Accepts a spotify_client instance (sp).
     """
-    results = sp.search(q=f"artist:{artist_name}", type="artist", limit=1)
+    results = spotify_client.search(q=f"artist:{artist_name}", type="artist", limit=1)
     items = results.get('artists', {}).get('items', [])
     if not items:
         return []
     artist_id = items[0]['id']
 
-    # THE FIX: Use a single, powerful regular expression.
-    # \b ensures we match "live" as a whole word, not as part of another word.
-    # re.IGNORECASE makes the search case-insensitive (catches 'Live' and 'live').
     live_pattern = re.compile(r'\blive\b|unplugged|sessions|live licks|flashpoint', re.IGNORECASE)
 
     all_api_albums = []
     offset = 0
     while True:
-        response = sp.artist_albums(artist_id, album_type='album', limit=50, offset=offset)
+        response = spotify_client.artist_albums(artist_id, album_type='album', limit=50, offset=offset)
         if not response['items']:
             break
         all_api_albums.extend(response['items'])

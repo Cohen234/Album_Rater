@@ -28,18 +28,9 @@ def add_to_blocklist(artist_name, album_id):
 
 def get_visible_studio_albums_for_artist(artist_name, spotify_client, blocklist_loader, deduplicate_fn,
                                          is_live_album_fn):
-    """
-    Returns the list of visible (filtered, non-blocklisted) studio albums for an artist.
-
-    :param artist_name: The artist's name as a string.
-    :param spotify_client: The Spotify client instance (should have .search and .album_tracks methods).
-    :param blocklist_loader: Function to load blocklist for the artist, returns a set of album IDs.
-    :param deduplicate_fn: Function to deduplicate and filter albums (e.g., deduplicate_by_track_overlap).
-    :param is_live_album_fn: Function to determine if an album is a live album.
-    :return: List of visible album dicts (each with at least 'id', 'name', 'tracks', etc.).
-    """
+    from spotify_logic import get_albums_by_artist
     # 1. Get all albums for artist from Spotify
-    albums_from_spotify = spotify_client.get_albums_by_artist(artist_name)
+    albums_from_spotify = get_albums_by_artist(spotify_client, artist_name)
 
     # 2. Fetch tracks and filter out live albums
     filtered_albums = []
