@@ -882,35 +882,35 @@ def get_album_stats(album_id):
             days_to_add = 45 if times_ranked > 1 else 15
             next_rerank_date = (last_ranked_date + pd.Timedelta(days=days_to_add)).strftime('%Y-%m-%d')
 
+        # 1. Standardize columns (spaces to underscores)
         main_df.columns = [c.replace(' ', '_') for c in main_df.columns]
-
-        # Ensure proper types
         main_df['Ranking'] = pd.to_numeric(main_df['Ranking'], errors='coerce')
         main_df['Artist_Name'] = main_df['Artist_Name'].astype(str)
+        main_df['Song_Name'] = main_df['Song_Name'].astype(str)
+        main_df['Ranking_Status'] = main_df['Ranking_Status'].astype(str)
 
-        # Filter to only 'final' rankings if that column exists
-        if 'Ranking_Status' in main_df.columns:
-            main_df = main_df[main_df['Ranking_Status'].astype(str).str.lower() == 'final']
+        # 2. Only FINAL rankings
+        main_df = main_df[main_df['Ranking_Status'].str.lower() == 'final']
 
-        # Remove duplicates: keep only the latest by Ranked_Date, if columns exist
+        # 3. Remove duplicates: keep only the latest by Ranked_Date
         if all(col in main_df.columns for col in ['Song_Name', 'Artist_Name', 'Ranked_Date']):
             main_df = main_df.sort_values('Ranked_Date').drop_duplicates(['Song_Name', 'Artist_Name'], keep='last')
 
-        # Filter valid entries (non-empty song/artist, and ranking)
+        # 4. Filter valid entries
         main_df = main_df[
             (main_df['Song_Name'].str.strip() != "") &
             (main_df['Artist_Name'].str.strip() != "") &
             (main_df['Ranking'].notnull())
             ]
 
-        # Handle 'Rank_Group' column (create if only 'Rank Group' exists)
+        # 5. Handle 'Rank_Group' column
         if 'Rank_Group' not in main_df.columns and 'Rank Group' in main_df.columns:
             main_df['Rank_Group'] = main_df['Rank Group']
 
-        # Remove interludes
-        actual_songs_df = main_df[main_df['Rank_Group'] != "I"].copy()
+        # 6. Remove interludes
+        main_df = main_df[main_df['Rank_Group'] != "I"]
 
-        # Artist filter: exact match in comma-separated list
+        # 7. Artist filter (exact match in comma-separated list)
         album_artist = str(album_stats.get('artist_name', '')).strip().lower()
 
         def artist_matcher_field(x):
@@ -919,8 +919,9 @@ def get_album_stats(album_id):
             except Exception:
                 return False
 
-        artist_songs_for_avg = actual_songs_df[actual_songs_df['Artist_Name'].apply(artist_matcher_field)]
-        artist_avg = artist_songs_for_avg['Ranking'].mean() if not artist_songs_for_avg.empty else None
+        artist_songs_df = main_df[main_df['Artist_Name'].apply(artist_matcher_field)]
+        artist_avg = artist_songs_df['Ranking'].mean() if not artist_songs_df.empty else None
+
 
         response_data = {
             'original_score': f"{original_score:.2f}" if pd.notna(original_score) else 'N/A',
