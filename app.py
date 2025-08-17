@@ -826,6 +826,7 @@ def album_page(artist_name, album_name, album_id):
     )
 @app.route('/get_album_stats/<album_id>')
 def get_album_stats(album_id):
+    from album_blocklist import get_visible_studio_albums_for_artist, load_blocklist_for_artist
     try:
         logging.info(f"Received album_id: {album_id}")
         # 1. Load data
@@ -915,6 +916,19 @@ def get_album_stats(album_id):
 
         # 7. Remove interludes
         main_df = main_df[main_df['Rank_Group'] != "I"]
+        visible_studio_albums = get_visible_studio_albums_for_artist(
+            album_artist,  # use the artist from the album
+            spotify_client=sp,
+            blocklist_loader=load_blocklist_for_artist,
+            deduplicate_fn=deduplicate_by_track_overlap,
+            is_live_album_fn=is_live_album
+        )
+        visible_album_ids = set(a['id'] for a in visible_studio_albums)
+        # Try both possible column names
+        if 'Spotify_Album_ID' in main_df.columns:
+            main_df = main_df[main_df['Spotify_Album_ID'].isin(visible_album_ids)]
+        elif 'spotify_album_id' in main_df.columns:
+            main_df = main_df[main_df['spotify_album_id'].isin(visible_album_ids)]
 
         # 8. ARTIST MATCH: exact match in comma-separated list (case-insensitive)
         album_artist = str(album_stats.get('artist_name', '')).strip().lower()
