@@ -321,6 +321,12 @@ def artist_page_v2(artist_name):
             df['Rank_Group'] = df['Rank Group']
         return df
 
+    def filter_df_by_artist(df, artist_col, artist_name):
+        artist_query = artist_name.lower().strip()
+        return df[df[artist_col].apply(
+            lambda x: artist_query in [str(a).strip().lower() for a in str(x).split(',')]
+        )].copy()
+
     try:
         logging.info(f"--- Loading Artist Stats Page for: {artist_name} ---")
 
@@ -359,19 +365,19 @@ def artist_page_v2(artist_name):
         # --- Assign Universal Rank *after* deduplication ---
         all_songs_df = all_songs_df.sort_values(by='Ranking', ascending=False)
         all_songs_df['Universal_Rank'] = range(1, len(all_songs_df) + 1)
-
-        # --- Duplicate check for debugging ---
-        dupes = all_songs_df[all_songs_df.duplicated(subset=['Song_Name', 'Artist_Name'], keep=False)]
-
-        def filter_df_by_artist(df, artist_col, artist_name):
-            artist_query = artist_name.lower().strip()
-            return df[df[artist_col].apply(
-                lambda x: artist_query in [str(a).strip().lower() for a in str(x).split(',')]
-            )].copy()
-
-        # --- Sort albums and assign Global Rank ---
         all_albums_df = all_albums_df.sort_values(by='weighted_average_score', ascending=False)
         all_albums_df['Global_Rank'] = range(1, len(all_albums_df) + 1)
+
+        # --- Duplicate check for debugging ---
+        all_songs_df['album_name_clean'] = all_songs_df['Album_Name'].astype(str).str.strip().str.lower()
+        all_albums_df['album_name_clean'] = all_albums_df['album_name'].astype(str).str.strip().str.lower()
+        album_first_ranked = all_songs_df.groupby('album_name_clean')['Ranked_Date'].min()
+        album_first_score = all_songs_df.groupby('album_name_clean')['Ranking'].first()
+        all_albums_df['first_ranked_date'] = all_albums_df['album_name_clean'].map(album_first_ranked)
+        all_albums_df['first_score'] = all_albums_df['album_name_clean'].map(album_first_score)
+        all_albums_df['first_ranked_date'] = pd.to_datetime(all_albums_df['first_ranked_date'], errors='coerce')
+        all_albums_df = all_albums_df[all_albums_df['first_ranked_date'].notnull()]
+
         artist_songs_df = filter_df_by_artist(all_songs_df, 'Artist_Name', artist_name)
         artist_albums_df = filter_df_by_artist(all_albums_df, 'artist_name', artist_name)
         if artist_songs_df.empty and artist_albums_df.empty:
@@ -419,26 +425,7 @@ def artist_page_v2(artist_name):
         song_percentile = ((total_songs - artist_songs_df['Universal_Rank'].mean()) / total_songs) * 100 if total_songs > 0 and not artist_songs_df.empty else 0
         artist_score = (album_percentile * 0.6) + (song_percentile * 0.4) if ranked_albums_count > 0 else 0
 
-        # 1. Clean names in all DataFrames (do this as early as possible)
-        all_songs_df['album_name_clean'] = all_songs_df['Album_Name'].astype(str).str.strip().str.lower()
-        # ...other setup...
 
-        # Assign album_name_clean
-        all_albums_df['album_name_clean'] = all_albums_df['album_name'].astype(str).str.strip().str.lower()
-
-        # Map ranking dates and scores
-        album_first_ranked = all_songs_df.groupby('album_name_clean')['Ranked_Date'].min()
-        album_first_score = all_songs_df.groupby('album_name_clean')['Ranking'].first()
-        all_albums_df['first_ranked_date'] = all_albums_df['album_name_clean'].map(album_first_ranked)
-        all_albums_df['first_score'] = all_albums_df['album_name_clean'].map(album_first_score)
-        all_albums_df['first_ranked_date'] = pd.to_datetime(all_albums_df['first_ranked_date'], errors='coerce')
-
-        # Filter albums to only those ever ranked
-        all_albums_df = all_albums_df[all_albums_df['first_ranked_date'].notnull()]
-
-        # Filter for current artist (multi-artist logic)
-
-        artist_albums_df['album_name_clean'] = artist_albums_df['album_name'].astype(str).str.strip().str.lower()
 
         def get_album_placement_on_rank_date(album_id, rank_date, all_albums_df):
             # Only include albums ranked on or before this date
