@@ -841,6 +841,8 @@ def get_album_stats(album_id):
             return jsonify({'error': 'Album not found in averages sheet.'}), 404
 
         album_stats = album_stats.iloc[0]
+        album_artist = str(album_stats.get('artist_name', '')).strip()  # <-- get album artist
+
         current_score = pd.to_numeric(album_stats.get('weighted_average_score'), errors='coerce')
         previous_score = pd.to_numeric(album_stats.get('previous_weighted_score'), errors='coerce')
         original_score = pd.to_numeric(album_stats.get('original_weighted_score'), errors='coerce')
@@ -880,6 +882,19 @@ def get_album_stats(album_id):
             days_to_add = 45 if times_ranked > 1 else 15
             next_rerank_date = (last_ranked_date + pd.Timedelta(days=days_to_add)).strftime('%Y-%m-%d')
 
+        # --- KEY FIX: Artist Avg includes songs where artist is in ANY part of the artist field ---
+        main_df['Artist Name'] = main_df['Artist Name'].astype(str)
+        main_df['Ranking'] = pd.to_numeric(main_df['Ranking'], errors='coerce')
+
+        # Only use songs with valid ranking, not interludes, and where the artist is present
+        artist_songs_mask = (
+            (main_df['Rank Group'].astype(str) != 'I') &
+            (main_df['Ranking'].notnull()) &
+            (main_df['Artist Name'].str.lower().str.contains(album_artist.lower()))
+        )
+        artist_songs_for_avg = main_df[artist_songs_mask]
+        artist_avg = artist_songs_for_avg['Ranking'].mean() if not artist_songs_for_avg.empty else None
+
         response_data = {
             'original_score': f"{original_score:.2f}" if pd.notna(original_score) else 'N/A',
             'best_song': {'name': str(best_song['Song Name']),
@@ -891,14 +906,14 @@ def get_album_stats(album_id):
             'leaderboard_placement': leaderboard_placement,
             'change_from_last_rank': f"{score_drift:+.2f}",  # This now uses the new drift calculation
             'next_rerank_date': next_rerank_date,
-            'rerank_history': rerank_history  # Pass the history to the frontend
+            'rerank_history': rerank_history,  # Pass the history to the frontend
+            'artist_avg': f"{artist_avg:.2f}" if artist_avg is not None else 'N/A'  # <-- RETURN THIS TO FRONTEND!
         }
         return jsonify(response_data)
 
     except Exception as e:
         logging.error(f"Error in get_album_stats for {album_id}: {e}", exc_info=True)
         return jsonify({'error': f'An error occurred: {e}'}), 500
-
 
 @app.route("/submit_rankings", methods=["POST"])
 def submit_rankings():
