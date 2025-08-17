@@ -615,7 +615,8 @@
         .then(res => res.json())
         .then(data => {
             if(data.success) {
-                document.querySelectorAll(`[data-album-id="${albumId}"]`).forEach(elem => elem.remove());
+                // Redirect to the artist page after deletion
+                window.location.href = "{{ url_for('artist_page_v2', artist_name=artist_name) }}";
             } else {
                 alert("Failed to delete album.");
             }
