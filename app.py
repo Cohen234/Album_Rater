@@ -1790,7 +1790,7 @@ def load_albums_by_artist_route():
 
     logging.info(f"\n--- LOADING ALBUM LIST FOR ARTIST: {artist_name} ---")
     try:
-        albums_from_spotify = get_albums_by_artist(artist_name)
+        albums_from_spotify = get_albums_by_artist(sp, artist_name)
 
         # Fetch tracks and filter out live albums
         filtered_albums = []
