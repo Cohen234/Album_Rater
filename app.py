@@ -323,9 +323,14 @@ def artist_page_v2(artist_name):
 
     def filter_df_by_artist(df, artist_col, artist_name):
         artist_query = artist_name.lower().strip()
-        return df[df[artist_col].apply(
-            lambda x: artist_query in [str(a).strip().lower() for a in str(x).split(',')]
-        )].copy()
+
+        def artist_matcher(x):
+            try:
+                return artist_query in [str(a).strip().lower() for a in str(x).split(',')]
+            except Exception:
+                return False
+
+        return df[df[artist_col].apply(artist_matcher)].copy()
 
     try:
         logging.info(f"--- Loading Artist Stats Page for: {artist_name} ---")
