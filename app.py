@@ -1637,6 +1637,7 @@ def search_artist():
 def deduplicate_by_track_overlap(albums):
     import re
     from collections import defaultdict
+    print(albums)
 
     def normalize_track_name(name):
         name = re.sub(r'\(.*?\)', '', name)
@@ -1695,6 +1696,7 @@ def deduplicate_by_track_overlap(albums):
             albums_to_exclude.add(album_id)
 
     albums_by_title = defaultdict(list)
+    print(albums_by_title)
     for a in albums:
         norm_title = normalize_album_title(a.get('name', ''))
         albums_by_title[norm_title].append(a)
@@ -1706,10 +1708,10 @@ def deduplicate_by_track_overlap(albums):
             album for album in title_albums
             if not re.search(r'(deluxe|remaster|edition)', album.get('name', '').lower())
         ]
-        # 2. Remaster only (must have remaster, but not deluxe or edition)
+        # 2. Remaster only (must have remaster or remastered, but not deluxe or edition)
         remasters = [
             album for album in title_albums
-            if re.search(r'remaster', album.get('name', '').lower())
+            if re.search(r'remaster(ed)?', album.get('name', '').lower())
             and not re.search(r'deluxe|edition', album.get('name', '').lower())
         ]
         # 3. Deluxe/Edition as last resort
@@ -1731,7 +1733,6 @@ def deduplicate_by_track_overlap(albums):
         elif deluxe_editions:
             canonical_album = min(deluxe_editions, key=get_date)
         else:
-            # Fallback: should not happen, but just in case
             canonical_album = min(title_albums, key=get_date)
         canonical_album_ids.add(canonical_album['id'])
 
