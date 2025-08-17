@@ -512,9 +512,9 @@ def artist_page_v2(artist_name):
 
         # For polar chart
         all_rank_groups = [f"{i / 2:.1f}" for i in range(2, 21)]
-        artist_songs_df['Rank_Group_Str'] = artist_songs_df['Rank_Group'].astype(str)
+        all_songs_df['Rank_Group_Str'] = all_songs_df['Rank_Group'].astype(str)
         polar_data_series = pd.Series(index=all_rank_groups + ['I'], dtype=int).fillna(0)
-        song_counts = artist_songs_df['Rank_Group_Str'].value_counts()
+        song_counts = all_songs_df['Rank_Group_Str'].value_counts()
         polar_data_series.update(song_counts)
         polar_chart_data = {
             'labels': polar_data_series.index.tolist(),

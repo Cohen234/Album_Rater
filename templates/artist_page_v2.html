@@ -598,6 +598,19 @@
         }
 
         .lb-table-album-name:hover::after,
+        .lb-table-song-name {
+            max-width: 130px; /* Adjust as desired */
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1 1 0;
+            cursor: pointer;
+            position: relative;
+            font-size: 1.07em;
+            color: #fff;
+            line-height: 1.35;
+        }
         .lb-table-song-name:hover::after {
             content: attr(data-full-title);
             position: absolute;
@@ -925,7 +938,7 @@
                                         {{ song['Artist Rank'] }}
                                     {% endif %}
                                 </td>
-                                <td class="lb-table-song-cell">
+                                <td class="lb-table-song-cell" style="display: flex; align-items: center; min-width: 0;">
                                     <span class="lb-table-song-name" data-full-title="{{ song['Song Name'] }}">{{ song['Song Name'] }}</span>
                                 </td>
                                 <td style="text-align:right;">{{ "%.2f"|format(song['Ranking']) }}</td>
