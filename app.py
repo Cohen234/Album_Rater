@@ -343,35 +343,40 @@ def artist_page_v2(artist_name):
         # --- Normalize columns: spaces to underscores everywhere ---
         all_songs_df = standardize_columns(all_songs_df)
         all_albums_df = standardize_columns(all_albums_df)
+        for col in ['Song_Name', 'Artist_Name', 'Ranking_Status', 'Album_Name']:
+            if col in all_songs_df.columns:
+                all_songs_df[col] = all_songs_df[col].astype(str)
+        for col in ['album_name', 'artist_name']:
+            if col in all_albums_df.columns:
+                all_albums_df[col] = all_albums_df[col].astype(str)
+        logging.info(f"all_songs_df dtypes:\n{all_songs_df.dtypes}")
+        logging.info(f"all_albums_df dtypes:\n{all_albums_df.dtypes}")
 
-        # --- Force artist and album columns to string to avoid type errors ---
-        all_songs_df['Artist_Name'] = all_songs_df['Artist_Name'].astype(str)
-        all_albums_df['artist_name'] = all_albums_df['artist_name'].astype(str)
-        all_songs_df['Album_Name'] = all_songs_df['Album_Name'].astype(str)
-        all_albums_df['album_name'] = all_albums_df['album_name'].astype(str)
 
         # --- Type conversions ---
         all_songs_df['Ranking'] = pd.to_numeric(all_songs_df['Ranking'], errors='coerce')
-        all_albums_df['weighted_average_score'] = pd.to_numeric(all_albums_df['weighted_average_score'], errors='coerce')
+        all_albums_df['weighted_average_score'] = pd.to_numeric(all_albums_df['weighted_average_score'],
+                                                                errors='coerce')
 
         # --- Keep only FINAL rows ---
         all_songs_df = all_songs_df[all_songs_df['Ranking_Status'].astype(str).str.lower() == 'final']
 
         # --- Remove duplicates: keep only the latest by Ranked_Date ---
-        all_songs_df = all_songs_df.sort_values('Ranked_Date').drop_duplicates(['Song_Name', 'Artist_Name'], keep='last')
+        all_songs_df = all_songs_df.sort_values('Ranked_Date').drop_duplicates(['Song_Name', 'Artist_Name'],
+                                                                               keep='last')
 
         # --- Filter for valid song/artist/ranking ---
         all_songs_df = all_songs_df[
-            (all_songs_df['Song_Name'].astype(str).str.strip() != "") &
-            (all_songs_df['Artist_Name'].astype(str).str.strip() != "") &
+            (all_songs_df['Song_Name'].str.strip() != "") &
+            (all_songs_df['Artist_Name'].str.strip() != "") &
             (all_songs_df['Ranking'].notnull())
-        ]
+            ]
 
         all_albums_df = all_albums_df[
-            (all_albums_df['album_name'].astype(str).str.strip() != "") &
-            (all_albums_df['artist_name'].astype(str).str.strip() != "") &
+            (all_albums_df['album_name'].str.strip() != "") &
+            (all_albums_df['artist_name'].str.strip() != "") &
             (all_albums_df['weighted_average_score'].notnull())
-        ]
+            ]
 
         # --- Assign Universal Rank *after* deduplication ---
         all_songs_df = all_songs_df.sort_values(by='Ranking', ascending=False)
@@ -396,6 +401,7 @@ def artist_page_v2(artist_name):
 
         # Standardize columns for artist_songs_df
         artist_songs_df = standardize_columns(artist_songs_df)
+
 
 
         if 'Rank_Group' not in artist_songs_df.columns and 'Rank Group' in artist_songs_df.columns:
@@ -774,6 +780,11 @@ def artist_page_v2(artist_name):
         )
     except Exception as e:
         logging.critical(f"🔥 CRITICAL ERROR loading artist page for {artist_name}: {e}")
+        try:
+            logging.critical("Sample all_songs_df row:\n%s", all_songs_df.head().to_dict())
+            logging.critical("Sample all_albums_df row:\n%s", all_albums_df.head().to_dict())
+        except Exception as inner_e:
+            logging.critical(f"Could not print sample rows: {inner_e}")
         return f"An error occurred: {e}", 500
 
 from flask import abort
