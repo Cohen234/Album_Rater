@@ -1865,65 +1865,85 @@ def song_page(artist_name, song_name):
     album_cover_url = ""
     release_date = ""
     song_length = "?"
-    track_number = None
+    track_number = "?"
 
-    # -- Get all songs on the album, in album order --
-    album_songs_df = main_df[
-        (main_df['Album Name'].str.strip().str.lower() == album_name.strip().lower()) &
-        (main_df['Artist Name'].str.strip().str.lower() == artist_name_clean)
-    ].copy()
-
-    # Try to get album info from Spotify, if album_id present
-    track_order_map = {}
+    # -- Get album info and album song list (for track number and album release date) --
+    album_song_list = []
+    got_album_info = False
     if album_id:
         try:
             album_info = load_album_data(sp, album_id)
             if album_info:
+                got_album_info = True
                 album_cover_url = album_info.get('album_cover_url', '') or album_cover_url
                 release_date = album_info.get('release_date', '') or release_date
-                # Map song title to track number and duration from Spotify
-                if 'songs' in album_info:
-                    for i, song in enumerate(album_info['songs']):
-                        song_name_album = song['song_name'].strip().lower()
-                        track_order_map[song_name_album] = {
-                            'track_number': i + 1,
-                            'duration_ms': int(song.get('duration_ms', 0)),
-                        }
+                album_song_list = album_info['songs'] if 'songs' in album_info else []
         except Exception as e:
             print("Error loading album data:", e)
 
-    # Assign track number and duration using the track_order_map if available
-    song_track_meta = track_order_map.get(song_name_clean)
-    if song_track_meta:
-        track_number = song_track_meta['track_number']
-        duration_sec = song_track_meta['duration_ms'] // 1000 if song_track_meta['duration_ms'] else None
-        if duration_sec:
-            m = duration_sec // 60
-            s = duration_sec % 60
-            song_length = f"{m}:{s:02}"
-    else:
-        # Fallback: try to get from sheet columns
-        track_number = rep.get('Position In Group', 'N/A') or rep.get('track_order', 'N/A')
-        duration_sec = None
-        for dur_col in ['duration_sec', 'duration_ms', 'Duration (ms)']:
-            if dur_col in rep and rep[dur_col]:
-                try:
-                    if 'ms' in dur_col:
-                        duration_sec = int(float(rep[dur_col])) // 1000
-                    else:
-                        duration_sec = int(float(rep[dur_col]))
-                    break
-                except Exception:
-                    duration_sec = None
-        if duration_sec:
-            m = duration_sec // 60
-            s = duration_sec % 60
-            song_length = f"{m}:{s:02}"
-        # Try album cover
+    # Find this song in the album song list (from Spotify)
+    if album_song_list:
+        for i, song in enumerate(album_song_list):
+            if song['song_name'].strip().lower() == song_name_clean:
+                track_number = i + 1
+                # Track length from Spotify
+                duration_sec = int(song.get('duration_ms', 0)) // 1000 if song.get('duration_ms') else None
+                if duration_sec:
+                    m = duration_sec // 60
+                    s = duration_sec % 60
+                    song_length = f"{m}:{s:02}"
+                break
+
+    # Fallbacks if not found via Spotify
+    if track_number == "?" or not song_length or song_length == "?":
+        # Get all album songs from sheet, order by Position In Group if available
+        album_songs_df = main_df[
+            (main_df['Album Name'].str.strip().str.lower() == album_name.strip().lower()) &
+            (main_df['Artist Name'].str.strip().str.lower() == artist_name_clean)
+        ].copy()
+
+        # Try to get track number by sheet order if necessary
+        if track_number == "?":
+            # Use position in group if available, else order as in sheet
+            if 'Position In Group' in album_songs_df.columns:
+                # Find our song in the album and get its 'Position In Group'
+                pos_row = album_songs_df[
+                    album_songs_df['Song Name'].str.strip().str.lower() == song_name_clean
+                ]
+                if not pos_row.empty:
+                    track_number = pos_row.iloc[0].get('Position In Group', '?')
+            else:
+                # Order as in sheet
+                album_songs_df = album_songs_df.reset_index(drop=True)
+                for idx, row in album_songs_df.iterrows():
+                    if row['Song Name'].strip().lower() == song_name_clean:
+                        track_number = idx + 1
+                        break
+
+        # Try to get song length from sheet
+        if not song_length or song_length == "?":
+            duration_sec = None
+            for dur_col in ['duration_sec', 'duration_ms', 'Duration (ms)']:
+                if dur_col in rep and rep[dur_col]:
+                    try:
+                        if 'ms' in dur_col:
+                            duration_sec = int(float(rep[dur_col])) // 1000
+                        else:
+                            duration_sec = int(float(rep[dur_col]))
+                        break
+                    except Exception:
+                        duration_sec = None
+            if duration_sec:
+                m = duration_sec // 60
+                s = duration_sec % 60
+                song_length = f"{m}:{s:02}"
+
+        # Album art fallback
         album_cover_url = rep.get('album_cover_url', '') or album_cover_url
 
     # Release date: always use album's release date (from album_info if possible, else fallback to sheet)
     if not release_date:
+        # Could also check album/averages sheet if you want
         release_date = rep.get('release_date', '') or rep.get('Release Date', '')
 
     # Timeline data
