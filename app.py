@@ -1841,10 +1841,8 @@ def song_page(artist_name, song_name):
     import numpy as np
     artist_name = unquote(artist_name)
     song_name = unquote(song_name)
-
-    # Load your main songs DataFrame
-    # Replace with your actual data loading!
-    main_df = pd.read_csv("all_songs.csv")  # Or your data source
+    main_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
+    main_df = get_as_dataframe(main_sheet, evaluate_formulas=False).fillna("")
 
     # Normalize columns
     for col in ['Song_Name', 'Artist_Name', 'Album_Name']:
