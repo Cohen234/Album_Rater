@@ -1198,6 +1198,77 @@ def submit_rankings():
                                    album_averages_df, include_index=False, resize=True)
                 logging.info("Successfully recalculated and saved all averages.")
 
+            try:
+                # Load full, up-to-date rankings (final_main_df) and clean
+                drift_df = final_main_df.copy()
+                drift_df['Ranking'] = pd.to_numeric(drift_df['Ranking'], errors='coerce')
+                drift_df = drift_df[drift_df['Ranking'].notnull()]
+                drift_df = drift_df[drift_df['Ranking Status'] == 'final']
+                drift_df = drift_df[drift_df['Rank Group'].astype(str) != 'I']
+
+                # Calculate average score per song (across all rankings)
+                song_grouped = drift_df.groupby(
+                    ['Song Name', 'Artist Name', 'Spotify Song ID', 'Album Name', 'Spotify Album ID']).agg(
+                    {'Ranking': 'mean'}).reset_index()
+
+                # Assign placement (1 = best)
+                song_grouped = song_grouped.sort_values('Ranking', ascending=False).reset_index(drop=True)
+                song_grouped['Placement'] = song_grouped.index + 1
+
+                # Calculate percentile
+                total_songs = len(song_grouped)
+                song_grouped['Percentile'] = (song_grouped['Placement'] - 1) / (
+                            total_songs - 1) * 100 if total_songs > 1 else 0
+
+                # Get current Song Data sheet and determine next event number
+                try:
+                    song_data_sheet = client.open_by_key(SPREADSHEET_ID).worksheet('Song Data')
+                    song_data_df = get_as_dataframe(song_data_sheet, evaluate_formulas=False).fillna("")
+                    if 'Event Number' in song_data_df.columns and not song_data_df.empty:
+                        event_number = int(song_data_df['Event Number'].max()) + 1
+                    else:
+                        event_number = 1
+                except Exception:
+                    # If sheet doesn't exist or is empty
+                    song_data_sheet = client.open_by_key(SPREADSHEET_ID).add_worksheet(title='Song Data', rows=1,
+                                                                                       cols=12)
+                    song_data_sheet.append_row([
+                        'Event Number', 'Ranked Date', 'Album Name', 'Artist Name', 'Spotify Album ID', 'Song Name',
+                        'Spotify Song ID', 'Score', 'Placement', 'Percentile'
+                    ])
+                    song_data_df = pd.DataFrame()
+                    event_number = 1
+
+                # Use the current time as Ranked Date for this event
+                event_ranked_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+                new_song_data_rows = []
+                for _, row in song_grouped.iterrows():
+                    new_song_data_rows.append({
+                        'Event Number': event_number,
+                        'Ranked Date': event_ranked_date,
+                        'Album Name': album_name,
+                        'Artist Name': row['Artist Name'],
+                        'Spotify Album ID': row['Spotify Album ID'],
+                        'Song Name': row['Song Name'],
+                        'Spotify Song ID': row['Spotify Song ID'],
+                        'Score': round(row['Ranking'], 4),
+                        'Placement': int(row['Placement']),
+                        'Percentile': round(row['Percentile'], 4)
+                    })
+
+                # Append to Song Data sheet
+                new_song_data_df = pd.DataFrame(new_song_data_rows)
+                # Concatenate with old data if any
+                if 'song_data_df' in locals() and not song_data_df.empty:
+                    final_song_data_df = pd.concat([song_data_df, new_song_data_df], ignore_index=True)
+                else:
+                    final_song_data_df = new_song_data_df
+                set_with_dataframe(song_data_sheet, final_song_data_df, include_index=False, resize=True)
+                logging.info(f"Updated Song Data drift timeline for event {event_number} ({album_name}).")
+            except Exception as e:
+                logging.error(f"Failed to update Song Data drift timeline: {e}")
+
             # --- 5. Get "AFTER" data for the animation ---
             averages_df_after = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
             averages_df_after['weighted_average_score'] = pd.to_numeric(averages_df_after['weighted_average_score'],
@@ -2003,6 +2074,21 @@ def song_page(artist_name, song_name):
     bins = np.arange(0.5, 10.5, 0.5)
     histogram_counts, bin_edges = np.histogram(song_df['Ranking'].dropna(), bins=bins)
     histogram_bins = [f"{b:.1f}" for b in bins[:-1]]
+    # --- Drift Timeline: Load from "Song Data" sheet ---
+    try:
+        song_data_df = get_as_dataframe(client.open_by_key(SPREADSHEET_ID).worksheet("Song Data")).fillna("")
+        drift_df = song_data_df[
+            (song_data_df['Song Name'].str.strip().str.lower() == song_name_clean) &
+            (song_data_df['Artist Name'].str.strip().str.lower() == artist_name_clean)
+        ].copy()
+        drift_df = drift_df.sort_values('Event Number', key=lambda s: s.astype(int))
+        timeline_event_numbers = drift_df['Event Number'].astype(int).tolist()
+        timelines_scores = drift_df['Score'].astype(float).tolist()
+        timeline_placements = drift_df['Placement'].astype(int).tolist()
+        timeline_percentiles = drift_df['Percentile'].astype(float).tolist()
+    except Exception as e:
+        print(f"Error loading Song Data drift timeline: {e}")
+        timeline_event_numbers, timelines_scores, timeline_placements, timeline_percentiles = [], [], [], []
 
     # Render
     return render_template(
@@ -2025,7 +2111,11 @@ def song_page(artist_name, song_name):
         timeline_scores=timeline_scores,
         histogram_bins=histogram_bins,
         histogram_counts=histogram_counts.tolist(),
-        current_score=current_score
+        current_score=current_score,
+        timeline_event_numbers=timeline_event_numbers,
+        timeline_placements=timeline_placements,
+        timeline_percentiles=timeline_percentiles,
+        timelines_scores=timelines_scores
     )
 
 def is_live_album(album_tracks):

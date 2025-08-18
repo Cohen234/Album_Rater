@@ -149,20 +149,45 @@
     </section>
     <div class="chart-card">
         <h3>Ranking Timeline</h3>
+        <div style="margin-bottom:12px">
+            <button onclick="showTimeline('score')">Score</button>
+            <button onclick="showTimeline('placement')">Placement</button>
+            <button onclick="showTimeline('percentile')">Percentile</button>
+        </div>
         <canvas id="timelineChart"></canvas>
     </div>
     <script>
-        // Timeline Chart
-        const timelineLabels = {{ timeline_dates | tojson }};
-        const timelineData = {{ timeline_scores | tojson }};
-        if (timelineLabels && timelineLabels.length > 0) {
-            new Chart(document.getElementById('timelineChart').getContext('2d'), {
+        const eventNumbers = {{ timeline_event_numbers | tojson }};
+        const scoreData = {{ timelines_scores | tojson }};
+        const placementData = {{ timeline_placements | tojson }};
+        const percentileData = {{ timeline_percentiles | tojson }};
+
+        let timelineChart;
+        function showTimeline(type) {
+            let label, data, yOptions = {};
+            if (type === 'score') {
+                label = 'Score';
+                data = scoreData;
+                yOptions = {min: 0, max: 10, title: {display:true, text: 'Score', color: '#b3b3b3'}};
+            } else if (type === 'placement') {
+                label = 'Placement';
+                data = placementData;
+                // Invert y axis for placement (lower placement = higher on graph)
+                yOptions = {reverse: true, title: {display:true, text: 'Placement (lower is better)', color: '#b3b3b3'}};
+            } else {
+                label = 'Percentile';
+                data = percentileData;
+                // Invert y axis for percentile (lower is better)
+                yOptions = {reverse: true, min: 0, max: 100, title: {display:true, text: 'Percentile (lower is better)', color: '#b3b3b3'}};
+            }
+            if (timelineChart) timelineChart.destroy();
+            timelineChart = new Chart(document.getElementById('timelineChart').getContext('2d'), {
                 type: 'line',
                 data: {
-                    labels: timelineLabels,
+                    labels: eventNumbers,
                     datasets: [{
-                        label: 'Score',
-                        data: timelineData,
+                        label: label,
+                        data: data,
                         borderColor: '#1DB954',
                         backgroundColor: 'rgba(29,185,84,0.11)',
                         fill: true,
@@ -175,12 +200,14 @@
                 options: {
                     plugins: { legend: { display: false }},
                     scales: {
-                        x: { title: { display: true, text: 'Date', color: '#b3b3b3' }, ticks: { color: '#b3b3b3' }, grid: { color: '#282828' } },
-                        y: { title: { display: true, text: 'Score', color: '#b3b3b3' }, min: 0, max: 10, ticks: { color: '#b3b3b3' }, grid: { color: '#282828' } }
+                        x: { title: { display: true, text: 'Album Rank Event', color: '#b3b3b3' }, ticks: { color: '#b3b3b3' }, grid: { color: '#282828' } },
+                        y: Object.assign({ticks: { color: '#b3b3b3' }, grid: { color: '#282828' }}, yOptions)
                     }
                 }
             });
         }
+        // Show score by default
+        showTimeline('score');
     </script>
 </body>
 </html>
