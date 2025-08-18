@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ song_title }} - Song Stats</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background-color: #121212;
+            color: #fff;
+            margin: 0;
+            padding: 0;
+        }
+        .song-header {
+            display: flex;
+            align-items: center;
+            gap: 32px;
+            background: #181818;
+            border-bottom: 1px solid #282828;
+            padding: 50px 40px 32px 40px;
+        }
+        .song-art {
+            width: 130px;
+            height: 130px;
+            border-radius: 12px;
+            box-shadow: 0 4px 18px rgba(0,0,0,0.23);
+            object-fit: cover;
+            flex-shrink: 0;
+        }
+        .song-header-info h1 {
+            font-size: 2.4em;
+            margin: 0 0 6px 0;
+        }
+        .song-header-info h2 {
+            font-size: 1.25em;
+            color: #b3b3b3;
+            margin: 0 0 10px 0;
+        }
+        .song-header-info a {
+            color: #1DB954;
+            text-decoration: none;
+            font-size: 1.1em;
+            margin-bottom: 8px;
+        }
+        .song-header-info .song-details {
+            color: #b3b3b3;
+            font-size: 1.02em;
+            margin-top: 3px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 28px;
+            padding: 40px;
+            background: #181818;
+        }
+        .stat-box {
+            background: #222;
+            border-radius: 10px;
+            padding: 26px 18px 19px 18px;
+            box-shadow: 0 3px 16px rgba(0,0,0,0.12);
+            text-align: center;
+        }
+        .stat-label {
+            color: #b3b3b3;
+            font-size: 0.97em;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+        }
+        .stat-value {
+            font-size: 2.1em;
+            font-weight: 700;
+            color: #1DB954;
+            margin-bottom: 0;
+        }
+        .stat-caption {
+            font-size: 1.08em;
+            color: #888;
+            margin-top: 8px;
+        }
+        .chart-card {
+            background: #181818;
+            border-radius: 10px;
+            padding: 36px 32px 32px 32px;
+            margin: 35px 40px 0 40px;
+            box-shadow: 0 2px 16px rgba(0,0,0,0.14);
+        }
+        .chart-card h3 {
+            font-size: 1.18em;
+            color: #b3b3b3;
+            margin: 0 0 15px 0;
+            letter-spacing: 1.1px;
+        }
+        .back-link {
+            display: block;
+            margin: 28px 0 0 40px;
+            color: #1DB954;
+            text-decoration: none;
+            font-size: 1.1em;
+        }
+        @media (max-width: 700px) {
+            .song-header { flex-direction: column; align-items: flex-start; gap: 16px; padding: 24px 10px 20px 10px;}
+            .stats-grid, .chart-card { padding: 18px 7px; margin: 12px 7px 0 7px;}
+            .back-link { margin-left: 7px;}
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <a href="{{ url_for('artist_page_v2', artist_name=artist_name) }}" class="back-link">&larr; Back to {{ artist_name }}</a>
+    <div class="song-header">
+        <img src="{{ album_cover_url or 'https://placehold.co/130x130' }}" alt="Album art" class="song-art">
+        <div class="song-header-info">
+            <h1>{{ song_title }}</h1>
+            <h2>{{ artist_name }}</h2>
+            <a href="{{ album_link }}">From album: {{ album_name }}</a>
+            <div class="song-details">
+                Track {{ track_number }} &bull; {{ song_length }} &bull; Released: {{ release_date }}
+            </div>
+        </div>
+    </div>
+    <section class="stats-grid">
+        <div class="stat-box">
+            <div class="stat-label">Average Score</div>
+            <div class="stat-value">{{ "%.2f"|format(song_avg) }}</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-label">Global Rank</div>
+            <div class="stat-value">#{{ song_global_rank }}</div>
+            <div class="stat-caption">Top {{ song_percentile|round(1) }}%</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-label">Artist Rank</div>
+            <div class="stat-value">#{{ artist_rank }}</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-label">Times Ranked</div>
+            <div class="stat-value">{{ times_ranked }}</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-label">Highest Score</div>
+            <div class="stat-value">{{ "%.2f"|format(highest_score) }}</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-label">Lowest Score</div>
+            <div class="stat-value">{{ "%.2f"|format(lowest_score) }}</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-label">Median Score</div>
+            <div class="stat-value">{{ "%.2f"|format(median_score) }}</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-label">Std. Dev.</div>
+            <div class="stat-value">{{ "%.2f"|format(std_score) }}</div>
+        </div>
+    </section>
+    <div class="chart-card">
+        <h3>Ranking Timeline</h3>
+        <canvas id="timelineChart"></canvas>
+    </div>
+    <div class="chart-card">
+        <h3>Ranking Distribution</h3>
+        <canvas id="histogramChart"></canvas>
+    </div>
+    <script>
+        // Timeline Chart
+        const timelineLabels = {{ timeline_dates | tojson }};
+        const timelineData = {{ timeline_scores | tojson }};
+        if (timelineLabels && timelineLabels.length > 0) {
+            new Chart(document.getElementById('timelineChart').getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: timelineLabels,
+                    datasets: [{
+                        label: 'Score',
+                        data: timelineData,
+                        borderColor: '#1DB954',
+                        backgroundColor: 'rgba(29,185,84,0.11)',
+                        fill: true,
+                        tension: 0.33,
+                        pointRadius: 5,
+                        pointHoverRadius: 7,
+                        pointBackgroundColor: '#1DB954'
+                    }]
+                },
+                options: {
+                    plugins: { legend: { display: false }},
+                    scales: {
+                        x: { title: { display: true, text: 'Date', color: '#b3b3b3' }, ticks: { color: '#b3b3b3' }, grid: { color: '#282828' } },
+                        y: { title: { display: true, text: 'Score', color: '#b3b3b3' }, min: 0, max: 10, ticks: { color: '#b3b3b3' }, grid: { color: '#282828' } }
+                    }
+                }
+            });
+        }
+
+        // Histogram Chart
+        const histogramLabels = {{ histogram_bins | tojson }};
+        const histogramData = {{ histogram_counts | tojson }};
+        if (histogramLabels && histogramLabels.length > 0) {
+            new Chart(document.getElementById('histogramChart').getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: histogramLabels,
+                    datasets: [{
+                        label: 'Count',
+                        data: histogramData,
+                        backgroundColor: 'rgba(29,185,84,0.7)'
+                    }]
+                },
+                options: {
+                    plugins: { legend: { display: false }},
+                    scales: {
+                        x: { title: { display: true, text: 'Score', color: '#b3b3b3' }, ticks: { color: '#b3b3b3' }, grid: { color: '#282828' } },
+                        y: { title: { display: true, text: 'Count', color: '#b3b3b3' }, min: 0, ticks: { color: '#b3b3b3' }, grid: { color: '#282828' } }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>

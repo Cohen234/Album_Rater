@@ -941,8 +941,10 @@
                                         {{ song['Artist Rank'] }}
                                     {% endif %}
                                 </td>
-                                <td class="lb-table-song-cell" style="display: flex; align-items: center; min-width: 0;">
+                                <td class="lb-table-song-cell">
+                                  <a href="{{ url_for('song_page', artist_name=artist_name, song_name=song['Song Name']) }}" class="song-link">
                                     <span class="lb-table-song-name" data-full-title="{{ song['Song Name'] }}">{{ song['Song Name'] }}</span>
+                                  </a>
                                 </td>
                                 <td style="text-align:right;">{{ "%.2f"|format(song['Ranking']) }}</td>
                                 <td class="global-rank">

@@ -1832,7 +1832,121 @@ def deduplicate_by_track_overlap(albums):
         canonical_album_ids.add(canonical_album['id'])
 
     return [a for a in albums if a['id'] in canonical_album_ids]
+def percentile_from_rank(rank, total):
+    return round(100 * (rank - 1) / total + 0.00001, 1)  # e.g. rank=1 of 1000 is 0.0%
 
+@app.route('/song/<artist_name>/<path:song_name>')
+def song_page(artist_name, song_name):
+    # Unquote if needed
+    import numpy as np
+    artist_name = unquote(artist_name)
+    song_name = unquote(song_name)
+
+    # Load your main songs DataFrame
+    # Replace with your actual data loading!
+    main_df = pd.read_csv("all_songs.csv")  # Or your data source
+
+    # Normalize columns
+    for col in ['Song_Name', 'Artist_Name', 'Album_Name']:
+        if col in main_df.columns:
+            main_df[col] = main_df[col].astype(str)
+
+    main_df['Ranking'] = pd.to_numeric(main_df['Ranking'], errors='coerce')
+
+    # Filter for the target song (exact match, case-insensitive)
+    song_df = main_df[
+        (main_df['Song_Name'].str.lower() == song_name.strip().lower()) &
+        (main_df['Artist_Name'].str.lower() == artist_name.strip().lower())
+    ]
+
+    if song_df.empty:
+        abort(404, "Song not found")
+
+    # Song stats
+    song_avg = song_df['Ranking'].mean()
+    times_ranked = song_df.shape[0]
+    highest_score = song_df['Ranking'].max()
+    lowest_score = song_df['Ranking'].min()
+    median_score = song_df['Ranking'].median()
+    std_score = song_df['Ranking'].std()
+
+    # Song metadata (use first row as representative)
+    rep = song_df.iloc[0]
+    album_name = rep['Album_Name']
+    album_cover_url = rep.get('album_cover_url', '')
+    album_link = f"/artist/{artist_name}/album/{album_name}/{rep.get('Spotify_Album_ID')}"
+    song_length_sec = float(rep.get('duration_sec', 0))
+    song_length_min = int(song_length_sec // 60)
+    song_length_remain = int(song_length_sec % 60)
+    song_length = f"{song_length_min}:{song_length_remain:02}" if song_length_sec else "?"
+    track_number = rep.get('Track_Number', 'N/A')
+    release_date = rep.get('release_date', '')
+
+    # Timeline data (if multiple rankings)
+    song_df_sorted = song_df.sort_values('Ranked_Date')
+    timeline_dates = song_df_sorted['Ranked_Date'].tolist()
+    timeline_scores = song_df_sorted['Ranking'].tolist()
+
+    # Histogram
+    bins = np.arange(0.5, 10.5, 0.5)
+    histogram_counts, bin_edges = np.histogram(song_df['Ranking'].dropna(), bins=bins)
+    histogram_bins = [f"{b:.1f}" for b in bins[:-1]]
+
+    # Global rank and percentile
+    # Load all songs for universal rank
+    all_songs = main_df.copy()
+    all_songs = all_songs[all_songs['Ranking'].notnull()]
+    all_songs = all_songs.groupby(['Song_Name', 'Artist_Name']).agg({'Ranking':'mean'}).reset_index()
+    all_songs = all_songs.sort_values('Ranking', ascending=False).reset_index(drop=True)
+    all_songs['Universal Rank'] = all_songs.index + 1
+    total_songs = all_songs.shape[0]
+    this_song_row = all_songs[
+        (all_songs['Song_Name'].str.lower() == song_name.strip().lower()) &
+        (all_songs['Artist_Name'].str.lower() == artist_name.strip().lower())
+    ]
+    if not this_song_row.empty:
+        song_global_rank = int(this_song_row['Universal Rank'].values[0])
+        song_percentile = percentile_from_rank(song_global_rank, total_songs)
+    else:
+        song_global_rank = "N/A"
+        song_percentile = "N/A"
+
+    # Artist rank (within artist)
+    artist_songs = all_songs[all_songs['Artist_Name'].str.lower() == artist_name.strip().lower()]
+    artist_songs = artist_songs.sort_values('Ranking', ascending=False).reset_index(drop=True)
+    artist_songs['Artist Rank'] = artist_songs.index + 1
+    this_artist_song = artist_songs[
+        artist_songs['Song_Name'].str.lower() == song_name.strip().lower()
+    ]
+    if not this_artist_song.empty:
+        artist_rank = int(this_artist_song['Artist Rank'].values[0])
+    else:
+        artist_rank = "N/A"
+
+    return render_template(
+        "song_page.html",
+        song_title=song_name,
+        artist_name=artist_name,
+        album_name=album_name,
+        album_cover_url=album_cover_url,
+        album_link=album_link,
+        track_number=track_number,
+        song_length=song_length,
+        release_date=release_date,
+        song_avg=song_avg,
+        times_ranked=times_ranked,
+        highest_score=highest_score,
+        lowest_score=lowest_score,
+        median_score=median_score,
+        std_score=std_score,
+        song_global_rank=song_global_rank,
+        song_percentile=song_percentile,
+        artist_rank=artist_rank,
+        timeline_dates=timeline_dates,
+        timeline_scores=timeline_scores,
+        histogram_bins=histogram_bins,
+        histogram_counts=histogram_counts.tolist(),
+    )
 
 def is_live_album(album_tracks):
     NON_LIVE_TERMS = {'remaster', 'remastered', 'mix', 'mono', 'edit', 'version'}
