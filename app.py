@@ -1870,7 +1870,7 @@ def song_page(artist_name, song_name):
 
     # Song metadata (use first row as representative)
     rep = song_df.iloc[0]
-    album_name = rep['Album_Name']
+    album_name = rep['Album Name']
     album_cover_url = rep.get('album_cover_url', '')
     album_link = f"/artist/{artist_name}/album/{album_name}/{rep.get('Spotify_Album_ID')}"
     song_length_sec = float(rep.get('duration_sec', 0))
