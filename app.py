@@ -1241,8 +1241,10 @@ def submit_rankings():
             # Append new rows, but if an error occurs after, log and continue
             append_success = False
             try:
+                # Batch data for all rows
+                batch_data = []
                 for _, row in song_grouped.iterrows():
-                    song_data_sheet.append_row([
+                    batch_data.append([
                         int(event_number),
                         event_ranked_date,
                         album_name,
@@ -1254,6 +1256,13 @@ def submit_rankings():
                         int(row['Placement']),
                         round(row['Percentile'], 4)
                     ])
+
+                if batch_data:
+                    song_data_sheet.append_rows(batch_data, value_input_option='USER_ENTERED')
+                    logging.info(
+                        f"Batch appended {len(batch_data)} rows to Song Data for event {event_number} ({album_name}).")
+                else:
+                    logging.info("No rows to append to Song Data.")
                 append_success = True
                 logging.info(f"Efficiently appended Song Data for event {event_number} ({album_name}).")
             except Exception as e:
