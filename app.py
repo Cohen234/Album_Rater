@@ -1866,21 +1866,37 @@ def song_page(artist_name, song_name):
     song_length = "?"
     track_number = "?"
 
-    # -- Album release date: always get from averages sheet as in get_album_data --
-    album_name_clean = album_name.strip().lower()
-    album_row = averages_df[
-        (averages_df['album_name'].str.strip().str.lower() == album_name_clean) &
-        (averages_df['artist_name'].str.strip().str.lower() == artist_name_clean)
-    ]
+    # --- ALBUM RELEASE DATE LOGIC ---
     release_date = ""
-    if not album_row.empty:
+    album_name_clean = album_name.strip().lower()
+    album_row = None
+    # 1. Try to find by album_id (if present)
+    if album_id and 'album_id' in averages_df.columns:
+        album_row = averages_df[
+            (averages_df['album_id'].astype(str) == str(album_id))
+        ]
+    # 2. If not found, try by album/artist name
+    if (album_row is None or album_row.empty) and all(col in averages_df.columns for col in ['album_name', 'artist_name']):
+        album_row = averages_df[
+            (averages_df['album_name'].str.strip().str.lower() == album_name_clean) &
+            (averages_df['artist_name'].str.strip().str.lower() == artist_name_clean)
+        ]
+    # 3. Extract release date from album row, checking all the usual columns
+    if album_row is not None and not album_row.empty:
         album_row = album_row.iloc[0]
         release_date = (
             album_row.get('release_date', "") or
             album_row.get('Release_Date', "") or
             album_row.get('releaseDate', "")
         )
-    # Fallback to song row if not found in averages sheet
+    # 4. Try get_album_release_dates(sp, [album_id])
+    if not release_date and album_id:
+        try:
+            release_dates_map = get_album_release_dates(sp, [album_id])
+            release_date = release_dates_map.get(album_id, "")
+        except Exception:
+            pass
+    # 5. Fallback to song row
     if not release_date:
         release_date = rep.get('release_date', '') or rep.get('Release Date', '')
 
@@ -2002,7 +2018,7 @@ def song_page(artist_name, song_name):
         times_ranked=song_df.shape[0],
         highest_score=song_df['Ranking'].max(),
         lowest_score=song_df['Ranking'].min(),
-        song_global_rank=song_global_rank,
+        song_global_rank=song_df.shape[0],
         song_percentile=song_percentile,
         artist_rank=artist_rank,
         timeline_dates=timeline_dates,
