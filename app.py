@@ -1200,11 +1200,9 @@ def submit_rankings():
                 logging.info("Successfully recalculated and saved all averages.")
 
             try:
-                # Try to open the Song Data sheet
                 song_data_sheet = client.open_by_key(SPREADSHEET_ID).worksheet('Song Data')
                 song_data_df = get_as_dataframe(song_data_sheet, evaluate_formulas=False).fillna("")
                 if 'Event Number' in song_data_df.columns and not song_data_df.empty:
-                    # Convert to numeric, ignore errors, drop NaN
                     event_numbers = pd.to_numeric(song_data_df['Event Number'], errors='coerce').dropna()
                     if not event_numbers.empty:
                         event_number = int(event_numbers.max()) + 1
@@ -1213,65 +1211,59 @@ def submit_rankings():
                 else:
                     event_number = 1
             except gspread.exceptions.WorksheetNotFound:
-                # Only create the sheet if it does not exist
                 song_data_sheet = client.open_by_key(SPREADSHEET_ID).add_worksheet(title='Song Data', rows=1, cols=12)
                 song_data_sheet.append_row([
-                    'Event Number', 'Ranked Date', 'Album Name', 'Artist Name', 'Spotify Album ID', 'Song Name',
-                    'Spotify Song ID', 'Score', 'Placement', 'Percentile'
+                    'Event Number', 'Ranked Date', 'Album Name', 'Artist Name', 'Spotify Album ID',
+                    'Song Name', 'Spotify Song ID', 'Score', 'Placement', 'Percentile'
                 ])
-                song_data_df = pd.DataFrame()
                 event_number = 1
 
-            # Now process and append data
+                # Prepare drift data
+            drift_df = final_main_df.copy()
+            drift_df['Ranking'] = pd.to_numeric(drift_df['Ranking'], errors='coerce')
+            drift_df = drift_df[drift_df['Ranking'].notnull()]
+            drift_df = drift_df[drift_df['Ranking Status'] == 'final']
+            drift_df = drift_df[drift_df['Rank Group'].astype(str) != 'I']
+
+            song_grouped = drift_df.groupby(
+                ['Song Name', 'Artist Name', 'Spotify Song ID', 'Album Name', 'Spotify Album ID']
+            ).agg({'Ranking': 'mean'}).reset_index()
+
+            song_grouped = song_grouped.sort_values('Ranking', ascending=False).reset_index(drop=True)
+            song_grouped['Placement'] = song_grouped.index + 1
+
+            total_songs = len(song_grouped)
+            song_grouped['Percentile'] = (song_grouped['Placement'] - 1) / (
+                        total_songs - 1) * 100 if total_songs > 1 else 0
+
+            event_ranked_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+            # Append new rows, but if an error occurs after, log and continue
+            append_success = False
             try:
-                drift_df = final_main_df.copy()
-                drift_df['Ranking'] = pd.to_numeric(drift_df['Ranking'], errors='coerce')
-                drift_df = drift_df[drift_df['Ranking'].notnull()]
-                drift_df = drift_df[drift_df['Ranking Status'] == 'final']
-                drift_df = drift_df[drift_df['Rank Group'].astype(str) != 'I']
-
-                # Calculate average score per song (across all rankings)
-                song_grouped = drift_df.groupby(
-                    ['Song Name', 'Artist Name', 'Spotify Song ID', 'Album Name', 'Spotify Album ID']
-                ).agg({'Ranking': 'mean'}).reset_index()
-
-                # Assign placement (1 = best)
-                song_grouped = song_grouped.sort_values('Ranking', ascending=False).reset_index(drop=True)
-                song_grouped['Placement'] = song_grouped.index + 1
-
-                # Calculate percentile
-                total_songs = len(song_grouped)
-                song_grouped['Percentile'] = (song_grouped['Placement'] - 1) / (
-                            total_songs - 1) * 100 if total_songs > 1 else 0
-
-                # Use the current time as Ranked Date for this event
-                event_ranked_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-                new_song_data_rows = []
                 for _, row in song_grouped.iterrows():
-                    new_song_data_rows.append({
-                        'Event Number': event_number,
-                        'Ranked Date': event_ranked_date,
-                        'Album Name': album_name,
-                        'Artist Name': row['Artist Name'],
-                        'Spotify Album ID': row['Spotify Album ID'],
-                        'Song Name': row['Song Name'],
-                        'Spotify Song ID': row['Spotify Song ID'],
-                        'Score': round(row['Ranking'], 4),
-                        'Placement': int(row['Placement']),
-                        'Percentile': round(row['Percentile'], 4)
-                    })
-
-                new_song_data_df = pd.DataFrame(new_song_data_rows)
-                if not song_data_df.empty:
-                    final_song_data_df = pd.concat([song_data_df, new_song_data_df], ignore_index=True)
-                else:
-                    final_song_data_df = new_song_data_df
-
-                set_with_dataframe(song_data_sheet, final_song_data_df, include_index=False, resize=True)
-                logging.info(f"Updated Song Data drift timeline for event {event_number} ({album_name}).")
+                    song_data_sheet.append_row([
+                        int(event_number),
+                        event_ranked_date,
+                        album_name,
+                        row['Artist Name'],
+                        row['Spotify Album ID'],
+                        row['Song Name'],
+                        row['Spotify Song ID'],
+                        round(row['Ranking'], 4),
+                        int(row['Placement']),
+                        round(row['Percentile'], 4)
+                    ])
+                append_success = True
+                logging.info(f"Efficiently appended Song Data for event {event_number} ({album_name}).")
             except Exception as e:
-                logging.error(f"Failed to update Song Data drift timeline: {e}")
+                # Check if the error happened after at least some rows were appended
+                if append_success:
+                    logging.error(f"Error after data appended to Song Data: {e} — but data was written, continuing.")
+                else:
+                    logging.error(f"Failed to append Song Data rows: {e}")
+
+
 
             # --- 5. Get "AFTER" data for the animation ---
             averages_df_after = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
