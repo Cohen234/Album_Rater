@@ -1845,7 +1845,7 @@ def song_page(artist_name, song_name):
     main_df = get_as_dataframe(main_sheet, evaluate_formulas=False).fillna("")
 
     # Normalize columns
-    for col in ['Song_Name', 'Artist_Name', 'Album_Name']:
+    for col in ['Song Name', 'Artist Name', 'Album Name']:
         if col in main_df.columns:
             main_df[col] = main_df[col].astype(str)
 
@@ -1853,8 +1853,8 @@ def song_page(artist_name, song_name):
 
     # Filter for the target song (exact match, case-insensitive)
     song_df = main_df[
-        (main_df['Song_Name'].str.lower() == song_name.strip().lower()) &
-        (main_df['Artist_Name'].str.lower() == artist_name.strip().lower())
+        (main_df['Song Name'].str.lower() == song_name.strip().lower()) &
+        (main_df['Artist Name'].str.lower() == artist_name.strip().lower())
     ]
 
     if song_df.empty:
@@ -1881,8 +1881,8 @@ def song_page(artist_name, song_name):
     release_date = rep.get('release_date', '')
 
     # Timeline data (if multiple rankings)
-    song_df_sorted = song_df.sort_values('Ranked_Date')
-    timeline_dates = song_df_sorted['Ranked_Date'].tolist()
+    song_df_sorted = song_df.sort_values('Ranked Date')
+    timeline_dates = song_df_sorted['Ranked Date'].tolist()
     timeline_scores = song_df_sorted['Ranking'].tolist()
 
     # Histogram
@@ -1894,13 +1894,13 @@ def song_page(artist_name, song_name):
     # Load all songs for universal rank
     all_songs = main_df.copy()
     all_songs = all_songs[all_songs['Ranking'].notnull()]
-    all_songs = all_songs.groupby(['Song_Name', 'Artist_Name']).agg({'Ranking':'mean'}).reset_index()
+    all_songs = all_songs.groupby(['Song Name', 'Artist Name']).agg({'Ranking':'mean'}).reset_index()
     all_songs = all_songs.sort_values('Ranking', ascending=False).reset_index(drop=True)
     all_songs['Universal Rank'] = all_songs.index + 1
     total_songs = all_songs.shape[0]
     this_song_row = all_songs[
-        (all_songs['Song_Name'].str.lower() == song_name.strip().lower()) &
-        (all_songs['Artist_Name'].str.lower() == artist_name.strip().lower())
+        (all_songs['Song Name'].str.lower() == song_name.strip().lower()) &
+        (all_songs['Artist Name'].str.lower() == artist_name.strip().lower())
     ]
     if not this_song_row.empty:
         song_global_rank = int(this_song_row['Universal Rank'].values[0])
@@ -1914,7 +1914,7 @@ def song_page(artist_name, song_name):
     artist_songs = artist_songs.sort_values('Ranking', ascending=False).reset_index(drop=True)
     artist_songs['Artist Rank'] = artist_songs.index + 1
     this_artist_song = artist_songs[
-        artist_songs['Song_Name'].str.lower() == song_name.strip().lower()
+        artist_songs['Song Name'].str.lower() == song_name.strip().lower()
     ]
     if not this_artist_song.empty:
         artist_rank = int(this_artist_song['Artist Rank'].values[0])
