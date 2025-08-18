@@ -1837,62 +1837,100 @@ def percentile_from_rank(rank, total):
 
 @app.route('/song/<artist_name>/<path:song_name>')
 def song_page(artist_name, song_name):
-    # Unquote if needed
     import numpy as np
-    artist_name = unquote(artist_name)
-    song_name = unquote(song_name)
-    main_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
-    main_df = get_as_dataframe(main_sheet, evaluate_formulas=False).fillna("")
 
-    # Normalize columns
+    artist_name_clean = artist_name.strip().lower()
+    song_name_clean = song_name.strip().lower()
+    main_df = get_as_dataframe(client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)).fillna("")
+
+    # Normalize string columns
     for col in ['Song Name', 'Artist Name', 'Album Name']:
         if col in main_df.columns:
             main_df[col] = main_df[col].astype(str)
 
     main_df['Ranking'] = pd.to_numeric(main_df['Ranking'], errors='coerce')
 
-    # Filter for the target song (exact match, case-insensitive)
+    # Filter for the song (case-insensitive)
     song_df = main_df[
-        (main_df['Song Name'].str.lower() == song_name.strip().lower()) &
-        (main_df['Artist Name'].str.lower() == artist_name.strip().lower())
+        (main_df['Song Name'].str.strip().str.lower() == song_name_clean) &
+        (main_df['Artist Name'].str.strip().str.lower() == artist_name_clean)
     ]
 
     if song_df.empty:
         abort(404, "Song not found")
 
-    # Song stats
-    song_avg = song_df['Ranking'].mean()
-    times_ranked = song_df.shape[0]
-    highest_score = song_df['Ranking'].max()
-    lowest_score = song_df['Ranking'].min()
-    median_score = song_df['Ranking'].median()
-    std_score = song_df['Ranking'].std()
-
-    # Song metadata (use first row as representative)
+    # Use the first row as representative
     rep = song_df.iloc[0]
     album_name = rep['Album Name']
-    album_cover_url = rep.get('album_cover_url', '')
-    album_link = f"/artist/{artist_name}/album/{album_name}/{rep.get('Spotify_Album_ID')}"
-    song_length_sec = float(rep.get('duration_sec', 0))
-    song_length_min = int(song_length_sec // 60)
-    song_length_remain = int(song_length_sec % 60)
-    song_length = f"{song_length_min}:{song_length_remain:02}" if song_length_sec else "?"
-    track_number = rep.get('Track_Number', 'N/A')
-    release_date = rep.get('release_date', '')
+    album_id = rep.get('Spotify Album ID', None)
+    album_cover_url = ""
+    release_date = ""
+    track_number = None
+    song_length = "?"
 
-    # Timeline data (if multiple rankings)
+    # Try to get album data from Spotify, if album_id present
+    track_found = False
+    if album_id:
+        try:
+            album_info = load_album_data(sp, album_id)
+            if album_info:
+                album_cover_url = album_info.get('album_cover_url', '') or album_cover_url
+                release_date = album_info.get('release_date', '') or release_date
+                # Find this song in album_info['songs']
+                if 'songs' in album_info:
+                    for i, song in enumerate(album_info['songs']):
+                        # Match using lower/strip to be robust
+                        if song['song_name'].strip().lower() == song_name_clean:
+                            track_number = i + 1
+                            # duration in ms/seconds
+                            duration_sec = int(song.get('duration_ms', 0)) // 1000
+                            m = duration_sec // 60
+                            s = duration_sec % 60
+                            song_length = f"{m}:{s:02}" if duration_sec else "?"
+                            # Prefer release date from track if available
+                            if song.get('release_date'):
+                                release_date = song.get('release_date')
+                            track_found = True
+                            break
+        except Exception as e:
+            print("Error loading album data:", e)
+
+    # Fallbacks if not found in Spotify data
+    if not track_found:
+        # Track number: try spreadsheet, default to N/A
+        track_number = rep.get('Position In Group', 'N/A')
+        # Song length: check for duration fields in spreadsheet
+        duration_sec = None
+        if 'duration_sec' in rep and rep['duration_sec']:
+            try:
+                duration_sec = int(float(rep['duration_sec']))
+            except Exception:
+                duration_sec = None
+        if not duration_sec and 'duration_ms' in rep and rep['duration_ms']:
+            try:
+                duration_sec = int(float(rep['duration_ms'])) // 1000
+            except Exception:
+                duration_sec = None
+        if not duration_sec and 'Duration (ms)' in rep and rep['Duration (ms)']:
+            try:
+                duration_sec = int(float(rep['Duration (ms)'])) // 1000
+            except Exception:
+                duration_sec = None
+        if duration_sec:
+            m = duration_sec // 60
+            s = duration_sec % 60
+            song_length = f"{m}:{s:02}"
+        # Release date
+        release_date = rep.get('release_date', '') or rep.get('Release Date', '') or release_date
+        album_cover_url = rep.get('album_cover_url', '') or album_cover_url
+
+    # Timeline data
     song_df_sorted = song_df.sort_values('Ranked Date')
     timeline_dates = song_df_sorted['Ranked Date'].tolist()
     timeline_scores = song_df_sorted['Ranking'].tolist()
     current_score = timeline_scores[-1] if timeline_scores else None
 
-    # Histogram
-    bins = np.arange(0.5, 10.5, 0.5)
-    histogram_counts, bin_edges = np.histogram(song_df['Ranking'].dropna(), bins=bins)
-    histogram_bins = [f"{b:.1f}" for b in bins[:-1]]
-
-    # Global rank and percentile
-    # Load all songs for universal rank
+    # Global rank and artist rank logic (unchanged, as in your code)
     all_songs = main_df.copy()
     all_songs = all_songs[all_songs['Ranking'].notnull()]
     all_songs = all_songs.groupby(['Song Name', 'Artist Name']).agg({'Ranking':'mean'}).reset_index()
@@ -1900,8 +1938,8 @@ def song_page(artist_name, song_name):
     all_songs['Universal Rank'] = all_songs.index + 1
     total_songs = all_songs.shape[0]
     this_song_row = all_songs[
-        (all_songs['Song Name'].str.lower() == song_name.strip().lower()) &
-        (all_songs['Artist Name'].str.lower() == artist_name.strip().lower())
+        (all_songs['Song Name'].str.lower() == song_name_clean) &
+        (all_songs['Artist Name'].str.lower() == artist_name_clean)
     ]
     if not this_song_row.empty:
         song_global_rank = int(this_song_row['Universal Rank'].values[0])
@@ -1911,33 +1949,36 @@ def song_page(artist_name, song_name):
         song_percentile = "N/A"
 
     # Artist rank (within artist)
-    artist_songs = all_songs[all_songs['Artist Name'].str.lower() == artist_name.strip().lower()]
+    artist_songs = all_songs[all_songs['Artist Name'].str.lower() == artist_name_clean]
     artist_songs = artist_songs.sort_values('Ranking', ascending=False).reset_index(drop=True)
     artist_songs['Artist Rank'] = artist_songs.index + 1
     this_artist_song = artist_songs[
-        artist_songs['Song Name'].str.lower() == song_name.strip().lower()
+        artist_songs['Song Name'].str.lower() == song_name_clean
     ]
     if not this_artist_song.empty:
         artist_rank = int(this_artist_song['Artist Rank'].values[0])
     else:
         artist_rank = "N/A"
 
+    # Histogram
+    bins = np.arange(0.5, 10.5, 0.5)
+    histogram_counts, bin_edges = np.histogram(song_df['Ranking'].dropna(), bins=bins)
+    histogram_bins = [f"{b:.1f}" for b in bins[:-1]]
+
+    # Render
     return render_template(
         "song_page.html",
         song_title=song_name,
         artist_name=artist_name,
         album_name=album_name,
         album_cover_url=album_cover_url,
-        album_link=album_link,
+        album_link=f"/artist/{artist_name}/album/{album_name}/{album_id}",
         track_number=track_number,
         song_length=song_length,
         release_date=release_date,
-        song_avg=song_avg,
-        times_ranked=times_ranked,
-        highest_score=highest_score,
-        lowest_score=lowest_score,
-        median_score=median_score,
-        std_score=std_score,
+        times_ranked=song_df.shape[0],
+        highest_score=song_df['Ranking'].max(),
+        lowest_score=song_df['Ranking'].min(),
         song_global_rank=song_global_rank,
         song_percentile=song_percentile,
         artist_rank=artist_rank,
