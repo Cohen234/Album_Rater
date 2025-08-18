@@ -68,7 +68,7 @@
             margin-bottom: 8px;
             text-transform: uppercase;
         }
-        .stat-value {
+        .stat-value, .stat-score-green {
             font-size: 2.1em;
             font-weight: 700;
             color: #1DB954;
@@ -122,8 +122,8 @@
     </div>
     <section class="stats-grid">
         <div class="stat-box">
-            <div class="stat-label">Average Score</div>
-            <div class="stat-value">{{ "%.2f"|format(song_avg) }}</div>
+            <div class="stat-label">Current Score</div>
+            <div class="stat-score-green">{{ "%.2f"|format(current_score) }}</div>
         </div>
         <div class="stat-box">
             <div class="stat-label">Global Rank</div>
@@ -146,22 +146,10 @@
             <div class="stat-label">Lowest Score</div>
             <div class="stat-value">{{ "%.2f"|format(lowest_score) }}</div>
         </div>
-        <div class="stat-box">
-            <div class="stat-label">Median Score</div>
-            <div class="stat-value">{{ "%.2f"|format(median_score) }}</div>
-        </div>
-        <div class="stat-box">
-            <div class="stat-label">Std. Dev.</div>
-            <div class="stat-value">{{ "%.2f"|format(std_score) }}</div>
-        </div>
     </section>
     <div class="chart-card">
         <h3>Ranking Timeline</h3>
         <canvas id="timelineChart"></canvas>
-    </div>
-    <div class="chart-card">
-        <h3>Ranking Distribution</h3>
-        <canvas id="histogramChart"></canvas>
     </div>
     <script>
         // Timeline Chart
@@ -189,30 +177,6 @@
                     scales: {
                         x: { title: { display: true, text: 'Date', color: '#b3b3b3' }, ticks: { color: '#b3b3b3' }, grid: { color: '#282828' } },
                         y: { title: { display: true, text: 'Score', color: '#b3b3b3' }, min: 0, max: 10, ticks: { color: '#b3b3b3' }, grid: { color: '#282828' } }
-                    }
-                }
-            });
-        }
-
-        // Histogram Chart
-        const histogramLabels = {{ histogram_bins | tojson }};
-        const histogramData = {{ histogram_counts | tojson }};
-        if (histogramLabels && histogramLabels.length > 0) {
-            new Chart(document.getElementById('histogramChart').getContext('2d'), {
-                type: 'bar',
-                data: {
-                    labels: histogramLabels,
-                    datasets: [{
-                        label: 'Count',
-                        data: histogramData,
-                        backgroundColor: 'rgba(29,185,84,0.7)'
-                    }]
-                },
-                options: {
-                    plugins: { legend: { display: false }},
-                    scales: {
-                        x: { title: { display: true, text: 'Score', color: '#b3b3b3' }, ticks: { color: '#b3b3b3' }, grid: { color: '#282828' } },
-                        y: { title: { display: true, text: 'Count', color: '#b3b3b3' }, min: 0, ticks: { color: '#b3b3b3' }, grid: { color: '#282828' } }
                     }
                 }
             });
