@@ -1910,7 +1910,7 @@ def song_page(artist_name, song_name):
         song_percentile = "N/A"
 
     # Artist rank (within artist)
-    artist_songs = all_songs[all_songs['Artist_Name'].str.lower() == artist_name.strip().lower()]
+    artist_songs = all_songs[all_songs['Artist Name'].str.lower() == artist_name.strip().lower()]
     artist_songs = artist_songs.sort_values('Ranking', ascending=False).reset_index(drop=True)
     artist_songs['Artist Rank'] = artist_songs.index + 1
     this_artist_song = artist_songs[
