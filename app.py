@@ -1842,6 +1842,7 @@ def song_page(artist_name, song_name):
     artist_name_clean = artist_name.strip().lower()
     song_name_clean = song_name.strip().lower()
     main_df = get_as_dataframe(client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)).fillna("")
+    averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
 
     # Normalize string columns
     for col in ['Song Name', 'Artist Name', 'Album Name']:
@@ -1855,7 +1856,6 @@ def song_page(artist_name, song_name):
         (main_df['Song Name'].str.strip().str.lower() == song_name_clean) &
         (main_df['Artist Name'].str.strip().str.lower() == artist_name_clean)
     ]
-
     if song_df.empty:
         abort(404, "Song not found")
 
@@ -1863,11 +1863,28 @@ def song_page(artist_name, song_name):
     album_name = rep['Album Name']
     album_id = rep.get('Spotify Album ID', None)
     album_cover_url = ""
-    release_date = ""
     song_length = "?"
     track_number = "?"
 
-    # -- Get album info and album song list (for track number and album release date) --
+    # -- Album release date: always get from averages sheet as in get_album_data --
+    album_name_clean = album_name.strip().lower()
+    album_row = averages_df[
+        (averages_df['album_name'].str.strip().str.lower() == album_name_clean) &
+        (averages_df['artist_name'].str.strip().str.lower() == artist_name_clean)
+    ]
+    release_date = ""
+    if not album_row.empty:
+        album_row = album_row.iloc[0]
+        release_date = (
+            album_row.get('release_date', "") or
+            album_row.get('Release_Date', "") or
+            album_row.get('releaseDate', "")
+        )
+    # Fallback to song row if not found in averages sheet
+    if not release_date:
+        release_date = rep.get('release_date', '') or rep.get('Release Date', '')
+
+    # -- Get album info and album song list (for track number and album art) --
     album_song_list = []
     got_album_info = False
     if album_id:
@@ -1876,7 +1893,6 @@ def song_page(artist_name, song_name):
             if album_info:
                 got_album_info = True
                 album_cover_url = album_info.get('album_cover_url', '') or album_cover_url
-                release_date = album_info.get('release_date', '') or release_date
                 album_song_list = album_info['songs'] if 'songs' in album_info else []
         except Exception as e:
             print("Error loading album data:", e)
@@ -1896,31 +1912,23 @@ def song_page(artist_name, song_name):
 
     # Fallbacks if not found via Spotify
     if track_number == "?" or not song_length or song_length == "?":
-        # Get all album songs from sheet, order by Position In Group if available
         album_songs_df = main_df[
             (main_df['Album Name'].str.strip().str.lower() == album_name.strip().lower()) &
             (main_df['Artist Name'].str.strip().str.lower() == artist_name_clean)
         ].copy()
-
-        # Try to get track number by sheet order if necessary
         if track_number == "?":
-            # Use position in group if available, else order as in sheet
             if 'Position In Group' in album_songs_df.columns:
-                # Find our song in the album and get its 'Position In Group'
                 pos_row = album_songs_df[
                     album_songs_df['Song Name'].str.strip().str.lower() == song_name_clean
                 ]
                 if not pos_row.empty:
                     track_number = pos_row.iloc[0].get('Position In Group', '?')
             else:
-                # Order as in sheet
                 album_songs_df = album_songs_df.reset_index(drop=True)
                 for idx, row in album_songs_df.iterrows():
                     if row['Song Name'].strip().lower() == song_name_clean:
                         track_number = idx + 1
                         break
-
-        # Try to get song length from sheet
         if not song_length or song_length == "?":
             duration_sec = None
             for dur_col in ['duration_sec', 'duration_ms', 'Duration (ms)']:
@@ -1937,14 +1945,7 @@ def song_page(artist_name, song_name):
                 m = duration_sec // 60
                 s = duration_sec % 60
                 song_length = f"{m}:{s:02}"
-
-        # Album art fallback
         album_cover_url = rep.get('album_cover_url', '') or album_cover_url
-
-    # Release date: always use album's release date (from album_info if possible, else fallback to sheet)
-    if not release_date:
-        # Could also check album/averages sheet if you want
-        release_date = rep.get('release_date', '') or rep.get('Release Date', '')
 
     # Timeline data
     song_df_sorted = song_df.sort_values('Ranked Date')
