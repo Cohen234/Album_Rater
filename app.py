@@ -1204,7 +1204,12 @@ def submit_rankings():
                 song_data_sheet = client.open_by_key(SPREADSHEET_ID).worksheet('Song Data')
                 song_data_df = get_as_dataframe(song_data_sheet, evaluate_formulas=False).fillna("")
                 if 'Event Number' in song_data_df.columns and not song_data_df.empty:
-                    event_number = int(song_data_df['Event Number'].max()) + 1
+                    # Convert to numeric, ignore errors, drop NaN
+                    event_numbers = pd.to_numeric(song_data_df['Event Number'], errors='coerce').dropna()
+                    if not event_numbers.empty:
+                        event_number = int(event_numbers.max()) + 1
+                    else:
+                        event_number = 1
                 else:
                     event_number = 1
             except gspread.exceptions.WorksheetNotFound:
