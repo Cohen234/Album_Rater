@@ -1884,6 +1884,7 @@ def song_page(artist_name, song_name):
     song_df_sorted = song_df.sort_values('Ranked Date')
     timeline_dates = song_df_sorted['Ranked Date'].tolist()
     timeline_scores = song_df_sorted['Ranking'].tolist()
+    current_score = timeline_scores[-1] if timeline_scores else None
 
     # Histogram
     bins = np.arange(0.5, 10.5, 0.5)
@@ -1944,6 +1945,7 @@ def song_page(artist_name, song_name):
         timeline_scores=timeline_scores,
         histogram_bins=histogram_bins,
         histogram_counts=histogram_counts.tolist(),
+        current_score=current_score
     )
 
 def is_live_album(album_tracks):
