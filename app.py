@@ -1933,7 +1933,7 @@ def song_page(artist_name, song_name):
 
     main_df = get_as_dataframe(client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)).fillna("")
     averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
-    for col in ['Song_Name', 'Artist_Name', 'Album_Name']:
+    for col in ['Song Name', 'Artist Name', 'Album Name']:
         if col in main_df.columns:
             main_df[col] = main_df[col].astype(str)
 
@@ -1941,8 +1941,8 @@ def song_page(artist_name, song_name):
 
     # Try exact match first
     song_df = main_df[
-        (main_df['Song_Name'].str.strip().str.lower() == song_name_clean)
-        & (main_df['Artist_Name'].str.strip().str.lower() == artist_name_clean)
+        (main_df['Song Name'].str.strip().str.lower() == song_name_clean)
+        & (main_df['Artist Name'].str.strip().str.lower() == artist_name_clean)
     ]
 
     # Optional: Try looser matching if still empty
@@ -1953,24 +1953,24 @@ def song_page(artist_name, song_name):
             n = re.sub(r'\s*-\s*\d{4} mix', '', n)
             n = n.replace('&', 'and')
             return n
-        main_df['Song_Name_Cleaned'] = main_df['Song_Name'].map(normalize_song_name)
+        main_df['Song_Name_Cleaned'] = main_df['Song Name'].map(normalize_song_name)
         search_song_name = normalize_song_name(song_name_clean)
         song_df = main_df[
             main_df['Song_Name_Cleaned'].str.contains(search_song_name, na=False)
-            & (main_df['Artist_Name'].str.strip().str.lower() == artist_name_clean)
+            & (main_df['Artist Name'].str.strip().str.lower() == artist_name_clean)
         ]
 
     if song_df.empty:
         # For debugging: print possible matches
         possible = main_df[
-            main_df['Artist_Name'].str.strip().str.lower() == artist_name_clean
-        ]['Song_Name'].unique()
+            main_df['Artist Name'].str.strip().str.lower() == artist_name_clean
+        ]['Song Name'].unique()
         print(f"Song not found. Artist: {artist_name_clean}, Song: {song_name_clean}")
         print("Possible:", possible)
         abort(404, f"Song not found. Did you mean one of: {', '.join(possible[:5])}...")
 
     rep = song_df.iloc[0]
-    album_name = rep['Album_Name']
+    album_name = rep['Album Name']
     album_id = rep.get('Spotify Album ID', None)
     album_cover_url = ""
     song_length = "?"
