@@ -397,6 +397,11 @@ def artist_page_v2(artist_name):
 
         artist_songs_df = filter_df_by_artist(all_songs_df, 'Artist_Name', artist_name)
         artist_albums_df = filter_df_by_artist(all_albums_df, 'artist_name', artist_name)
+        print("Looking for artist:", repr(artist_name.lower().strip()))
+        print("Unique artist names in songs df:", all_songs_df['Artist_Name'].unique())
+        print("Filtered songs shape:", artist_songs_df.shape)
+        print("Unique artist names in albums df:", all_albums_df['artist_name'].unique())
+        print("Filtered albums shape:", artist_albums_df.shape)
         if artist_songs_df.empty and artist_albums_df.empty:
             return redirect(url_for('load_albums_by_artist_route', artist_name=artist_name))
 
@@ -426,9 +431,7 @@ def artist_page_v2(artist_name):
         mastery_points = artist_albums_df['times_ranked'].fillna(0).astype(int).clip(upper=3).sum()
         max_mastery_points = len(visible_album_ids) * 3
         mastery_percentage = (mastery_points / max_mastery_points) * 100 if max_mastery_points > 0 else 0
-        print(artist_albums_df[['album_id', 'album_name', 'times_ranked']])
-        print("visible_album_ids:", visible_album_ids)
-        print("mastery_points:", mastery_points, "max:", max_mastery_points)
+
 
         # LEADERBOARD POINTS
         total_songs = len(all_songs_df)
@@ -934,7 +937,6 @@ def get_album_stats(album_id):
         )
         visible_album_ids = set(a['id'] for a in visible_studio_albums)
 
-        print("VISIBLE ALBUM IDS (album stats page):", visible_album_ids)  # DEBUG
 
         # --- Restrict main_df to visible albums ---
         if 'Spotify_Album_ID' in main_df.columns:
@@ -950,8 +952,7 @@ def get_album_stats(album_id):
 
         artist_songs_df = main_df[main_df['Artist_Name'].apply(artist_matcher_field)]
 
-        print("ARTIST SONGS DF (album stats page):",
-              artist_songs_df[['Song_Name', 'Ranking', 'Spotify_Album_ID']])  # DEBUG
+
 
         artist_avg = artist_songs_df['Ranking'].mean() if not artist_songs_df.empty else None
 
@@ -1300,16 +1301,7 @@ def submit_rankings():
             new_placement = int(new_placement_series[0] + 1) if not new_placement_series.empty else 1
             total_albums = len(averages_df_after)
             dominant_color = get_dominant_color(album_cover_url)
-            print("Returning animation_data:", {
-                'album_name': album_name,
-                'artist_name': artist_name,
-                'album_cover_url': album_cover_url,
-                'final_score': new_score,
-                'final_rank': new_placement,
-                'total_albums': total_albums,
-                'dominant_color': dominant_color,
-                'album_id': album_id
-            })
+
 
             # --- 6. Return the correct JSON for the frontend ---
             if is_rerank:
@@ -1494,7 +1486,6 @@ def get_album_data(artist_name, album_name, album_id):
     else:
         album_songs_df['duration_ms'] = 180000  # fallback: 3min per song
     album_songs_df['duration_sec'] = album_songs_df['duration_ms'] / 1000
-    print(album_songs_df[['Song Name', 'duration_ms', 'duration_sec']])
 
     # Sort by Position In Group or track number, fallback to index
 
@@ -2506,7 +2497,7 @@ def finalize_rankings():
     if not data:
         return "Invalid data", 400
 
-    print("Received data in finalize_rankings:", data)
+
 
     valid_ranks = {str(r) for r in [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10]}
 
