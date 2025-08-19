@@ -1927,6 +1927,8 @@ def song_page(artist_name, song_name):
     # Decode for URL-encoded names
     artist_name = unquote(artist_name)
     song_name = unquote(song_name)
+    song_name = song_name.replace('+', ' ')
+    artist_name = artist_name.replace('+', ' ')
 
     artist_name_clean = artist_name.strip().lower()
     song_name_clean = song_name.strip().lower()
