@@ -1914,9 +1914,12 @@ def percentile_from_rank(rank, total):
 @app.route('/song/<artist_name>/<path:song_name>')
 def song_page(artist_name, song_name):
     import numpy as np
+    import re
 
     artist_name_clean = artist_name.strip().lower()
     song_name_clean = song_name.strip().lower()
+
+    # Load data
     main_df = get_as_dataframe(client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)).fillna("")
     averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
 
@@ -1927,13 +1930,37 @@ def song_page(artist_name, song_name):
 
     main_df['Ranking'] = pd.to_numeric(main_df['Ranking'], errors='coerce')
 
-    # Filter for the song (case-insensitive)
+    def normalize_song_name(name):
+        # Lowercase, strip, remove common suffixes like " - remaster", " - remastered", " - 2019 mix", etc.
+        n = name.strip().lower()
+        n = re.sub(r'\s*-\s*remaster(ed)?(\s*\d+)?', '', n)
+        n = re.sub(r'\s*-\s*\d{4} mix', '', n)
+        n = n.replace('&', 'and')
+        return n
+
+    # Use normalized song names for loose matching
+    main_df['Song Name Cleaned'] = main_df['Song Name'].map(normalize_song_name)
+    search_song_name = normalize_song_name(song_name_clean)
+
+    # Try fuzzy/substring match first, then fallback to strict match if needed
     song_df = main_df[
-        (main_df['Song Name'].str.strip().str.lower() == song_name_clean) &
-        (main_df['Artist Name'].str.strip().str.lower() == artist_name_clean)
+        main_df['Song Name Cleaned'].str.contains(search_song_name, na=False)
+        & (main_df['Artist Name'].str.strip().str.lower() == artist_name_clean)
     ]
+
+    # If still empty, fallback to strict equality (in case of exact match needed)
     if song_df.empty:
-        abort(404, "Song not found")
+        song_df = main_df[
+            (main_df['Song Name'].str.strip().str.lower() == song_name_clean)
+            & (main_df['Artist Name'].str.strip().str.lower() == artist_name_clean)
+        ]
+
+    if song_df.empty:
+        # Give user a hint of potential matches!
+        possible = main_df[
+            main_df['Artist Name'].str.strip().str.lower() == artist_name_clean
+        ]['Song Name'].unique()
+        abort(404, f"Song not found. Did you mean one of: {', '.join(possible[:5])}...")
 
     rep = song_df.iloc[0]
     album_name = rep['Album Name']
