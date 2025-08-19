@@ -1946,18 +1946,13 @@ def song_page(artist_name, song_name):
     release_date = ""
     album_name_clean = album_name.strip().lower()
     album_row = None
-    # 1. Try to find by album_id (if present)
     if album_id and 'album_id' in averages_df.columns:
-        album_row = averages_df[
-            (averages_df['album_id'].astype(str) == str(album_id))
-        ]
-    # 2. If not found, try by album/artist name
+        album_row = averages_df[averages_df['album_id'].astype(str) == str(album_id)]
     if (album_row is None or album_row.empty) and all(col in averages_df.columns for col in ['album_name', 'artist_name']):
         album_row = averages_df[
             (averages_df['album_name'].str.strip().str.lower() == album_name_clean) &
             (averages_df['artist_name'].str.strip().str.lower() == artist_name_clean)
         ]
-    # 3. Extract release date from album row, checking all the usual columns
     if album_row is not None and not album_row.empty:
         album_row = album_row.iloc[0]
         release_date = (
@@ -1965,14 +1960,12 @@ def song_page(artist_name, song_name):
             album_row.get('Release_Date', "") or
             album_row.get('releaseDate', "")
         )
-    # 4. Try get_album_release_dates(sp, [album_id])
     if not release_date and album_id:
         try:
             release_dates_map = get_album_release_dates(sp, [album_id])
             release_date = release_dates_map.get(album_id, "")
         except Exception:
             pass
-    # 5. Fallback to song row
     if not release_date:
         release_date = rep.get('release_date', '') or rep.get('Release Date', '')
 
@@ -1994,7 +1987,6 @@ def song_page(artist_name, song_name):
         for i, song in enumerate(album_song_list):
             if song['song_name'].strip().lower() == song_name_clean:
                 track_number = i + 1
-                # Track length from Spotify
                 duration_sec = int(song.get('duration_ms', 0)) // 1000 if song.get('duration_ms') else None
                 if duration_sec:
                     m = duration_sec // 60
@@ -2039,7 +2031,23 @@ def song_page(artist_name, song_name):
                 song_length = f"{m}:{s:02}"
         album_cover_url = rep.get('album_cover_url', '') or album_cover_url
 
-    # Timeline data
+    # Timeline data (only for events where the song is ranked)
+    try:
+        song_data_df = get_as_dataframe(client.open_by_key(SPREADSHEET_ID).worksheet("Song Data")).fillna("")
+        drift_df = song_data_df[
+            (song_data_df['Song Name'].str.strip().str.lower() == song_name_clean) &
+            (song_data_df['Artist Name'].str.strip().str.lower() == artist_name_clean)
+        ].copy()
+        drift_df = drift_df.sort_values('Event Number', key=lambda s: s.astype(int))
+        timeline_event_numbers = list(range(1, len(drift_df) + 1))
+        timelines_scores = drift_df['Score'].astype(float).tolist()
+        timeline_placements = drift_df['Placement'].astype(int).tolist()
+        timeline_percentiles = drift_df['Percentile'].astype(float).tolist()
+    except Exception as e:
+        print(f"Error loading Song Data drift timeline: {e}")
+        timeline_event_numbers, timelines_scores, timeline_placements, timeline_percentiles = [], [], [], []
+
+    # Timeline for the detailed song_df (main sheet, not Song Data)
     song_df_sorted = song_df.sort_values('Ranked Date')
     timeline_dates = song_df_sorted['Ranked Date'].tolist()
     timeline_scores = song_df_sorted['Ranking'].tolist()
@@ -2079,23 +2087,7 @@ def song_page(artist_name, song_name):
     bins = np.arange(0.5, 10.5, 0.5)
     histogram_counts, bin_edges = np.histogram(song_df['Ranking'].dropna(), bins=bins)
     histogram_bins = [f"{b:.1f}" for b in bins[:-1]]
-    # --- Drift Timeline: Load from "Song Data" sheet ---
-    try:
-        song_data_df = get_as_dataframe(client.open_by_key(SPREADSHEET_ID).worksheet("Song Data")).fillna("")
-        drift_df = song_data_df[
-            (song_data_df['Song Name'].str.strip().str.lower() == song_name_clean) &
-            (song_data_df['Artist Name'].str.strip().str.lower() == artist_name_clean)
-            ].copy()
-        drift_df = drift_df.sort_values('Event Number', key=lambda s: s.astype(int))
-        # Per-song event counter: 1, 2, 3, ...
-        timeline_event_numbers = list(range(1, len(drift_df) + 1))
-        timelines_scores = drift_df['Score'].astype(float).tolist()
-        timeline_placements = drift_df['Placement'].astype(int).tolist()
-        timeline_percentiles = drift_df['Percentile'].astype(float).tolist()
-    except Exception as e:
-        print(f"Error loading Song Data drift timeline: {e}")
-        timeline_event_numbers, timelines_scores, timeline_placements, timeline_percentiles = [], [], [], []
-    # Render
+
     return render_template(
         "song_page.html",
         song_title=song_name,
@@ -2109,7 +2101,7 @@ def song_page(artist_name, song_name):
         times_ranked=song_df.shape[0],
         highest_score=song_df['Ranking'].max(),
         lowest_score=song_df['Ranking'].min(),
-        song_global_rank=song_df.shape[0],
+        song_global_rank=song_global_rank,
         song_percentile=song_percentile,
         artist_rank=artist_rank,
         timeline_dates=timeline_dates,
