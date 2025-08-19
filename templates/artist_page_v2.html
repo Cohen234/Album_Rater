@@ -732,50 +732,49 @@
 
         <!-- Quick Stat Cards Grid -->
         <section class="section-grid-4">
-    <!-- Highest-Ranked Album -->
-            <div class="quick-stat-card stat-card-centered">
+            <a href="{{ top_album_link }}" style="text-decoration:none;color:inherit;">
+            <div class="quick-stat-card stat-card-centered hover-card">
                 <div class="quick-stat-header">HIGHEST-RANKED ALBUM</div>
                 <img class="quick-stat-img" src="{{ top_album_cover or 'https://placehold.co/60x60' }}" alt="" />
                 <div class="quick-stat-info">
-                    <div class="quick-stat-value">
-                        <a href="{{ top_album_link }}" style="color:var(--spotify-green);text-decoration:none;">{{ top_album_name }}</a>
-                    </div>
+                    <div class="quick-stat-value">{{ top_album_name }}</div>
                     <div class="stat-score">Score: <span>{{ "%.2f"|format(top_album_score) }}</span></div>
                 </div>
             </div>
+            </a>
             <!-- Lowest-Ranked Album -->
-            <div class="quick-stat-card stat-card-centered">
+            <a href="{{ low_album_link }}" style="text-decoration:none;color:inherit;">
+            <div class="quick-stat-card stat-card-centered hover-card">
                 <div class="quick-stat-header">LOWEST-RANKED ALBUM</div>
                 <img class="quick-stat-img" src="{{ low_album_cover or 'https://placehold.co/60x60' }}" alt="" />
                 <div class="quick-stat-info">
-                    <div class="quick-stat-value">
-                        <a href="{{ low_album_link }}" style="color:var(--spotify-green);text-decoration:none;">{{ low_album_name }}</a>
-                    </div>
+                    <div class="quick-stat-value">{{ low_album_name }}</div>
                     <div class="stat-score">Score: {{ "%.2f"|format(low_album_score) }}</div>
                 </div>
             </div>
+            </a>
             <!-- Highest-Ranked Song -->
-            <div class="quick-stat-card stat-card-centered">
+            <a href="{{ top_song_link }}" style="text-decoration:none;color:inherit;">
+            <div class="quick-stat-card stat-card-centered hover-card">
                 <div class="quick-stat-header">HIGHEST-RANKED SONG</div>
                 <img class="quick-stat-img" src="{{ top_song_cover or 'https://placehold.co/60x60' }}" alt="" />
                 <div class="quick-stat-info">
-                    <div class="quick-stat-value">
-                        <a href="{{ top_song_link }}" style="color:var(--spotify-green);text-decoration:none;">{{ top_song_name }}</a>
-                    </div>
+                    <div class="quick-stat-value">{{ top_song_name }}</div>
                     <div class="stat-score">Score: {{ "%.2f"|format(top_song_score) }}</div>
                 </div>
             </div>
+            </a>
             <!-- Lowest-Ranked Song -->
-            <div class="quick-stat-card stat-card-centered">
+            <a href="{{ low_song_link }}" style="text-decoration:none;color:inherit;">
+            <div class="quick-stat-card stat-card-centered hover-card">
                 <div class="quick-stat-header">LOWEST-RANKED SONG</div>
                 <img class="quick-stat-img" src="{{ low_song_cover or 'https://placehold.co/60x60' }}" alt="" />
                 <div class="quick-stat-info">
-                    <div class="quick-stat-value">
-                        <a href="{{ low_song_link }}" style="color:var(--spotify-green);text-decoration:none;">{{ low_song_name }}</a>
-                    </div>
+                    <div class="quick-stat-value">{{ low_song_name }}</div>
                     <div class="stat-score">Score: {{ "%.2f"|format(low_song_score) }}</div>
                 </div>
             </div>
+            </a>
         </section>
         <section class="section-grid-4">
             <!-- Median Song Score -->
