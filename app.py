@@ -311,6 +311,7 @@ def artist_page_v2(artist_name):
     )
     visible_album_ids = set(a['id'] for a in visible_studio_albums)
 
+
     def standardize_columns(df):
         df.columns = [c.replace(' ', '_') for c in df.columns]
         if 'Rank_Group' not in df.columns and 'Rank_Group' in df.columns:
@@ -619,9 +620,16 @@ def artist_page_v2(artist_name):
         # Song leaderboard: Only use actual_songs_df!
         song_leaderboard_clean = []
         for row in actual_songs_df.to_dict('records'):
-            row['Song Name'] = clean_title(row.get('Song_Name', ''))  # Ensure this key is present
+            # For display
+            row['display_name'] = clean_title(row.get('Song_Name', ''))
             row['Universal Rank'] = row.get('Universal_Rank', '')
             row['Artist Rank'] = row.get('Artist_Rank', '')
+            # For linking: pass the REAL sheet song name in the url (url-encoded)
+            row['song_link'] = url_for(
+                'song_page',
+                artist_name=artist_name,
+                song_name=quote_plus(row['Song_Name'])
+            )
             song_leaderboard_clean.append(row)
 
         # For album leaderboard (not changed)
