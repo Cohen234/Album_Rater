@@ -2037,12 +2037,14 @@ def song_page(artist_name, song_name):
         drift_df = song_data_df[
             (song_data_df['Song Name'].str.strip().str.lower() == song_name_clean) &
             (song_data_df['Artist Name'].str.strip().str.lower() == artist_name_clean)
-        ].copy()
+            ].copy()
         drift_df = drift_df.sort_values('Event Number', key=lambda s: s.astype(int))
-        timeline_event_numbers = list(range(1, len(drift_df) + 1))
+        # These lists will be the same length; only events where the song exists
+        timeline_event_numbers = drift_df['Event Number'].astype(int).tolist()
         timelines_scores = drift_df['Score'].astype(float).tolist()
         timeline_placements = drift_df['Placement'].astype(int).tolist()
         timeline_percentiles = drift_df['Percentile'].astype(float).tolist()
+        print(timeline_event_numbers)
     except Exception as e:
         print(f"Error loading Song Data drift timeline: {e}")
         timeline_event_numbers, timelines_scores, timeline_placements, timeline_percentiles = [], [], [], []
