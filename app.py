@@ -327,7 +327,7 @@ def artist_page_v2(artist_name):
 
         def artist_matcher(x):
             try:
-                return artist_query in [str(a).strip().lower() for a in str(x).split(',')]
+                return artist_query == str(x).strip().lower()
             except Exception:
                 return False
 
