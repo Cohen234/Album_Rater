@@ -535,22 +535,42 @@ def artist_page_v2(artist_name):
             low_song_row = actual_songs_df.loc[actual_songs_df['Ranking'].idxmin()]
             top_song_name = top_song_row['Song_Name']
             top_song_score = top_song_row['Ranking']
-            top_song_cover = top_song_row.get('album_cover_url', '')
+            top_song_album = top_song_row['Album_Name']
+            low_song_name = low_song_row['Song_Name']
+            low_song_score = low_song_row['Ranking']
+            low_song_album = low_song_row['Album_Name']
+
+            # Find album art for highest song
+            top_album_row = artist_albums_df[
+                artist_albums_df['album_name'].str.strip().str.lower() == str(top_song_album).strip().lower()
+                ]
+            if not top_album_row.empty:
+                top_song_cover = top_album_row['album_cover_url'].values[0]
+            else:
+                top_song_cover = 'https://placehold.co/60x60'
+
+            # Find album art for lowest song
+            low_album_row = artist_albums_df[
+                artist_albums_df['album_name'].str.strip().str.lower() == str(low_song_album).strip().lower()
+                ]
+            if not low_album_row.empty:
+                low_song_cover = low_album_row['album_cover_url'].values[0]
+            else:
+                low_song_cover = 'https://placehold.co/60x60'
+
             top_song_link = url_for(
                 'album_page',
                 artist_name=artist_name,
                 album_name=quote_plus(top_song_row['album_name']),
-                album_id=top_song_row['album_id']
-            ) if top_song_row.get('album_id') else "#"
-            low_song_name = low_song_row['Song_Name']
-            low_song_score = low_song_row['Ranking']
-            low_song_cover = low_song_row.get('album_cover_url', '')
+                album_id=top_album_row['album_id'].values[0] if not top_album_row.empty else ''
+            ) if not top_album_row.empty else "#"
+
             low_song_link = url_for(
                 'album_page',
                 artist_name=artist_name,
                 album_name=quote_plus(low_song_row['album_name']),
-                album_id=low_song_row['album_id']
-            ) if low_song_row.get('album_id') else "#"
+                album_id=low_album_row['album_id'].values[0] if not low_album_row.empty else ''
+            ) if not low_album_row.empty else "#"
         else:
             top_song_name = top_song_score = top_song_cover = top_song_link = ''
             low_song_name = low_song_score = low_song_cover = low_song_link = ''
