@@ -540,7 +540,7 @@ def artist_page_v2(artist_name):
 
             # Find album art for highest song
             top_album_row = artist_albums_df[
-                artist_albums_df['Album_Name'].str.strip().str.lower() == str(top_song_album).strip().lower()
+                artist_albums_df['album_name'].str.strip().str.lower() == str(top_song_album).strip().lower()
                 ]
             if not top_album_row.empty:
                 top_song_cover = top_album_row['album_cover_url'].values[0]
@@ -549,7 +549,7 @@ def artist_page_v2(artist_name):
 
             # Find album art for lowest song
             low_album_row = artist_albums_df[
-                artist_albums_df['Album_Name'].str.strip().str.lower() == str(low_song_album).strip().lower()
+                artist_albums_df['album_name'].str.strip().str.lower() == str(low_song_album).strip().lower()
                 ]
             if not low_album_row.empty:
                 low_song_cover = low_album_row['album_cover_url'].values[0]
