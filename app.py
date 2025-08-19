@@ -531,12 +531,12 @@ def artist_page_v2(artist_name):
         if not actual_songs_df.empty:
             top_song_row = actual_songs_df.loc[actual_songs_df['Ranking'].idxmax()]
             low_song_row = actual_songs_df.loc[actual_songs_df['Ranking'].idxmin()]
-            top_song_name = top_song_row['Song Name']
+            top_song_name = top_song_row['Song_Name']
             top_song_score = top_song_row['Ranking']
-            top_song_album = top_song_row['Album Name']
-            low_song_name = low_song_row['Song Name']
+            top_song_album = top_song_row['Album_Name']
+            low_song_name = low_song_row['Song_Name']
             low_song_score = low_song_row['Ranking']
-            low_song_album = low_song_row['Album Name']
+            low_song_album = low_song_row['Album_Name']
 
             # Find album art for highest song
             top_album_row = artist_albums_df[
@@ -559,14 +559,14 @@ def artist_page_v2(artist_name):
             top_song_link = url_for(
                 'album_page',
                 artist_name=artist_name,
-                album_name=quote_plus(top_song_row['Album Name']),
+                album_name=quote_plus(top_song_row['Album_Name']),
                 album_id=top_album_row['album_id'].values[0] if not top_album_row.empty else ''
             ) if not top_album_row.empty else "#"
 
             low_song_link = url_for(
                 'album_page',
                 artist_name=artist_name,
-                album_name=quote_plus(low_song_row['Album Name']),
+                album_name=quote_plus(low_song_row['Album_Name']),
                 album_id=low_album_row['album_id'].values[0] if not low_album_row.empty else ''
             ) if not low_album_row.empty else "#"
         else:
