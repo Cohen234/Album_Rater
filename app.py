@@ -221,7 +221,10 @@ def profile_page():
 
     # --- Totals ---
     albums_ranked = albums_df[albums_df['times_ranked'] > 0]
-    songs_ranked = songs_df[songs_df['ranking_status'].str.lower() == 'final']
+    if 'ranking_status' in songs_df.columns:
+        songs_ranked = songs_df[songs_df['ranking_status'].str.lower() == 'final']
+    else:
+        songs_ranked = songs_df.copy()  # or songs_df.iloc[0:0] for empty
     artists_ranked = songs_ranked['artist_name'].str.strip().str.lower().nunique()
 
     num_albums = len(albums_ranked)
@@ -252,13 +255,14 @@ def profile_page():
     recent_artists = songs_ranked.sort_values('ranked_date', ascending=False)['artist_name'].drop_duplicates().head(8).tolist()
 
     # --- Paused Albums (Preliminary) ---
-    paused_albums = []
-    if not prelim_df.empty and 'album_name' in prelim_df.columns:
+    if not prelim_df.empty and 'album_name' in prelim_df.columns and 'ranking_status' in prelim_df.columns:
         paused_albums = (
             prelim_df[prelim_df['ranking_status'].str.lower() == 'preliminary']
             .sort_values('ranked_date', ascending=False)
             .drop_duplicates(['album_name'])
         )[['artist_name', 'album_name', 'ranked_date']].head(8).to_dict('records')
+    else:
+        paused_albums = []
 
     # --- Averages, Medians, Stdevs ---
     avg_album_score = albums_ranked['weighted_average_score'].mean() if not albums_ranked.empty else 0
