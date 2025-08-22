@@ -218,7 +218,6 @@ def profile_page():
     songs_df['ranked_date'] = pd.to_datetime(songs_df['ranked_date'], errors='coerce')
     albums_df['weighted_average_score'] = pd.to_numeric(albums_df['weighted_average_score'], errors='coerce')
     albums_df['last_ranked_date'] = pd.to_datetime(albums_df['last_ranked_date'], errors='coerce')
-    albums_df['release_date'] = pd.to_datetime(albums_df['release_date'], errors='coerce')
 
     # --- Totals ---
     albums_ranked = albums_df[albums_df['times_ranked'] > 0]
@@ -278,8 +277,8 @@ def profile_page():
             albums_df['release_date'] = albums_df['album_id'].map(release_dates_map)
         else:
             albums_df['release_date'] = pd.NaT
-
-    albums_df['release_date'] = pd.to_datetime(albums_df['release_date'], errors='coerce')
+    else:
+        albums_df['release_date'] = pd.to_datetime(albums_df['release_date'], errors='coerce')
     albums_df['release_year'] = albums_df['release_date'].dt.year
     decade_bins = list(range(1960, datetime.now().year + 10, 10))
     albums_df['decade'] = pd.cut(albums_df['release_year'], bins=decade_bins, right=False, labels=[f"{y}s" for y in decade_bins[:-1]])
