@@ -270,6 +270,16 @@ def profile_page():
     std_song_score = songs_ranked['ranking'].std() if not songs_ranked.empty else 0
 
     # --- Favorite Albums by Decade (Top 3 per decade) ---
+    # After loading and standardizing albums_df...
+    if 'release_date' not in albums_df.columns or albums_df['release_date'].isnull().all():
+        if 'album_id' in albums_df.columns:
+            album_ids = albums_df['album_id'].dropna().unique().tolist()
+            release_dates_map = get_album_release_dates(sp, album_ids)
+            albums_df['release_date'] = albums_df['album_id'].map(release_dates_map)
+        else:
+            albums_df['release_date'] = pd.NaT
+
+    albums_df['release_date'] = pd.to_datetime(albums_df['release_date'], errors='coerce')
     albums_df['release_year'] = albums_df['release_date'].dt.year
     decade_bins = list(range(1960, datetime.now().year + 10, 10))
     albums_df['decade'] = pd.cut(albums_df['release_year'], bins=decade_bins, right=False, labels=[f"{y}s" for y in decade_bins[:-1]])
