@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ user_name }} - Music Profile</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background: #181818;
+            color: #fff;
+            font-family: 'Montserrat', sans-serif;
+            margin: 0; padding: 0;
+        }
+        .main-container { max-width: 1100px; margin: 0 auto; padding: 36px 20px 64px 20px; }
+        header {
+            text-align: center;
+            margin-bottom: 36px;
+        }
+        header h1 { font-size: 2.4em; margin-bottom: 0.2em; }
+        .search-bar {
+            margin: 18px auto 0 auto;
+            max-width: 480px;
+            display: flex;
+            gap: 8px;
+        }
+        .search-bar input[type="text"] {
+            flex: 1;
+            padding: 12px 14px;
+            border-radius: 8px;
+            border: none;
+            font-size: 1.12em;
+            outline: none;
+        }
+        .search-bar button {
+            background: #1DB954;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 22px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .search-bar button:hover { background: #1ed760; }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 24px;
+            margin-bottom: 44px;
+        }
+        .stat-card {
+            background: #232323;
+            border-radius: 10px;
+            padding: 30px 22px 24px 22px;
+            text-align: center;
+            box-shadow: 0 2px 18px rgba(0,0,0,0.18);
+        }
+        .stat-card h3 { color: #b3b3b3; margin: 0 0 12px 0; font-size: 1.08em; letter-spacing:1.1px; }
+        .stat-card .value { font-size: 2.6em; font-weight: 700; color: #1DB954; }
+        .stat-card .label { color: #b3b3b3; font-size: 1.02em; margin-top: 2px; }
+
+        .section-title {
+            text-align: left;
+            font-size: 1.35em;
+            color: #b3b3b3;
+            margin: 36px 0 18px 0;
+            font-weight: 700;
+            letter-spacing: 1px;
+        }
+        .favorites-by-decade, .decade-table {
+            background: #232323;
+            border-radius: 10px;
+            padding: 18px 18px 10px 18px;
+            margin-bottom: 24px;
+        }
+        .favorites-by-decade h4 { margin: 12px 0; color: #fff; }
+        .decade-table table { width: 100%; border-collapse: collapse; color: #fff; background: none; }
+        .decade-table th, .decade-table td {
+            border-bottom: 1px solid #383838;
+            padding: 8px 8px;
+            text-align: center;
+        }
+        .decade-table th { color: #b3b3b3; }
+
+        .timeline-container {
+            overflow-x: auto;
+            margin-bottom: 24px;
+        }
+        .timeline-row {
+            display: flex;
+            align-items: flex-end;
+            gap: 36px;
+            min-width: 650px;
+            padding: 18px 0 36px 0;
+        }
+        .timeline-event {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 120px;
+            position: relative;
+        }
+        .timeline-event .album-img {
+            width: 78px; height: 78px; border-radius: 9px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.13);
+            margin-bottom: 9px;
+        }
+        .timeline-event .album-label { font-size: 1.03em; color: #fff; font-weight: 600; }
+        .timeline-event .score { color: #1DB954; font-weight: 700; font-size: 1.01em; margin-top:3px;}
+        .timeline-event .date { color: #b3b3b3; font-size: 0.97em; margin-top:2px; }
+        .timeline-row::before {
+            content: "";
+            position: absolute;
+            left: 0; right: 0;
+            height: 4px; background: #383838;
+            top: 59px; z-index: 0;
+        }
+        .polar-chart-container, .era-chart-container {
+            background: #232323;
+            border-radius: 10px;
+            padding: 24px 18px 24px 18px;
+            margin-bottom: 28px;
+        }
+        .decade-albums-list {
+            display: flex; gap: 40px; flex-wrap: wrap;
+        }
+        .decade-block { min-width: 170px; }
+        .decade-block h4 { margin-bottom: 8px; }
+        .decade-album {
+            background: #181818; border-radius: 7px; margin-bottom: 9px; padding: 8px;
+            font-size: 1.01em; color: #1DB954;
+        }
+        .paused-albums-list {
+            display: flex; gap: 22px; flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+        .paused-album-card {
+            background: #232323; padding: 10px 16px; border-radius: 7px; color: #EAB308;
+            font-size: 1.05em; min-width: 170px;
+        }
+        .autocomplete-suggestions {
+            background: #fff; color: #232323; border-radius: 8px;
+            box-shadow: 0 2px 14px rgba(0,0,0,0.08);
+            position: absolute; z-index: 4;
+            max-height: 180px; overflow-y: auto;
+            left: 0; right: 0;
+        }
+        .autocomplete-suggestion {
+            padding: 11px 16px; cursor: pointer;
+        }
+        .autocomplete-suggestion:hover { background: #F3F3F3; }
+        .standardized-table {
+            width: 100%; border-collapse: collapse; background: #232323; color: #fff;
+            margin: 0 0 24px 0;
+        }
+        .standardized-table th, .standardized-table td {
+            border-bottom: 1px solid #383838; padding: 8px 8px; text-align: center;
+            font-size: 0.97em;
+        }
+        .standardized-table th { color: #b3b3b3; }
+        .chart-toggle-btn {
+            background: #444; color: #fff; border:none; border-radius:7px; padding:8px 16px; margin-bottom:12px; cursor:pointer; margin-right:8px;
+        }
+        .chart-toggle-btn.active, .chart-toggle-btn:hover { background: #1DB954; color: #fff; }
+    </style>
+</head>
+<body>
+<div class="main-container">
+
+    <header>
+        <h1>{{ user_name }}</h1>
+        <form class="search-bar" id="search-bar-form" autocomplete="off" style="position:relative;">
+            <input type="text" id="search-bar-input" placeholder="Search artist or album..." />
+            <button type="submit">Start Ranking</button>
+            <div id="autocomplete-list" class="autocomplete-suggestions"></div>
+        </form>
+    </header>
+
+    <!-- Lifetime Stats -->
+    <div class="stat-grid">
+        <div class="stat-card">
+            <h3>Albums Ranked</h3>
+            <div class="value">{{ num_albums }}</div>
+        </div>
+        <div class="stat-card">
+            <h3>Songs Ranked</h3>
+            <div class="value">{{ num_songs }}</div>
+        </div>
+        <div class="stat-card">
+            <h3>Artists Ranked</h3>
+            <div class="value">{{ num_artists }}</div>
+        </div>
+        <div class="stat-card">
+            <h3>First Album Ranked</h3>
+            <div class="value">{{ first_album_ranked.name if first_album_ranked else "-" }}</div>
+            <div class="label">{{ first_album_ranked.date if first_album_ranked else "" }}</div>
+        </div>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="stat-grid" style="margin-bottom:18px;">
+        <div class="stat-card">
+            <h3>Last Album Ranked</h3>
+            <div class="value">{{ last_album_info.name if last_album_info else "-" }}</div>
+            <div class="label">Score: {{ "%.2f"|format(last_album_info.score) if last_album_info else "" }}<br>
+            {{ last_album_info.date if last_album_info else "" }}</div>
+        </div>
+        <div class="stat-card">
+            <h3>Last Song Ranked</h3>
+            <div class="value">{{ last_song_info.name if last_song_info else "-" }}</div>
+            <div class="label">Score: {{ "%.2f"|format(last_song_info.score) if last_song_info else "" }}<br>
+            {{ last_song_info.date if last_song_info else "" }}</div>
+        </div>
+        <div class="stat-card">
+            <h3>Recently Ranked Artists</h3>
+            <div class="label">
+                {% for a in recent_artists %}
+                    <span style="color:#1DB954;">{{ a }}</span>{% if not loop.last %}, {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        <div class="stat-card">
+            <h3>Paused Albums (Preliminary)</h3>
+            <div class="paused-albums-list">
+                {% for a in paused_albums %}
+                <span class="paused-album-card">{{ a['album_name'] }}<br><span style="font-size:0.94em;color:#b3b3b3;">{{ a['artist_name'] }}</span></span>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Aggregate Stats -->
+    <div class="stat-grid" style="margin-bottom:22px;">
+        <div class="stat-card">
+            <h3>Avg Album Score</h3>
+            <div class="value">{{ "%.2f"|format(avg_album_score) }}</div>
+            <div class="label">Median: {{ "%.2f"|format(median_album_score) }}</div>
+            <div class="label">Std Dev: {{ "%.2f"|format(std_album_score) }}</div>
+        </div>
+        <div class="stat-card">
+            <h3>Avg Song Score</h3>
+            <div class="value">{{ "%.2f"|format(avg_song_score) }}</div>
+            <div class="label">Median: {{ "%.2f"|format(median_song_score) }}</div>
+            <div class="label">Std Dev: {{ "%.2f"|format(std_song_score) }}</div>
+        </div>
+    </div>
+
+    <!-- Favorite Albums by Decade -->
+    <div class="section-title">Favorite Albums by Decade (Top 3 by Score)</div>
+    <div class="favorites-by-decade decade-albums-list">
+        {% for decade, albums in favorite_by_decade.items() %}
+        <div class="decade-block">
+            <h4>{{ decade }}</h4>
+            {% for album in albums %}
+                <div class="decade-album">
+                    <b>{{ album.album_name }}</b>
+                    <span style="color:#b3b3b3;">({{ album.artist_name }})</span>
+                    <span style="color:#1DB954; font-weight:600;">{{ "%.2f"|format(album.score) }}</span>
+                </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Decade Stats Table -->
+    <div class="section-title">Decade Album Stats</div>
+    <div class="decade-table">
+        <table>
+            <thead>
+                <tr>
+                    <th>Decade</th>
+                    <th>Albums</th>
+                    <th>Avg Score</th>
+                    <th>Median</th>
+                    <th>Std Dev</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for row in decade_stats %}
+                <tr>
+                    <td>{{ row.decade }}</td>
+                    <td>{{ row.album_count }}</td>
+                    <td>{{ "%.2f"|format(row.avg_album_score) }}</td>
+                    <td>{{ "%.2f"|format(row.median_album_score) }}</td>
+                    <td>{{ "%.2f"|format(row.std_album_score) }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Polar Chart (Ranking Distribution) -->
+    <div class="section-title">Ranking Distribution</div>
+    <div class="polar-chart-container">
+        <canvas id="polarChart"></canvas>
+    </div>
+
+    <!-- Timeline (Ranking Dates) -->
+    <div class="section-title">Ranking Timeline</div>
+    <div class="timeline-container">
+        <div class="timeline-row">
+            {% for event in timeline_events %}
+            <div class="timeline-event">
+                <img class="album-img" src="{{ event.album_cover_url or 'https://placehold.co/80x80' }}" />
+                <div class="album-label">{{ event.album_name }}</div>
+                <div class="score">{{ "%.2f"|format(event.score) }}</div>
+                <div class="date">{{ event.date }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Era Chart (Albums by Release Date) -->
+    <div class="section-title">Era Chart: Album Scores vs. Release Date</div>
+    <div>
+        <button class="chart-toggle-btn active" id="toggle-era-albums">Albums</button>
+        <button class="chart-toggle-btn" id="toggle-era-years">Year Averages</button>
+    </div>
+    <div class="era-chart-container">
+        <canvas id="eraChart"></canvas>
+    </div>
+
+    <!-- Standardized Song Scores -->
+    <div class="section-title">Standardized Song Scores</div>
+    <table class="standardized-table">
+        <thead>
+            <tr>
+                <th>Song</th>
+                <th>Artist</th>
+                <th>Album</th>
+                <th>Raw Score</th>
+                <th>Standardized</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for song in standardized_songs %}
+            <tr>
+                <td>{{ song.song_name }}</td>
+                <td>{{ song.artist_name }}</td>
+                <td>{{ song.album_name }}</td>
+                <td>{{ "%.2f"|format(song.ranking) }}</td>
+                <td>{{ "%.2f"|format(song.standardized_score) }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+<script>
+    // --- Polar Chart ---
+    const polarData = {{ polar_chart_data|tojson }};
+    const polarColors = polarData.data.map((_, i) => {
+        const green = Math.floor(255 - (i * (200 / polarData.data.length)));
+        return `rgba(29, ${green}, 84, 0.7)`;
+    });
+    new Chart(document.getElementById('polarChart').getContext('2d'), {
+        type: 'polarArea',
+        data: {
+            labels: polarData.labels,
+            datasets: [{
+                label: 'Song Count',
+                data: polarData.data,
+                backgroundColor: polarColors,
+                borderColor: '#181818',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: {display: false} },
+            scales: {
+                r: {
+                    grid: { color: '#333' },
+                    ticks: { display: false },
+                    pointLabels: { color: '#b3b3b3', font: {size: 12, weight:'bold'} }
+                }
+            },
+            startAngle: -90
+        }
+    });
+
+    // --- Era Chart (albums vs. date, or year avg) ---
+    const eraAlbums = {{ era_chart_albums|tojson }};
+    const eraYears = {{ era_chart_years|tojson }};
+    let mode = "albums";
+    const eraChart = new Chart(document.getElementById('eraChart').getContext('2d'), {
+        type: 'scatter',
+        data: { datasets: [{
+            label: 'Album Score',
+            data: eraAlbums,
+            borderColor: 'rgba(29,185,84,1)',
+            backgroundColor: 'rgba(29,185,84,0.20)',
+            pointRadius: 7,
+            pointHoverRadius: 10,
+            showLine: false
+        }]},
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            if (mode==="albums") {
+                                return context.raw.label + " (" + context.raw.artist + "): " + context.raw.y.toFixed(2);
+                            } else {
+                                return "Year: " + context.raw.year + ", Avg: " + context.raw.y.toFixed(2) + " ±" + (context.raw.sem?context.raw.sem.toFixed(2):"0");
+                            }
+                        }
+                    }
+                },
+                annotation: {}
+            },
+            scales: {
+                x: {
+                    type: 'time',
+                    time: { unit: 'month', tooltipFormat:'MMM yyyy' },
+                    ticks: { color: '#b3b3b3' },
+                    grid: { color: '#2a2a2a' }
+                },
+                y: {
+                    min: 0, max: 10.1,
+                    ticks: { color: '#b3b3b3', stepSize: 1 },
+                    grid: { color: '#2a2a2a' }
+                }
+            }
+        }
+    });
+    document.getElementById('toggle-era-albums').onclick = function() {
+        mode = "albums";
+        eraChart.data.datasets = [{
+            label: 'Album Score',
+            data: eraAlbums,
+            borderColor: 'rgba(29,185,84,1)',
+            backgroundColor: 'rgba(29,185,84,0.20)',
+            pointRadius: 7,
+            pointHoverRadius: 10,
+            showLine: false
+        }];
+        eraChart.options.plugins.annotation.annotations = {};
+        eraChart.update();
+        this.classList.add("active");
+        document.getElementById('toggle-era-years').classList.remove("active");
+    }
+    document.getElementById('toggle-era-years').onclick = function() {
+        mode = "years";
+        eraChart.data.datasets = [{
+            label: 'Year Avg',
+            type: 'line',
+            data: eraYears,
+            borderColor: '#1DB954',
+            backgroundColor: 'rgba(29,185,84,0.15)',
+            pointRadius: 9,
+            pointHoverRadius: 12,
+            showLine: true,
+            fill: false
+        }];
+        // Add error bars using chartjs-plugin-annotation
+        let anns = {};
+        eraYears.forEach((pt, i) => {
+            if (pt.sem && pt.sem > 0) {
+                anns["error"+i] = {
+                    type: 'line',
+                    xMin: pt.x, xMax: pt.x,
+                    yMin: pt.y - pt.sem, yMax: pt.y + pt.sem,
+                    borderColor: '#FF5252',
+                    borderWidth: 2,
+                    borderDash: [5,5],
+                    label: { display:false }
+                }
+            }
+        });
+        eraChart.options.plugins.annotation.annotations = anns;
+        eraChart.update();
+        this.classList.add("active");
+        document.getElementById('toggle-era-albums').classList.remove("active");
+    }
+
+    // --- Search Autocomplete ---
+    const rankedArtists = {{ ranked_artists|tojson }};
+    const rankedAlbums = {{ ranked_albums|tojson }};
+    const input = document.getElementById("search-bar-input");
+    const acList = document.getElementById("autocomplete-list");
+    input.addEventListener("input", function() {
+        const v = this.value.trim().toLowerCase();
+        acList.innerHTML = "";
+        if (!v) return;
+        let matches = [];
+        if (v.length >= 2) {
+            matches = rankedArtists.filter(a=>a.toLowerCase().includes(v)).map(a=>({type:"artist",name:a}))
+                .concat(rankedAlbums.filter(a=>a.toLowerCase().includes(v)).map(a=>({type:"album",name:a})));
+        }
+        matches.slice(0,8).forEach(m=>{
+            const div = document.createElement("div");
+            div.className = "autocomplete-suggestion";
+            div.textContent = m.name + " " + (m.type==="artist"?"(Artist)":"(Album)");
+            div.onclick = function() {
+                input.value = m.name;
+                acList.innerHTML = "";
+            };
+            acList.appendChild(div);
+        });
+    });
+    document.body.addEventListener("click", ()=>acList.innerHTML="");
+
+    // --- Search Submit Handler ---
+    document.getElementById("search-bar-form").onsubmit = function(e) {
+        e.preventDefault();
+        const val = input.value.trim();
+        if (!val) return;
+        // Simple logic: If artist, go to artist page. If album, go to album page.
+        // Could be improved with backend endpoint for fuzzy search
+        if (rankedArtists.includes(val)) {
+            window.location.href = "/artist/" + encodeURIComponent(val);
+        } else if (rankedAlbums.includes(val)) {
+            // Need to find the artist for this album
+            fetch("/api/find_album?album_name=" + encodeURIComponent(val))
+                .then(resp=>resp.json())
+                .then(data=>{
+                    if (data.found) {
+                        window.location.href = data.url;
+                    } else {
+                        window.location.href = "/rank_album?album_name=" + encodeURIComponent(val);
+                    }
+                });
+        } else {
+            // Not found, default to album search
+            window.location.href = "/rank_album?album_name=" + encodeURIComponent(val);
+        }
+    };
+</script>
+</body>
+</html>

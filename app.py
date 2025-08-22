@@ -195,6 +195,202 @@ def get_album_release_dates(sp_instance, album_ids):
         except Exception as e:
             logging.error(f"Could not fetch album release dates batch: {e}")
     return release_dates
+@app.route("/")
+@app.route("/profile")
+def profile_page():
+    user_name = "Cohen Callaway"
+
+    # Load main song/album dataframes
+    songs_df = get_as_dataframe(client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)).fillna("")
+    albums_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
+    prelim_df = get_as_dataframe(client.open_by_key(SPREADSHEET_ID).worksheet(PRELIM_SHEET_NAME)).fillna("")
+
+    # --- Standardize columns and types ---
+    def std_cols(df):
+        df.columns = [c.replace(' ', '_').lower() for c in df.columns]
+        return df
+    songs_df = std_cols(songs_df)
+    albums_df = std_cols(albums_df)
+    prelim_df = std_cols(prelim_df)
+
+    # Ensure numeric for scores/dates
+    songs_df['ranking'] = pd.to_numeric(songs_df['ranking'], errors='coerce')
+    songs_df['ranked_date'] = pd.to_datetime(songs_df['ranked_date'], errors='coerce')
+    albums_df['weighted_average_score'] = pd.to_numeric(albums_df['weighted_average_score'], errors='coerce')
+    albums_df['last_ranked_date'] = pd.to_datetime(albums_df['last_ranked_date'], errors='coerce')
+    albums_df['release_date'] = pd.to_datetime(albums_df['release_date'], errors='coerce')
+
+    # --- Totals ---
+    albums_ranked = albums_df[albums_df['times_ranked'] > 0]
+    songs_ranked = songs_df[songs_df['ranking_status'].str.lower() == 'final']
+    artists_ranked = songs_ranked['artist_name'].str.strip().str.lower().nunique()
+
+    num_albums = len(albums_ranked)
+    num_songs = len(songs_ranked)
+    num_artists = artists_ranked
+
+    # --- Last Ranked ---
+    last_album = albums_ranked.sort_values('last_ranked_date', ascending=False).head(1)
+    last_album_info = None
+    if not last_album.empty:
+        last_album_row = last_album.iloc[0]
+        last_album_info = {
+            "name": last_album_row['album_name'],
+            "score": last_album_row['weighted_average_score'],
+            "date": last_album_row['last_ranked_date'].strftime("%b %d, %Y") if pd.notnull(last_album_row['last_ranked_date']) else ""
+        }
+    last_song = songs_ranked.sort_values('ranked_date', ascending=False).head(1)
+    last_song_info = None
+    if not last_song.empty:
+        last_song_row = last_song.iloc[0]
+        last_song_info = {
+            "name": last_song_row['song_name'],
+            "score": last_song_row['ranking'],
+            "date": last_song_row['ranked_date'].strftime("%b %d, %Y") if pd.notnull(last_song_row['ranked_date']) else ""
+        }
+
+    # --- Recently Ranked Artists ---
+    recent_artists = songs_ranked.sort_values('ranked_date', ascending=False)['artist_name'].drop_duplicates().head(8).tolist()
+
+    # --- Paused Albums (Preliminary) ---
+    paused_albums = []
+    if not prelim_df.empty and 'album_name' in prelim_df.columns:
+        paused_albums = (
+            prelim_df[prelim_df['ranking_status'].str.lower() == 'preliminary']
+            .sort_values('ranked_date', ascending=False)
+            .drop_duplicates(['album_name'])
+        )[['artist_name', 'album_name', 'ranked_date']].head(8).to_dict('records')
+
+    # --- Averages, Medians, Stdevs ---
+    avg_album_score = albums_ranked['weighted_average_score'].mean() if not albums_ranked.empty else 0
+    avg_song_score = songs_ranked['ranking'].mean() if not songs_ranked.empty else 0
+    median_album_score = albums_ranked['weighted_average_score'].median() if not albums_ranked.empty else 0
+    median_song_score = songs_ranked['ranking'].median() if not songs_ranked.empty else 0
+    std_album_score = albums_ranked['weighted_average_score'].std() if not albums_ranked.empty else 0
+    std_song_score = songs_ranked['ranking'].std() if not songs_ranked.empty else 0
+
+    # --- Favorite Albums by Decade (Top 3 per decade) ---
+    albums_df['release_year'] = albums_df['release_date'].dt.year
+    decade_bins = list(range(1960, datetime.now().year + 10, 10))
+    albums_df['decade'] = pd.cut(albums_df['release_year'], bins=decade_bins, right=False, labels=[f"{y}s" for y in decade_bins[:-1]])
+    favorite_by_decade = defaultdict(list)
+    for decade, group in albums_df.groupby('decade'):
+        favs = group.sort_values('weighted_average_score', ascending=False).head(3)
+        for _, row in favs.iterrows():
+            favorite_by_decade[decade].append({
+                "album_name": row['album_name'],
+                "artist_name": row['artist_name'],
+                "score": row['weighted_average_score'],
+                "release_year": row['release_year']
+            })
+
+    # --- Decade Stats Table ---
+    decade_stats = []
+    for decade, group in albums_df.groupby('decade'):
+        if not group.empty:
+            decade_stats.append({
+                "decade": decade,
+                "avg_album_score": group['weighted_average_score'].mean(),
+                "median_album_score": group['weighted_average_score'].median(),
+                "std_album_score": group['weighted_average_score'].std(),
+                "album_count": len(group)
+            })
+
+    # --- First Album Ranked ---
+    if not albums_ranked.empty and 'last_ranked_date' in albums_ranked.columns:
+        first_album_row = albums_ranked.sort_values('last_ranked_date').iloc[0]
+        first_album_ranked = {
+            "name": first_album_row['album_name'],
+            "date": first_album_row['last_ranked_date'].strftime("%b %d, %Y") if pd.notnull(first_album_row['last_ranked_date']) else ""
+        }
+    else:
+        first_album_ranked = None
+
+    # --- Ranking Distribution Polar Chart (Songs) ---
+    bins = [round(x * 0.5, 1) for x in range(2, 21)]
+    songs_ranked['score_bin'] = pd.cut(songs_ranked['ranking'], bins=[0]+bins+[10.1], labels=[str(b) for b in bins]+['10.0'])
+    rank_dist = songs_ranked['score_bin'].value_counts().sort_index()
+    polar_chart_data = {
+        "labels": list(rank_dist.index),
+        "data": list(rank_dist.values)
+    }
+
+    # --- Timeline Data (Albums Ranked Chronologically) ---
+    timeline_albums = albums_ranked.sort_values('last_ranked_date')
+    timeline_events = []
+    for _, row in timeline_albums.iterrows():
+        timeline_events.append({
+            "album_name": row['album_name'],
+            "artist_name": row['artist_name'],
+            "score": row['weighted_average_score'],
+            "date": row['last_ranked_date'].strftime("%b %d, %Y") if pd.notnull(row['last_ranked_date']) else "",
+            "album_cover_url": row.get('album_cover_url', '')
+        })
+
+    # --- Era Chart Data (Albums by Release Date) ---
+    # View 1: Each album, point by release date
+    era_albums = albums_ranked[albums_ranked['release_date'].notnull()]
+    era_chart_albums = [{
+        "x": row['release_date'].strftime("%Y-%m-%d"),
+        "y": row['weighted_average_score'],
+        "label": row['album_name'],
+        "artist": row['artist_name'],
+        "cover": row.get('album_cover_url', '')
+    } for _, row in era_albums.iterrows()]
+
+    # View 2: Averages by year, error bars
+    era_albums['release_year'] = era_albums['release_date'].dt.year
+    era_yearly = era_albums.groupby('release_year').agg(
+        avg_score=('weighted_average_score', 'mean'),
+        std_score=('weighted_average_score', 'std'),
+        count=('weighted_average_score', 'count'),
+    ).reset_index()
+    era_chart_years = [{
+        "x": f"{int(row['release_year'])}-07-01",
+        "y": row['avg_score'],
+        "sem": row['std_score'] if not np.isnan(row['std_score']) else 0,
+        "n": int(row['count']),
+        "year": int(row['release_year'])
+    } for _, row in era_yearly.iterrows()]
+
+    # --- Search/Autocomplete Data ---
+    ranked_artists = sorted(songs_ranked['artist_name'].dropna().unique())
+    ranked_albums = sorted(albums_ranked['album_name'].dropna().unique())
+
+    # --- Standardized Song Scores ---
+    song_scores = songs_ranked['ranking'].dropna().values
+    mean_song = np.mean(song_scores) if len(song_scores) else 0
+    std_song = np.std(song_scores) if len(song_scores) else 1
+    songs_ranked['standardized_score'] = (songs_ranked['ranking'] - mean_song) / std_song
+    standardized_songs = songs_ranked[['song_name', 'artist_name', 'ranking', 'standardized_score', 'album_name']].sort_values('standardized_score', ascending=False).to_dict('records')
+
+    return render_template(
+        "profile.html",
+        user_name=user_name,
+        num_albums=num_albums,
+        num_songs=num_songs,
+        num_artists=num_artists,
+        last_album_info=last_album_info,
+        last_song_info=last_song_info,
+        recent_artists=recent_artists,
+        paused_albums=paused_albums,
+        avg_album_score=avg_album_score,
+        avg_song_score=avg_song_score,
+        median_album_score=median_album_score,
+        median_song_score=median_song_score,
+        std_album_score=std_album_score,
+        std_song_score=std_song_score,
+        favorite_by_decade=favorite_by_decade,
+        decade_stats=decade_stats,
+        first_album_ranked=first_album_ranked,
+        polar_chart_data=polar_chart_data,
+        timeline_events=timeline_events,
+        era_chart_albums=era_chart_albums,
+        era_chart_years=era_chart_years,
+        ranked_artists=ranked_artists,
+        ranked_albums=ranked_albums,
+        standardized_songs=standardized_songs
+    )
 def get_dominant_color(image_url):
     try:
         response = requests.get(image_url)
@@ -204,6 +400,17 @@ def get_dominant_color(image_url):
     except Exception as e:
 
         return "#ffffff"
+@app.route("/api/find_album")
+def api_find_album():
+    album_name = request.args.get("album_name", "").strip().lower()
+    albums_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
+    albums_df['album_name_lc'] = albums_df['album_name'].str.strip().str.lower()
+    row = albums_df[albums_df['album_name_lc'] == album_name]
+    if not row.empty:
+        r = row.iloc[0]
+        url = url_for("album_page", artist_name=r['artist_name'], album_name=quote_plus(r['album_name']), album_id=r['album_id'])
+        return jsonify({"found": True, "url": url})
+    return jsonify({"found": False})
 def get_ordinal_suffix(n):
     """Converts a number to its ordinal form (e.g., 1 -> 1st, 2 -> 2nd)."""
     if 11 <= (n % 100) <= 13:
