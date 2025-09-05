@@ -195,6 +195,7 @@ def get_album_release_dates(sp_instance, album_ids):
         except Exception as e:
             logging.error(f"Could not fetch album release dates batch: {e}")
     return release_dates
+from collections import defaultdict
 @app.route("/")
 @app.route("/profile")
 def profile_page():
