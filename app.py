@@ -198,6 +198,8 @@ def get_album_release_dates(sp_instance, album_ids):
 from collections import defaultdict
 from gspread.exceptions import APIError
 import numpy as np
+@app.route("/")
+@app.route("/profile")
 def profile_page():
     user_name = "Cohen Callaway"
     try:
