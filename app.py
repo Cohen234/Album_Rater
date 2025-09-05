@@ -348,31 +348,37 @@ def profile_page():
             "album_cover_url": row.get('album_cover_url', '')
         })
 
-    # --- Era Chart Data (Albums by Release Date) ---
-    # View 1: Each album, point by release date
-    era_albums = albums_ranked[albums_ranked['release_date'].notnull()]
-    era_chart_albums = [{
-        "x": row['release_date'].strftime("%Y-%m-%d"),
-        "y": row['weighted_average_score'],
-        "label": row['album_name'],
-        "artist": row['artist_name'],
-        "cover": row.get('album_cover_url', '')
-    } for _, row in era_albums.iterrows()]
+    if 'release_date' in albums_ranked.columns:
+        era_albums = albums_ranked[albums_ranked['release_date'].notnull()]
+    else:
+        era_albums = pd.DataFrame(columns=albums_ranked.columns)
 
-    # View 2: Averages by year, error bars
-    era_albums['release_year'] = era_albums['release_date'].dt.year
-    era_yearly = era_albums.groupby('release_year').agg(
-        avg_score=('weighted_average_score', 'mean'),
-        std_score=('weighted_average_score', 'std'),
-        count=('weighted_average_score', 'count'),
-    ).reset_index()
-    era_chart_years = [{
-        "x": f"{int(row['release_year'])}-07-01",
-        "y": row['avg_score'],
-        "sem": row['std_score'] if not np.isnan(row['std_score']) else 0,
-        "n": int(row['count']),
-        "year": int(row['release_year'])
-    } for _, row in era_yearly.iterrows()]
+    era_chart_albums = []
+    if not era_albums.empty and 'release_date' in era_albums.columns:
+        era_chart_albums = [{
+            "x": row['release_date'].strftime("%Y-%m-%d"),
+            "y": row['weighted_average_score'],
+            "label": row['album_name'],
+            "artist": row['artist_name'],
+            "cover": row.get('album_cover_url', '')
+        } for _, row in era_albums.iterrows() if pd.notnull(row['release_date'])]
+
+        era_albums['release_year'] = pd.to_datetime(era_albums['release_date'], errors='coerce').dt.year
+        era_yearly = era_albums.groupby('release_year').agg(
+            avg_score=('weighted_average_score', 'mean'),
+            std_score=('weighted_average_score', 'std'),
+            count=('weighted_average_score', 'count'),
+        ).reset_index()
+        era_chart_years = [{
+            "x": f"{int(row['release_year'])}-07-01",
+            "y": row['avg_score'],
+            "sem": row['std_score'] if not np.isnan(row['std_score']) else 0,
+            "n": int(row['count']),
+            "year": int(row['release_year'])
+        } for _, row in era_yearly.iterrows()]
+    else:
+        era_chart_albums = []
+        era_chart_years = []
 
     # --- Search/Autocomplete Data ---
     ranked_artists = sorted(songs_ranked['artist_name'].dropna().unique())
