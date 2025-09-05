@@ -196,6 +196,7 @@ def get_album_release_dates(sp_instance, album_ids):
             logging.error(f"Could not fetch album release dates batch: {e}")
     return release_dates
 from collections import defaultdict
+import numpy as np
 @app.route("/")
 @app.route("/profile")
 def profile_page():
