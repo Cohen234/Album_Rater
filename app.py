@@ -228,12 +228,21 @@ def profile_page():
     else:
         songs_ranked = songs_df.copy()
 
+    # ... previous code ...
     song_scores = songs_ranked['ranking'].dropna().values
     mean_song = np.mean(song_scores) if len(song_scores) else 0
     std_song = np.std(song_scores) if len(song_scores) else 1
 
-    songs_ranked.loc[:, 'score_bin'] = pd.cut(...)
+    bins = [round(x * 0.5, 1) for x in range(2, 22)]  # 1.0 ... 10.0 inclusive
+    songs_ranked.loc[:, 'score_bin'] = pd.cut(
+        songs_ranked['ranking'],
+        bins=[0] + bins,
+        labels=[str(b) for b in bins],
+        include_lowest=True
+    )
+
     songs_ranked.loc[:, 'standardized_score'] = (songs_ranked['ranking'] - mean_song) / std_song
+    # ... rest of your code ...
     artists_ranked = songs_ranked['artist_name'].str.strip().str.lower().nunique()
 
     num_albums = len(albums_ranked)
