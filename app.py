@@ -227,6 +227,13 @@ def profile_page():
         songs_ranked = songs_df[songs_df['ranking_status'].str.lower() == 'final'].copy()
     else:
         songs_ranked = songs_df.copy()
+
+    song_scores = songs_ranked['ranking'].dropna().values
+    mean_song = np.mean(song_scores) if len(song_scores) else 0
+    std_song = np.std(song_scores) if len(song_scores) else 1
+
+    songs_ranked.loc[:, 'score_bin'] = pd.cut(...)
+    songs_ranked.loc[:, 'standardized_score'] = (songs_ranked['ranking'] - mean_song) / std_song
     artists_ranked = songs_ranked['artist_name'].str.strip().str.lower().nunique()
 
     num_albums = len(albums_ranked)
@@ -273,9 +280,8 @@ def profile_page():
     median_song_score = songs_ranked['ranking'].median() if not songs_ranked.empty else 0
     std_album_score = albums_ranked['weighted_average_score'].std() if not albums_ranked.empty else 0
     std_song_score = songs_ranked['ranking'].std() if not songs_ranked.empty else 0
-    song_scores = songs_ranked['ranking'].dropna().values
-    mean_song = np.mean(song_scores) if len(song_scores) else 0
-    std_song = np.std(song_scores) if len(song_scores) else 1
+
+
 
     # --- Favorite Albums by Decade (Top 3 per decade) ---
     if 'release_date' not in albums_df.columns or albums_df['release_date'].isnull().all():
@@ -338,8 +344,8 @@ def profile_page():
     songs_ranked.loc[:, 'standardized_score'] = (songs_ranked['ranking'] - mean_song) / std_song
     rank_dist = songs_ranked['score_bin'].value_counts().sort_index()
     polar_chart_data = {
-        "labels": list(rank_dist.index),
-        "data": list(rank_dist.values)
+        "labels": [str(label) for label in rank_dist.index],
+        "data": [int(x) for x in rank_dist.values]
     }
 
     # --- Timeline Data (Albums Ranked Chronologically) ---
@@ -391,10 +397,6 @@ def profile_page():
     ranked_albums = sorted(albums_ranked['album_name'].dropna().unique())
 
     # --- Standardized Song Scores ---
-    song_scores = songs_ranked['ranking'].dropna().values
-    mean_song = np.mean(song_scores) if len(song_scores) else 0
-    std_song = np.std(song_scores) if len(song_scores) else 1
-    songs_ranked['standardized_score'] = (songs_ranked['ranking'] - mean_song) / std_song
     standardized_songs = songs_ranked[['song_name', 'artist_name', 'ranking', 'standardized_score', 'album_name']].sort_values('standardized_score', ascending=False).to_dict('records')
 
     return render_template(
