@@ -273,6 +273,9 @@ def profile_page():
     median_song_score = songs_ranked['ranking'].median() if not songs_ranked.empty else 0
     std_album_score = albums_ranked['weighted_average_score'].std() if not albums_ranked.empty else 0
     std_song_score = songs_ranked['ranking'].std() if not songs_ranked.empty else 0
+    song_scores = songs_ranked['ranking'].dropna().values
+    mean_song = np.mean(song_scores) if len(song_scores) else 0
+    std_song = np.std(song_scores) if len(song_scores) else 1
 
     # --- Favorite Albums by Decade (Top 3 per decade) ---
     if 'release_date' not in albums_df.columns or albums_df['release_date'].isnull().all():
@@ -325,12 +328,14 @@ def profile_page():
 
     # --- Ranking Distribution Polar Chart (Songs) ---
     bins = [round(x * 0.5, 1) for x in range(2, 22)]  # 1.0 ... 10.0 inclusive
-    songs_ranked['score_bin'] = pd.cut(
+    songs_ranked.loc[:, 'score_bin'] = pd.cut(
         songs_ranked['ranking'],
         bins=[0] + bins,
         labels=[str(b) for b in bins],
         include_lowest=True
     )
+
+    songs_ranked.loc[:, 'standardized_score'] = (songs_ranked['ranking'] - mean_song) / std_song
     rank_dist = songs_ranked['score_bin'].value_counts().sort_index()
     polar_chart_data = {
         "labels": list(rank_dist.index),
