@@ -290,7 +290,7 @@ def profile_page():
     decade_bins = list(range(1960, datetime.now().year + 10, 10))
     albums_df['decade'] = pd.cut(albums_df['release_year'], bins=decade_bins, right=False, labels=[f"{y}s" for y in decade_bins[:-1]])
     favorite_by_decade = defaultdict(list)
-    for decade, group in albums_df.groupby('decade'):
+    for decade, group in albums_df.groupby('decade', observed=False):
         favs = group.sort_values('weighted_average_score', ascending=False).head(3)
         for _, row in favs.iterrows():
             favorite_by_decade[decade].append({
@@ -302,7 +302,7 @@ def profile_page():
 
     # --- Decade Stats Table ---
     decade_stats = []
-    for decade, group in albums_df.groupby('decade'):
+    for decade, group in albums_df.groupby('decade', observed=False):
         if not group.empty:
             decade_stats.append({
                 "decade": decade,
@@ -323,8 +323,13 @@ def profile_page():
         first_album_ranked = None
 
     # --- Ranking Distribution Polar Chart (Songs) ---
-    bins = [round(x * 0.5, 1) for x in range(2, 21)]
-    songs_ranked['score_bin'] = pd.cut(songs_ranked['ranking'], bins=[0]+bins+[10.1], labels=[str(b) for b in bins]+['10.0'])
+    bins = [round(x * 0.5, 1) for x in range(2, 22)]  # 1.0 ... 10.0 inclusive
+    songs_ranked['score_bin'] = pd.cut(
+        songs_ranked['ranking'],
+        bins=[0] + bins,
+        labels=[str(b) for b in bins],
+        include_lowest=True
+    )
     rank_dist = songs_ranked['score_bin'].value_counts().sort_index()
     polar_chart_data = {
         "labels": list(rank_dist.index),
