@@ -224,9 +224,9 @@ def profile_page():
     # --- Totals ---
     albums_ranked = albums_df[albums_df['times_ranked'] > 0]
     if 'ranking_status' in songs_df.columns:
-        songs_ranked = songs_df[songs_df['ranking_status'].str.lower() == 'final']
+        songs_ranked = songs_df[songs_df['ranking_status'].str.lower() == 'final'].copy()
     else:
-        songs_ranked = songs_df.copy()  # or songs_df.iloc[0:0] for empty
+        songs_ranked = songs_df.copy()
     artists_ranked = songs_ranked['artist_name'].str.strip().str.lower().nunique()
 
     num_albums = len(albums_ranked)
