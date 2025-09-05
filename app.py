@@ -196,16 +196,20 @@ def get_album_release_dates(sp_instance, album_ids):
             logging.error(f"Could not fetch album release dates batch: {e}")
     return release_dates
 from collections import defaultdict
+from gspread.exceptions import APIError
 import numpy as np
-@app.route("/")
-@app.route("/profile")
 def profile_page():
     user_name = "Cohen Callaway"
-
-    # Load main song/album dataframes
-    songs_df = get_as_dataframe(client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)).fillna("")
-    albums_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
-    prelim_df = get_as_dataframe(client.open_by_key(SPREADSHEET_ID).worksheet(PRELIM_SHEET_NAME)).fillna("")
+    try:
+        # Load main song/album dataframes
+        songs_df = get_as_dataframe(client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)).fillna("")
+        albums_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
+        prelim_df = get_as_dataframe(client.open_by_key(SPREADSHEET_ID).worksheet(PRELIM_SHEET_NAME)).fillna("")
+    except APIError as e:
+        if "429" in str(e):
+            # Show a friendly error page
+            return render_template("rate_limit.html", message="Google Sheets API rate limit exceeded. Please try again in a minute.")
+        raise
 
     # --- Standardize columns and types ---
     def std_cols(df):
