@@ -2030,9 +2030,7 @@ def rerank_success():
         new_placement=new_placement, total_albums=total_albums, times_ranked=times_ranked,
         dominant_color=dominant_color, old_score_color=old_score_color, new_score_color=new_score_color
     )
-@app.route('/')
-def index():
-    return render_template('index.html')
+
 @app.route('/ranking_success')
 def ranking_success():
     album_name = request.args.get('album_name')
