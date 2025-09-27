@@ -179,21 +179,35 @@ def group_ranked_songs(sheet_rows):
             continue
     return group_bins
 def get_album_release_dates(sp_instance, album_ids):
-    """Fetches release dates for a list of album IDs."""
+    """Fetches release dates for a list of album IDs robustly."""
     release_dates = {}
     if not album_ids:
         return release_dates
-    # Spotify allows max 20 IDs per batch call
+
     album_ids = [str(aid) for aid in album_ids]
     for i in range(0, len(album_ids), 20):
+        batch = album_ids[i:i + 20]
         try:
-            batch = album_ids[i:i + 20]
             albums_info = sp_instance.albums(batch)
             for album in albums_info['albums']:
                 if album:
                     release_dates[album['id']] = album.get('release_date')
         except Exception as e:
-            logging.error(f"Could not fetch album release dates batch: {e}")
+            logging.error(f"Could not fetch album release dates batch {batch}: {e}")
+            # Optionally, retry once after a short delay
+            import time
+            time.sleep(2)
+            try:
+                albums_info = sp_instance.albums(batch)
+                for album in albums_info['albums']:
+                    if album:
+                        release_dates[album['id']] = album.get('release_date')
+            except Exception as e2:
+                logging.error(f"Second attempt failed for batch {batch}: {e2}")
+                # Optionally, set release date to None for these IDs
+                for aid in batch:
+                    release_dates[aid] = None
+
     return release_dates
 from collections import defaultdict
 from gspread.exceptions import APIError
