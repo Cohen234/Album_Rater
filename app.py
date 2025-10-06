@@ -426,8 +426,12 @@ def profile_page():
     ranked_albums = sorted(albums_ranked['album_name'].dropna().unique())
 
     # --- Standardized Song Scores ---
-    standardized_songs = songs_ranked[['song_name', 'artist_name', 'ranking', 'standardized_score', 'album_name']].sort_values('standardized_score', ascending=False).to_dict('records')
-
+    standardized_songs = (
+        songs_ranked[['song_name', 'artist_name', 'ranking', 'standardized_score', 'album_name']]
+        .sort_values('standardized_score', ascending=False)
+        .head(10)  # <-- Only top 10
+        .to_dict('records')
+    )
     return render_template(
         "profile.html",
         user_name=user_name,
