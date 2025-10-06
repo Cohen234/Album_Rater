@@ -205,7 +205,6 @@
             <div id="autocomplete-list" class="autocomplete-suggestions"></div>
         </form>
     </header>
-
     <!-- Lifetime Stats -->
     <div class="stat-grid">
         <div class="stat-card">
@@ -374,7 +373,7 @@
                     {% if song.album_cover_url %}
                         <img src="{{ song.album_cover_url }}" alt="Album Art" class="album-art-img">
                     {% else %}
-                        <img src="https://placehold.co/54x54" class="album-art-img">
+                        <img src="https://placehold.co/54x54" class="album-art-img" alt="No Art">
                     {% endif %}
                 </td>
                 <td>{{ song.album_name }}</td>
