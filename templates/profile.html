@@ -57,11 +57,21 @@
             padding: 30px 22px 24px 22px;
             text-align: center;
             box-shadow: 0 2px 18px rgba(0,0,0,0.18);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 150px; /* makes the cards bigger vertically */
         }
-        .stat-card h3 { color: #b3b3b3; margin: 0 0 12px 0; font-size: 1.08em; letter-spacing:1.1px; }
-        .stat-card .value { font-size: 2.6em; font-weight: 700; color: #1DB954; }
-        .stat-card .label { color: #b3b3b3; font-size: 1.02em; margin-top: 2px; }
-
+        .stat-card .value {
+            font-size: 3em;
+            font-weight: 700;
+            color: #1DB954;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+        }
         .section-title {
             text-align: left;
             font-size: 1.35em;
@@ -157,10 +167,27 @@
             margin: 0 0 24px 0;
         }
         .standardized-table th, .standardized-table td {
-            border-bottom: 1px solid #383838; padding: 8px 8px; text-align: center;
-            font-size: 0.97em;
+            border-bottom: 1px solid #383838;
+            padding: 18px 16px; /* larger cells */
+            text-align: center;
+            font-size: 1.08em;
+            vertical-align: middle;
         }
         .standardized-table th { color: #b3b3b3; }
+        .album-art-cell {
+            width: 60px;
+            height: 60px;
+        }
+        .album-art-img {
+            width: 54px;
+            height: 54px;
+            border-radius: 6px;
+            object-fit: cover;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
         .chart-toggle-btn {
             background: #444; color: #fff; border:none; border-radius:7px; padding:8px 16px; margin-bottom:12px; cursor:pointer; margin-right:8px;
         }
@@ -328,8 +355,10 @@
     <table class="standardized-table">
         <thead>
             <tr>
+                <th>#</th>
                 <th>Song</th>
                 <th>Artist</th>
+                <th>Album Art</th>
                 <th>Album</th>
                 <th>Raw Score</th>
                 <th>Standardized</th>
@@ -338,8 +367,16 @@
         <tbody>
         {% for song in standardized_songs %}
             <tr>
+                <td>{{ loop.index }}</td>
                 <td>{{ song.song_name }}</td>
                 <td>{{ song.artist_name }}</td>
+                <td class="album-art-cell">
+                    {% if song.album_cover_url %}
+                        <img src="{{ song.album_cover_url }}" alt="Album Art" class="album-art-img">
+                    {% else %}
+                        <img src="https://placehold.co/54x54" class="album-art-img">
+                    {% endif %}
+                </td>
                 <td>{{ song.album_name }}</td>
                 <td>{{ "%.2f"|format(song.ranking) }}</td>
                 <td>{{ "%.2f"|format(song.standardized_score) }}</td>

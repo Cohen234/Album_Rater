@@ -426,10 +426,14 @@ def profile_page():
     ranked_albums = sorted(albums_ranked['album_name'].dropna().unique())
 
     # --- Standardized Song Scores ---
+    # Assuming albums_ranked is a DataFrame of albums with album_name and album_cover_url
+    album_cover_map = dict(zip(albums_ranked['album_name'], albums_ranked['album_cover_url']))
+
     standardized_songs = (
         songs_ranked[['song_name', 'artist_name', 'ranking', 'standardized_score', 'album_name']]
         .sort_values('standardized_score', ascending=False)
-        .head(10)  # <-- Only top 10
+        .head(10)
+        .assign(album_cover_url=lambda df: df['album_name'].map(album_cover_map))
         .to_dict('records')
     )
     return render_template(
