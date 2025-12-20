@@ -199,11 +199,17 @@
 
     <header>
         <h1>{{ user_name }}</h1>
-        <form class="search-bar" id="search-bar-form" autocomplete="off" style="position:relative;">
+        <form class="search-bar" autocomplete="off" style="position:relative;">
             <input type="text" id="search-bar-input" placeholder="Search artist or album..." />
-            <button type="submit">Start Ranking</button>
+
+            <a href="artist_page_v2.html">
+                <button type="button">Start Ranking</button>
+            </a>
+
             <div id="autocomplete-list" class="autocomplete-suggestions"></div>
         </form>
+
+
     </header>
     <!-- Lifetime Stats -->
     <div class="stat-grid">
