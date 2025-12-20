@@ -199,13 +199,9 @@
 
     <header>
         <h1>{{ user_name }}</h1>
-        <form class="search-bar" autocomplete="off" style="position:relative;">
+        <form class="search-bar" id="search-bar-form" autocomplete="off" style="position:relative;">
             <input type="text" id="search-bar-input" placeholder="Search artist or album..." />
-
-            <a href="artist_page_v2.html">
-                <button type="button">Start Ranking</button>
-            </a>
-
+            <button type="submit">Start Ranking</button>
             <div id="autocomplete-list" class="autocomplete-suggestions"></div>
         </form>
 
@@ -571,7 +567,11 @@
             // Not found, default to album search
             window.location.href = "/rank_album?album_name=" + encodeURIComponent(val);
         }
-    };
+
+    document.getElementById("search-bar-form").addEventListener("submit", function (e) {
+        e.preventDefault(); // stop form submission
+        window.location.href = "artist_page_v2.html";
+    });
 </script>
 </body>
 </html>
