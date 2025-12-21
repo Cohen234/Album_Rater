@@ -463,15 +463,31 @@ def profile_page():
         ranked_albums=ranked_albums,
         standardized_songs=standardized_songs
     )
+
+
 def get_dominant_color(image_url):
     try:
-        response = requests.get(image_url)
-        color_thief = ColorThief(BytesIO(response.content))
-        rgb = color_thief.get_color(quality=1)
-        return f"rgb({rgb[0]}, {rgb[1]}, {rgb[2]})"
-    except Exception as e:
+        # Fetch the image with a timeout of 10 seconds
+        response = requests.get(image_url, timeout=10)
+        response.raise_for_status()  # Raise an HTTPError for bad responses
 
-        return "#ffffff"
+        # Load the image data into a buffer for ColorThief processing
+        image_data = BytesIO(response.content)
+        color_thief = ColorThief(image_data)
+
+        # Compute the dominant color with a quality setting
+        rgb = color_thief.get_color(quality=1)
+        return f"rgb({rgb[0]}, {rgb[1]}, {rgb[2]})"  # Return the dominant color in RGB format
+
+    except requests.exceptions.RequestException as e:
+        # Log HTTP or timeout-related issues
+        logging.error(f"Failed to fetch image from {image_url}. Error: {e}")
+        return "#000000"  # Default to black if the request fails
+
+    except Exception as e:
+        # Log other unexpected errors (e.g., issues in image processing)
+        logging.error(f"Error processing image from {image_url}. Error: {e}")
+        return "#000000"  # Default to black for other errors
 @app.route("/api/find_album")
 def api_find_album():
     album_name = request.args.get("album_name", "").strip().lower()
