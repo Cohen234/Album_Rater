@@ -1127,6 +1127,11 @@
                     });
                 }
             });
+            console.log('Submitting rankings:', {
+                album_id: albumData.album_id,
+                all_ranked_data: globalRankedDataForSaving,
+                prelim_rank_data: prelimRankData
+            });
 
             // The fetch call remains the same
             fetch('/submit_rankings', {
