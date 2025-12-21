@@ -464,30 +464,32 @@ def profile_page():
         standardized_songs=standardized_songs
     )
 
-
+from PIL import Image, UnidentifiedImageError
 def get_dominant_color(image_url):
     try:
-        # Fetch the image with a timeout of 10 seconds
+        # Fetch the image with a timeout
         response = requests.get(image_url, timeout=10)
-        response.raise_for_status()  # Raise an HTTPError for bad responses
+        response.raise_for_status()  # Raise HTTP errors if any
 
-        # Load the image data into a buffer for ColorThief processing
+        # Load the image data into a buffer
         image_data = BytesIO(response.content)
-        color_thief = ColorThief(image_data)
 
-        # Compute the dominant color with a quality setting
-        rgb = color_thief.get_color(quality=1)
-        return f"rgb({rgb[0]}, {rgb[1]}, {rgb[2]})"  # Return the dominant color in RGB format
+        # Try to extract the dominant color using ColorThief
+        color_thief = ColorThief(image_data)
+        rgb = color_thief.get_color(quality=1)  # Might raise an error for unsupported images
+        return f"rgb({rgb[0]}, {rgb[1]}, {rgb[2]})"
 
     except requests.exceptions.RequestException as e:
-        # Log HTTP or timeout-related issues
-        logging.error(f"Failed to fetch image from {image_url}. Error: {e}")
-        return "#000000"  # Default to black if the request fails
+        logging.error(f"Failed to fetch album image from {image_url}. Error: {e}")
+        return "#000000"  # Default to black if download fails
+
+    except UnidentifiedImageError as e:
+        logging.error(f"Invalid image data fetched from {image_url}. Error: {e}")
+        return "#000000"  # Default to black if image is invalid
 
     except Exception as e:
-        # Log other unexpected errors (e.g., issues in image processing)
-        logging.error(f"Error processing image from {image_url}. Error: {e}")
-        return "#000000"  # Default to black for other errors
+        logging.error(f"Unexpected error in get_dominant_color for {image_url}: {e}")
+        return "#000000"  # Default to black for all other errors
 @app.route("/api/find_album")
 def api_find_album():
     album_name = request.args.get("album_name", "").strip().lower()
