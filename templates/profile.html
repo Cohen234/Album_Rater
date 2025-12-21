@@ -199,10 +199,9 @@
 
     <header>
         <h1>{{ user_name }}</h1>
-        <form class="search-bar" id="search-bar-form" autocomplete="off" style="position:relative;">
-            <input type="text" id="search-bar-input" placeholder="Search artist or album..." />
+        <form class="search-bar" id="search-bar-form" method="POST" action="/search">
+            <input type="text" name="artist_name" id="search-bar-input" placeholder="Search artist or album..." required />
             <button type="submit">Start Ranking</button>
-            <div id="autocomplete-list" class="autocomplete-suggestions"></div>
         </form>
 
 
