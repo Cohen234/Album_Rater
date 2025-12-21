@@ -2095,7 +2095,7 @@ def search_artist():
         return redirect(url_for('artist_page_v2', artist_name=artist_name))
     else:
         flash("Please enter an artist name.")
-        return redirect(url_for('index'))
+        return redirect(url_for('profile'))
 def deduplicate_by_track_overlap(albums):
     import re
     from collections import defaultdict

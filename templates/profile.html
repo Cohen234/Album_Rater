@@ -544,30 +544,6 @@
     document.body.addEventListener("click", ()=>acList.innerHTML="");
 
     // --- Search Submit Handler ---
-    document.getElementById("search-bar-form").onsubmit = function(e) {
-        e.preventDefault();
-        const val = input.value.trim();
-        if (!val) return;
-        // Simple logic: If artist, go to artist page. If album, go to album page.
-        // Could be improved with backend endpoint for fuzzy search
-        if (rankedArtists.includes(val)) {
-            window.location.href = "/artist/" + encodeURIComponent(val);
-        } else if (rankedAlbums.includes(val)) {
-            // Need to find the artist for this album
-            fetch("/api/find_album?album_name=" + encodeURIComponent(val))
-                .then(resp=>resp.json())
-                .then(data=>{
-                    if (data.found) {
-                        window.location.href = data.url;
-                    } else {
-                        window.location.href = "/rank_album?album_name=" + encodeURIComponent(val);
-                    }
-                });
-        } else {
-            // Not found, default to album search
-            window.location.href = "/rank_album?album_name=" + encodeURIComponent(val);
-        }
-
     document.addEventListener("DOMContentLoaded", function () {
         const form = document.getElementById("search-bar-form");
         const input = document.getElementById("search-bar-input");
@@ -578,10 +554,9 @@
             const query = input.value.trim();
             if (!query) return;
 
-            // Normalize for comparison
             const qLower = query.toLowerCase();
 
-            // ----- 1) CHECK ARTIST FIRST -----
+            // ---- 1) CHECK ARTIST FIRST ----
             const artistMatch = rankedArtists.find(
                 a => a.toLowerCase() === qLower
             );
@@ -592,7 +567,7 @@
                 return;
             }
 
-            // ----- 2) CHECK ALBUM -----
+            // ---- 2) CHECK ALBUM ----
             const albumMatch = rankedAlbums.find(
                 a => a.toLowerCase() === qLower
             );
@@ -603,7 +578,7 @@
                 return;
             }
 
-            // ----- 3) FALLBACK -----
+            // ---- 3) FALLBACK ----
             alert("Artist or album not found.");
         });
     });
