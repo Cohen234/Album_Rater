@@ -21,19 +21,12 @@ import logging
 
 # Import functions from spotify_logic after all core imports
 from spotify_logic import get_albums_by_artist, extract_album_id
+import psycopg2
 
+DATABASE_URL = os.environ.get("SUPABASE_DATABASE_URL")
+conn = psycopg2.connect(DATABASE_URL)
+cursor = conn.cursor()
 # --- Google Sheets Setup ---
-creds_info = json.loads(os.environ['GOOGLE_SERVICE_ACCOUNT_JSON'])
-creds = Credentials.from_service_account_info(
-    creds_info,
-    scopes=["https://www.googleapis.com/auth/spreadsheets"]
-)
-client = gspread.authorize(creds)
-
-SPREADSHEET_ID = '15E4b-DWSYP9AzbAzSviqkW-jEOktbimPlmhNIs_d5jc'
-SHEET_NAME = "Sheet1"
-album_averages_sheet_name = "Album Averages" # Renamed for clarity and consistency
-PRELIM_SHEET_NAME = "Preliminary Ranks"
 
 # --- Flask App Initialization ---
 app = Flask(__name__)
@@ -111,55 +104,28 @@ def calculate_score_value(position, total_songs, rank_group_val):
     # Return with high precision to prevent score collisions
     return round(new_score, 6)
 
-def get_album_averages_df(client_gspread, spreadsheet_id, sheet_name):
-    try:
-        sheet = client_gspread.open_by_key(spreadsheet_id).worksheet(sheet_name)
-        logging.debug(f"Successfully opened sheet '{sheet_name}' for Album Averages.")
-    except Exception as e:
-        logging.error(f"Failed to open sheet '{sheet_name}': {e}", exc_info=True)
-        if isinstance(e, gspread.exceptions.WorksheetNotFound):
-            logging.info(f"Worksheet '{sheet_name}' not found, attempting to create.")
-            try:
-                # Ensure 'last_ranked_date' is in the initial header
-                header = ['album_id', 'album_name', 'artist_name', 'average_score', 'weighted_average_score',
-                          'original_weighted_score', 'previous_weighted_score', 'times_ranked', 'last_ranked_date', 'rerank_history']
-                sheet = client_gspread.open_by_key(spreadsheet_id).add_worksheet(title=sheet_name, rows=1,
-                                                                                 cols=len(header))
-                sheet.append_row(header)
-                logging.info(f"Created new sheet: '{sheet_name}'")
-            except Exception as create_e:
-                logging.critical(f"CRITICAL ERROR: Could not create sheet '{sheet_name}': {create_e}", exc_info=True)
-                raise create_e  # Re-raise to stop execution if sheet creation fails
-        raise e  # Re-raise the original error if it's not WorksheetNotFound or creation fails
+def get_album_averages_df():
+    cursor.execute("SELECT * FROM Re-Ranking and Song History (Album Averages);")
+    albums_data = cursor.fetchall()
+    albums_df = pd.DataFrame(albums_data, columns=[desc[0] for desc in cursor.description])
 
-        # ...
-    df = get_as_dataframe(sheet, evaluate_formulas=False)
-
-    # THE FIX: This list now contains all the columns your app uses.
+    # Perform DataFrame cleanup
     expected_cols = ['album_id', 'album_name', 'artist_name', 'average_score', 'weighted_average_score',
                      'original_weighted_score', 'previous_weighted_score', 'times_ranked',
                      'last_ranked_date', 'rerank_history', 'score_history', 'album_cover_url']
 
-    # THE FIX: Add the if/else block to handle an empty sheet
-    if df.empty:
-        return pd.DataFrame(columns=expected_cols)
-    else:
-        for col in expected_cols:
-            if col not in df.columns:
-                # Initialize both history columns as an empty JSON array string
-                df[col] = pd.NA if col not in ['rerank_history', 'score_history'] else '[]'
+    for col in expected_cols:
+        if col not in albums_df.columns:
+            albums_df[col] = pd.NA if col not in ['rerank_history', 'score_history'] else '[]'
 
-    # Now we can safely convert types
-    for col in ['average_score', 'weighted_average_score', 'original_weighted_score', 'previous_weighted_score']:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
-    df['times_ranked'] = pd.to_numeric(df['times_ranked'], errors='coerce').fillna(0).astype(int)
-
-    df = df.fillna({
+    albums_df['times_ranked'] = pd.to_numeric(albums_df['times_ranked'], errors='coerce').fillna(0).astype(int)
+    albums_df = albums_df.fillna({
         'rerank_history': '[]',
         'score_history': '[]',
         'album_cover_url': ''
     })
-    return df
+
+    return albums_df
 def group_ranked_songs(sheet_rows):
     group_bins = {round(x * 0.5, 1): [] for x in range(2, 21)}  # 1.0 to 10.0
     for row in sheet_rows:
@@ -218,19 +184,22 @@ def profile_page():
     user_name = "Cohen Callaway"
     try:
         # Load main song/album dataframes
-        songs_df = get_as_dataframe(client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)).fillna("")
-        albums_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
-        prelim_df = get_as_dataframe(client.open_by_key(SPREADSHEET_ID).worksheet(PRELIM_SHEET_NAME)).fillna("")
-    except APIError as e:
-        if "429" in str(e):
-            # Show a friendly error page
-            return render_template("rate_limit.html", message="Google Sheets API rate limit exceeded. Please try again in a minute.")
-        raise
+        cursor.execute("SELECT * FROM Song Data;")
+        songs_df = pd.DataFrame(cursor.fetchall(), columns=[desc[0] for desc in cursor.description]).fillna("")
 
-    # --- Standardize columns and types ---
+        albums_df = get_album_averages_df()
+
+        cursor.execute("SELECT * FROM Preliminary Ranks;")
+        prelim_df = pd.DataFrame(cursor.fetchall(), columns=[desc[0] for desc in cursor.description]).fillna("")
+    except psycopg2.Error as e:
+        logging.error(f"Database error occurred: {e}")
+        return render_template("error.html", message="Database connection error. Please try again later.")
+
+    # --- Standardization ---
     def std_cols(df):
         df.columns = [c.replace(' ', '_').lower() for c in df.columns]
         return df
+
     songs_df = std_cols(songs_df)
     albums_df = std_cols(albums_df)
     prelim_df = std_cols(prelim_df)
@@ -493,10 +462,11 @@ def get_dominant_color(image_url):
 @app.route("/api/find_album")
 def api_find_album():
     album_name = request.args.get("album_name", "").strip().lower()
-    albums_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
-    albums_df['album_name_lc'] = albums_df['album_name'].str.strip().str.lower()
-    row = albums_df[albums_df['album_name_lc'] == album_name]
-    if not row.empty:
+    cursor.execute("SELECT * FROM Re-Ranking and Song History (Album Averages);")
+    album_data = cursor.fetchall()
+    cursor.execute("SELECT * FROM Re-Ranking and Song History (Album Averages) WHERE LOWER(album_name) = %s;", (album_name,))
+    row = cursor.fetchall()
+    if row:
         r = row.iloc[0]
         url = url_for("album_page", artist_name=r['artist_name'], album_name=quote_plus(r['album_name']), album_id=r['album_id'])
         return jsonify({"found": True, "url": url})
@@ -566,8 +536,9 @@ def merge_album_with_rankings(album_tracks, sheet_rows, artist_name):
 
 def load_google_sheet_data():
     # This function uses `client`, so it must be defined after `client` is initialized
-    sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
-    return sheet.get_all_records()
+    cursor.execute("SELECT * FROM Song Data;")
+    song_data = cursor.fetchall()
+    return pd.DataFrame(song_data, columns=[desc[0] for desc in cursor.description])
 
 
 def clean_title(title):
@@ -634,9 +605,12 @@ def artist_page_v2(artist_name):
         logging.info(f"--- Loading Artist Stats Page for: {artist_name} ---")
 
         # 1. --- Load All Base Data ---
-        main_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
-        all_songs_df = get_as_dataframe(main_sheet, evaluate_formulas=False).fillna("")
-        all_albums_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
+        cursor.execute("SELECT * FROM Song Data;")
+        songs_data = cursor.fetchall()
+        all_songs_df = pd.DataFrame(songs_data, columns=[desc[0] for desc in cursor.description]).fillna("")
+        cursor.execute("SELECT * FROM Re-Ranking and Song History (Album Averages);")
+        album_data = cursor.fetchall()
+        all_albums_df = pd.DataFrame(album_data, columns=[desc[0] for desc in cursor.description])
 
         # --- Normalize columns: spaces to underscores everywhere ---
         all_songs_df = standardize_columns(all_songs_df)
@@ -1120,10 +1094,26 @@ from urllib.parse import unquote
 def album_page(artist_name, album_name, album_id):
     album_name = unquote(album_name)
 
-    album_data = get_album_data(artist_name, album_name, album_id)
-    if not album_data:
-        print("ALBUM DATA NOT FOUND!")
-        abort(404)
+    try:
+        # Query album data from `album_averages` table
+        cursor.execute("SELECT * FROM Re-Ranking and Song History (Album Averages) WHERE album_id = %s;", (album_id,))
+        album_data_row = cursor.fetchone()
+
+        if not album_data_row:
+            logging.error("ALBUM DATA NOT FOUND!")
+            abort(404)
+
+        album_data = dict(zip([desc[0] for desc in cursor.description], album_data_row))
+
+        # Additional queries for songs, if needed
+        cursor.execute("SELECT * FROM Song Data WHERE spotify_album_id = %s;", (album_id,))
+        album_songs = cursor.fetchall()
+        album_data['album_songs'] = pd.DataFrame(album_songs, columns=[desc[0] for desc in cursor.description]).to_dict(
+            'records')
+
+    except Exception as e:
+        logging.error(f"Error fetching album data from database: {e}")
+        abort(500)
 
 
     return render_template(
@@ -1156,10 +1146,15 @@ def get_album_stats(album_id):
     try:
         logging.info(f"Received album_id: {album_id}")
         # 1. Load data
-        main_df = get_as_dataframe(client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)).fillna("")
-        logging.info(f"main_df columns: {main_df.columns.tolist()}; shape: {main_df.shape}")
-        averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
-        logging.info(f"averages_df columns: {averages_df.columns.tolist()}; shape: {averages_df.shape}")
+        # Fetch song-level data from `song_data` table
+        cursor.execute("SELECT * FROM Song Data;")
+        main_data = cursor.fetchall()
+        main_df = pd.DataFrame(main_data, columns=[desc[0] for desc in cursor.description]).fillna("")
+
+        # Fetch album averages data from `album_averages`
+        cursor.execute("SELECT * FROM Re-Ranking and Song History (Album Averages);")
+        averages_data = cursor.fetchall()
+        averages_df = pd.DataFrame(averages_data, columns=[desc[0] for desc in cursor.description]).fillna("")
 
         # 2. Find the specific album's data
         album_stats = averages_df[averages_df['album_id'].astype(str) == str(album_id)]
@@ -1198,6 +1193,8 @@ def get_album_stats(album_id):
         averages_df.sort_values(by='weighted_average_score', ascending=False, inplace=True)
         averages_df.reset_index(drop=True, inplace=True)
 
+        averages_df.sort_values(by='weighted_average_score', ascending=False, inplace=True)
+        averages_df.reset_index(drop=True, inplace=True)
         placement_series = averages_df.index[averages_df['album_id'].astype(str) == str(album_id)]
         leaderboard_placement = int(placement_series[0] + 1) if not placement_series.empty else 'N/A'
 
@@ -1317,14 +1314,15 @@ def submit_rankings():
                 return jsonify({'status': 'error', 'message': 'No preliminary ranks to save.'}), 400
 
             try:
-                prelim_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(PRELIM_SHEET_NAME)
-                prelim_df = get_as_dataframe(prelim_sheet, evaluate_formulas=False).fillna("")
-            except gspread.exceptions.WorksheetNotFound:
-                prelim_sheet = client.open_by_key(SPREADSHEET_ID).add_worksheet(title=PRELIM_SHEET_NAME, rows=1, cols=8)
-                prelim_sheet.append_row(
-                    ['album_id', 'album_name', 'artist_name', 'album_cover_url', 'song_id', 'song_name', 'prelim_rank',
-                     'timestamp'])
-                prelim_df = pd.DataFrame()
+                cursor.execute("SELECT * FROM Preliminary Ranks;")
+                prelim_data = cursor.fetchall()
+                prelim_df = pd.DataFrame(prelim_data, columns=[desc[0] for desc in cursor.description]).fillna("")
+            except psycopg2.Error as e:
+                logging.error(f"Database error occurred while fetching `preliminary_rankings`: {e}")
+                # Handle the error gracefully (maybe return an empty DataFrame or raise the error)
+                prelim_df = pd.DataFrame(
+                    columns=['album_id', 'album_name', 'artist_name', 'album_cover_url', 'song_id', 'song_name',
+                             'prelim_rank', 'timestamp'])
 
             # Filter out any old draft rows for this album before adding new ones
             if 'album_id' in prelim_df.columns:
@@ -1338,8 +1336,16 @@ def submit_rankings():
             } for p in prelim_ranks_from_js]
 
             final_prelim_df = pd.concat([prelim_df, pd.DataFrame(new_prelim_rows)], ignore_index=True)
-            set_with_dataframe(prelim_sheet, final_prelim_df, include_index=False, resize=True)
-            logging.info(f"Successfully saved draft for album {album_id}.")
+            cursor.executemany(
+                """
+                INSERT INTO Preliminary Ranks (album_id, album_name, artist_name, album_cover_url, song_id, song_name, prelim_rank, timestamp)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (album_id, song_id) DO UPDATE SET
+                    prelim_rank = EXCLUDED.prelim_rank, timestamp = EXCLUDED.timestamp;
+                """,
+                final_prelim_df.values.tolist()
+            )
+            conn.commit()
 
             dominant_color = get_dominant_color(album_cover_url)
             return jsonify({
@@ -1357,20 +1363,35 @@ def submit_rankings():
             old_score = 0
             old_placement = 0
             if is_rerank:
-                averages_df_before = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
+                cursor.execute("SELECT * FROM Re-Ranking and Song History (Album Averages);")
+                averages_data = cursor.fetchall()
+                averages_df_before = pd.DataFrame(averages_data, columns=[desc[0] for desc in cursor.description])
+
                 if not averages_df_before.empty:
                     old_album_data = averages_df_before[averages_df_before['album_id'].astype(str) == str(album_id)]
-                    if not old_album_data.empty:
-                        old_score = old_album_data.iloc[0]['weighted_average_score']
-                        # Sort to find old placement
-                        averages_df_before.sort_values(by='weighted_average_score', ascending=False, inplace=True)
-                        averages_df_before.reset_index(drop=True, inplace=True)
-                        old_placement_series = averages_df_before.index[averages_df_before['album_id'].astype(str) == str(album_id)]
+                    old_score = old_album_data.iloc[0]['weighted_average_score']
+                    # Sort to find old placement
+                    cursor.execute(
+                        "SELECT album_id, weighted_average_score FROM Re-Ranking and Song History (Album Averages) ORDER BY weighted_average_score DESC;"
+                    )
+                    averages_sorted_data = cursor.fetchall()
+                    averages_sorted_df = pd.DataFrame(
+                        averages_sorted_data,
+                        columns=['album_id', 'weighted_average_score']
+                    ).reset_index(drop=True)
+
+                    if not averages_sorted_df.empty:
+                        old_placement_series = averages_sorted_df.index[
+                            averages_sorted_df['album_id'].astype(str) == str(album_id)
+                            ]
                         old_placement = int(old_placement_series[0] + 1) if not old_placement_series.empty else 1
+                    else:
+                        old_placement = 1  # Default placement if no data is found
 
             # --- 4. Update Google Sheets with New Final Rankings ---
-            main_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
-            main_df = get_as_dataframe(main_sheet, evaluate_formulas=False).fillna("")
+            cursor.execute("SELECT * FROM Song Data;")
+            main_data = cursor.fetchall()
+            main_df = pd.DataFrame(main_data, columns=[desc[0] for desc in cursor.description]).fillna("")
 
             all_song_ids = [s.get('song_id') for s in all_ranked_songs_from_js if s.get('song_id')]
             song_details_map = {}
@@ -1394,184 +1415,338 @@ def submit_rankings():
             for ranked_song_data in all_ranked_songs_from_js:
                 song_id = str(ranked_song_data.get('song_id'))
                 details = song_details_map.get(song_id, {})
+                ranked_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # Use current timestamp for new songs
 
-                # Try to preserve the original 'Ranked Date' if it exists for this song/album/artist
-                existing_row = main_df[
-                    (main_df['Spotify Song ID'].astype(str) == song_id) &
-                    (main_df['Album Name'] == ranked_song_data.get('album_name')) &
-                    (main_df['Artist Name'] == ranked_song_data.get('artist_name'))
-                    ]
-                if not existing_row.empty and existing_row.iloc[0].get('Ranked Date'):
-                    ranked_date = existing_row.iloc[0]['Ranked Date']
-                else:
-                    ranked_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                cursor.execute(
+                    """
+                    INSERT INTO Song Data (album_name, artist_name, spotify_album_id, song_name, ranking, duration_ms, ranking_status, ranked_date, position_in_group, rank_group, spotify_song_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (spotify_song_id) DO UPDATE SET
+                        ranking = EXCLUDED.ranking,
+                        ranking_status = EXCLUDED.ranking_status,
+                        ranked_date = EXCLUDED.ranked_date;
+                    """,
+                    (
+                        ranked_song_data.get('album_name'),
+                        ranked_song_data.get('artist_name'),
+                        ranked_song_data.get('album_id'),
+                        details.get('name', ranked_song_data.get('song_name')),
+                        ranked_song_data.get('calculated_score', 0.0),
+                        details.get('duration_ms', 0),
+                        'final',
+                        ranked_date,  # Fixed timestamp
+                        str(ranked_song_data.get('position_in_group', '')),
+                        str(ranked_song_data.get('rank_group')),
+                        song_id,
+                    )
+                )
+            conn.commit()
 
-                new_final_rows_data.append({
-                    'Album Name': ranked_song_data.get('album_name'),
-                    'Artist Name': ranked_song_data.get('artist_name'),
-                    'Spotify Album ID': ranked_song_data.get('album_id'),
-                    'Song Name': details.get('name', ranked_song_data.get('song_name')),
-                    'Ranking': ranked_song_data.get('calculated_score', 0.0),
-                    'Duration (ms)': details.get('duration_ms', 0),
-                    'Ranking Status': 'final',
-                    'Ranked Date': ranked_date,  # <<---------------------- FIXED
-                    'Position In Group': str(ranked_song_data.get('position_in_group', '')),
-                    'Rank Group': str(ranked_song_data.get('rank_group')),
-                    'Spotify Song ID': song_id,
-                })
+            logging.info("Updating album averages...")
+            try:
+                # Fetch necessary data for recalculations
+                cursor.execute(
+                    "SELECT spotify_album_id, AVG(ranking) AS average_score FROM Song Data WHERE rank_group != 'I' GROUP BY spotify_album_id;")
+                averages = cursor.fetchall()
 
-            final_main_df = pd.concat([main_df_filtered, pd.DataFrame(new_final_rows_data)],
-                                      ignore_index=True) if new_final_rows_data else main_df_filtered
-            set_with_dataframe(main_sheet, final_main_df, include_index=False, resize=True)
-            logging.info("Updated main ranking sheet.")
+                for album_id, avg_score in averages:
+                    cursor.execute(
+                        """
+                        UPDATE album_averages SET average_score = %s, weighted_average_score = %s, last_ranked_date = %s, times_ranked = times_ranked + 1
+                        WHERE album_id = %s;
+                        """,
+                        (
+                            avg_score,  # Regular average score
+                            avg_score,  # Weighted average needs custom calculation logic (placeholder here)
+                            datetime.now().strftime('%Y-%m-%d %H:%M:%S'),  # Update last ranked date
+                            album_id,  # Specific album ID
+                        )
+                    )
+                conn.commit()
+                logging.info("Album averages updated.")
+            except psycopg2.Error as e:
+                logging.error(f"Error updating album averages: {e}")
 
             # Recalculate and Update Album Averages Sheet
-            df_for_calc = final_main_df.copy()
+            # Query valid song data from the database
+            cursor.execute("""
+                SELECT spotify_album_id, ranking, duration_ms
+                FROM Song Data
+                WHERE rank_group != 'I' AND ranking IS NOT NULL AND duration_ms IS NOT NULL;
+            """)
+            valid_song_data = cursor.fetchall()
+
+            # Convert the data into a Pandas DataFrame for convenience in calculating averages
+            col_names = ['Spotify Album ID', 'Ranking', 'Duration (ms)']
+            df_for_calc = pd.DataFrame(valid_song_data, columns=col_names)
+
+            # Ensure numeric data types
             df_for_calc['Ranking'] = pd.to_numeric(df_for_calc['Ranking'], errors='coerce')
             df_for_calc['Duration (ms)'] = pd.to_numeric(df_for_calc['Duration (ms)'], errors='coerce')
-            df_for_calc.dropna(subset=['Ranking', 'Duration (ms)'], inplace=True)
-            df_for_calc_no_interludes = df_for_calc[df_for_calc['Rank Group'].astype(str) != 'I']
+            df_for_calc.dropna(inplace=True)  # Drop rows with missing data
+            df_for_calc_no_interludes = df_for_calc[df_for_calc['Spotify Album ID'].notnull()]
 
             if not df_for_calc_no_interludes.empty:
-                simple_averages = df_for_calc_no_interludes.groupby('Spotify Album ID')['Ranking'].mean().round(6)
+                cursor.execute("""
+                    SELECT spotify_album_id, AVG(ranking) AS simple_average
+                    FROM Song Data
+                    WHERE rank_group != 'I'
+                    GROUP BY spotify_album_id;
+                """)
+                simple_averages = pd.DataFrame(cursor.fetchall(), columns=['Spotify Album ID', 'Simple Average'])
+                cursor.execute("""
+                    SELECT spotify_album_id, 
+                           SUM(ranking * duration_ms) / SUM(duration_ms) AS weighted_average
+                    FROM Song Data
+                    WHERE rank_group != 'I' AND duration_ms > 0
+                    GROUP BY spotify_album_id;
+                """)
+                weighted_averages = pd.DataFrame(cursor.fetchall(), columns=['Spotify Album ID', 'Weighted Average'])
+                cursor.execute("""
+                    SELECT spotify_album_id
+                    FROM Re-Ranking and Song History (Album Averages)
+                    ORDER BY weighted_average_score DESC;
+                """)
+                sorted_album_ids = [row[0] for row in cursor.fetchall()]
+                new_placement = sorted_album_ids.index(album_id) + 1 if album_id in sorted_album_ids else None
+                total_albums = len(sorted_album_ids)
 
-                def weighted_avg(group):
-                    total_duration = group['Duration (ms)'].sum()
-                    return ((group['Ranking'] * group['Duration (ms)']).sum() / total_duration) if total_duration > 0 else \
-                    group['Ranking'].mean()
+                cursor.execute("""
+                        SELECT spotify_album_id, album_name, artist_name
+                        FROM Song Data
+                        GROUP BY spotify_album_id, album_name, artist_name;
+                    """)
+                album_info_map = {
+                    row[0]: {'Album Name': row[1], 'Artist Name': row[2]}
+                    for row in cursor.fetchall()
+                }
 
-                weighted_averages = df_for_calc_no_interludes.groupby('Spotify Album ID').apply(weighted_avg).round(6)
-                sorted_scores = weighted_averages.sort_values(ascending=False)
-                new_placement = sorted_scores.index.get_loc(album_id) + 1
-
-                total_albums = len(sorted_scores)
-
-                album_averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
-                album_info_map = df_for_calc[['Spotify Album ID', 'Album Name', 'Artist Name']].drop_duplicates(
-                    'Spotify Album ID').set_index('Spotify Album ID').to_dict('index')
+                logging.info(f"Successfully calculated album metrics and placement for album {album_id}.")
 
                 # THE FIX: This loop now updates the score history for ALL albums
-                for album_id_to_update, new_weighted_avg in weighted_averages.items():
-                    new_simple_avg = simple_averages.get(album_id_to_update)
-                    existing_rows = album_averages_df[album_averages_df['album_id'].astype(str) == str(album_id_to_update)]
+                for album_id_to_update in weighted_averages.keys():  # Iterating through all albums to update or insert
+                    try:
+                        # Fetch current album values
+                        cursor.execute("""
+                            SELECT weighted_average_score, times_ranked, score_history, average_score
+                            FROM Re-Ranking and Song History (Album Averages) WHERE album_id = %s;
+                        """, (album_id_to_update,))
+                        album_data = cursor.fetchone()
 
-                    if not existing_rows.empty:
-                        idx = existing_rows.index[0]
+                        if album_data:  # If the album exists
+                            current_weighted_avg = album_data[0] or 0
+                            current_times_ranked = album_data[1] or 0
+                            current_score_history = json.loads(album_data[2] or '[]')
+                            current_average_score = album_data[3]
 
-                        # --- Update Score History for EVERY album ---
-                        try:
-                            history_str = album_averages_df.at[idx, 'score_history']
-                            score_history = json.loads(history_str) if history_str and pd.notna(history_str) else []
-                            score_history.append(float(new_weighted_avg))
-                            album_averages_df.at[idx, 'score_history'] = json.dumps(score_history)
-                        except (json.JSONDecodeError, TypeError) as e:
-                            logging.error(f"Error updating score_history for {album_id_to_update}: {e}")
+                            new_weighted_avg = weighted_averages[album_id_to_update]
+                            new_simple_avg = simple_averages.get(album_id_to_update, None)
 
-                        # --- Logic for the SUBMITTED album ---
-                        if album_id_to_update == album_id:
-                            album_averages_df.at[idx, 'previous_weighted_score'] = new_weighted_avg
-                            album_averages_df.at[idx, 'times_ranked'] = int(
-                                album_averages_df.at[idx, 'times_ranked'] or 0) + 1
+                            # Update score history
+                            current_score_history.append(new_weighted_avg)
+                            updated_score_history = json.dumps(current_score_history)
 
-                            # Update history with the NEW score
-                            if is_rerank:
+                            # Update the database values for the album
+                            cursor.execute("""
+                                UPDATE Re-Ranking and Song History (Album Averages)
+                                SET score_history = %s, average_score = %s, weighted_average_score = %s, 
+                                    times_ranked = %s, last_ranked_date = %s
+                                WHERE album_id = %s;
+                            """, (
+                                updated_score_history,
+                                new_simple_avg,
+                                new_weighted_avg,
+                                current_times_ranked + 1,
+                                datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                album_id_to_update
+                            ))
+                            conn.commit()
+
+                            # Handle rerank history if reranking
+                            if album_id_to_update == album_id and is_rerank:
+                                cursor.execute("""
+                                    SELECT rerank_history
+                                    FROM Re-Ranking and Song History (Album Averages)
+                                    WHERE album_id = %s;
+                                """, (album_id,))
+                                result = cursor.fetchone()
+                                history_str = result[0] or '[]' if result else '[]'
+                                rerank_history = json.loads(history_str)
+
+                                # Append rerank history
+                                rerank_history.append({
+                                    'date': datetime.now().strftime('%Y-%m-%d'),
+                                    'score': new_weighted_avg,
+                                    'placement': f"{new_placement}/{total_albums}"
+                                })
+
+                                updated_rerank_history = json.dumps(rerank_history)
+                                cursor.execute("""
+                                    UPDATE Re-Ranking and Song History (Album Averages)
+                                    SET rerank_history = %s
+                                    WHERE album_id = %s;
+                                """, (updated_rerank_history, album_id))
+                                conn.commit()
+
+                        else:  # If the album does not exist, insert it into the database
+                            info = album_info_map.get(album_id_to_update)
+                            if info:
                                 try:
-                                    history_str = album_averages_df.at[idx, 'rerank_history']
-                                    rerank_history = json.loads(history_str) if history_str and pd.notna(
-                                        history_str) else []
-                                    # Append the new score that was just calculated
-                                    rerank_history.append({
+                                    initial_history = [{
                                         'date': datetime.now().strftime('%Y-%m-%d'),
-                                        'score': float(new_weighted_avg),
-                                        # THE FIX: Add the placement at the time of the event
-                                        'placement': f"{new_placement}/{total_albums}"
-                                    })
-                                    album_averages_df.at[idx, 'rerank_history'] = json.dumps(rerank_history)
-                                except (json.JSONDecodeError, TypeError) as e:
-                                    logging.error(f"Error updating rerank history for {album_id}: {e}")
+                                        'score': weighted_averages[album_id_to_update]
+                                    }]
+                                    cursor.execute("""
+                                        INSERT INTO Re-Ranking and Song History (Album Averages) (
+                                            album_id, album_name, artist_name, average_score, weighted_average_score,
+                                            original_weighted_score, previous_weighted_score, times_ranked, 
+                                            last_ranked_date, rerank_history, score_history, album_cover_url
+                                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                                    """, (
+                                        album_id_to_update,
+                                        info['Album Name'],
+                                        info['Artist Name'],
+                                        simple_averages.get(album_id_to_update, None),
+                                        weighted_averages[album_id_to_update],
+                                        weighted_averages[album_id_to_update],
+                                        weighted_averages[album_id_to_update],
+                                        1,
+                                        datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                        json.dumps([]),  # No rerank history initially
+                                        json.dumps([weighted_averages[album_id_to_update]]),  # Initial score history
+                                        info.get('album_cover_url', '')
+                                    ))
+                                    conn.commit()
+                                except psycopg2.Error as e:
+                                    logging.error(f"Error inserting new album into album_averages: {e}")
 
-                            # Now, update the main scores and the last ranked date
-                        album_averages_df.at[idx, 'average_score'] = new_simple_avg
-                        album_averages_df.at[idx, 'weighted_average_score'] = new_weighted_avg
-                        album_averages_df.at[idx, 'last_ranked_date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    except psycopg2.Error as e:
+                        logging.error(f"Error processing album ID {album_id_to_update}: {e}")
+
+                    # Commit new rows or updates in `album_averages`
+                    logging.info("Successfully recalculated and saved all averages into the database.")
+
+                    # Fetch latest song data
+                    logging.info("Fetching song data for processing...")
+                    cursor.execute("""
+                            SELECT event_number, ranked_date, album_name, artist_name, spotify_album_id,
+                                   song_name, spotify_song_id, ranking, placement, percentile
+                            FROM Song Data
+                        """)
+                    song_data = cursor.fetchall()
+                    song_data_df = pd.DataFrame(song_data, columns=[desc[0] for desc in cursor.description]).fillna("")
+
+                    # Group and calculate `song_grouped` data
+                    logging.info("Grouping song data for the event...")
+                    song_grouped = (
+                        song_data_df.groupby(
+                            ["Spotify Album ID", "Album Name", "Artist Name", "Spotify Song ID", "Song Name"]
+                        )
+                        .agg({"Ranking": "mean"})
+                        .reset_index()
+                        .sort_values("Ranking", ascending=False)
+                        .reset_index(drop=True)
+                    )
+                    song_grouped["Placement"] = song_grouped.index + 1
+                    total_songs = len(song_grouped)
+                    song_grouped["Percentile"] = song_grouped["Placement"] / total_songs * 100
+
+                    # Compute the next event number
+                    logging.info("Calculating the next event number...")
+                    cursor.execute("SELECT MAX(event_number) FROM Song Data;")
+                    result = cursor.fetchone()
+                    event_number = int(result[0] or 0) + 1
+
+                    # Prepare song event data for insertion
+                    logging.info("Preparing song events for insertion...")
+                    song_event_data = [
+                        (
+                            event_number,
+                            datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                            row["Album Name"],
+                            row["Artist Name"],
+                            row["Spotify Album ID"],
+                            row["Song Name"],
+                            row["Spotify Song ID"],
+                            round(row["Ranking"], 4),
+                            int(row["Placement"]),
+                            round(row["Percentile"], 4)
+                        )
+                        for _, row in song_grouped.iterrows()
+                    ]
+
+                    # Insert new song events into the database
+                    logging.info("Inserting song events into the database...")
+                    cursor.executemany("""
+                            INSERT INTO song_data (event_number, ranked_date, album_name, artist_name, spotify_album_id,
+                                                   song_name, spotify_song_id, ranking, placement, percentile)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """, song_event_data)
+                    conn.commit()
+                    logging.info(f"Inserted {len(song_event_data)} rows into `song_data` for event {event_number}.")
 
 
-                    else:
-                        # Logic for adding a brand new album
-                        info = album_info_map.get(album_id_to_update)
-                        if info:
-                            # THE FIX: Create the initial history event without placement data,
-                            # as it's not available yet. It will be added on the first re-rank.
-                            initial_history = [{
-                                'date': datetime.now().strftime('%Y-%m-%d'),
-                                'score': float(new_weighted_avg)
-                            }]
-                            new_row = pd.DataFrame([{
-                                'album_id': album_id_to_update, 'album_name': info['Album Name'],
-                                'artist_name': info['Artist Name'], 'average_score': new_simple_avg,
-                                'weighted_average_score': new_weighted_avg,
-                                'original_weighted_score': new_weighted_avg,
-                                'previous_weighted_score': new_weighted_avg, 'times_ranked': 1,
-                                'last_ranked_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                                'rerank_history': json.dumps(initial_history),
-                                'score_history': json.dumps([float(new_weighted_avg)]),
-                                'album_cover_url': album_cover_url
-                            }])
-                            album_averages_df = pd.concat([album_averages_df, new_row], ignore_index=True)
-
-                set_with_dataframe(client.open_by_key(SPREADSHEET_ID).worksheet(album_averages_sheet_name),
-                                   album_averages_df, include_index=False, resize=True)
-                logging.info("Successfully recalculated and saved all averages.")
-
-            try:
-                song_data_sheet = client.open_by_key(SPREADSHEET_ID).worksheet('Song Data')
-                song_data_df = get_as_dataframe(song_data_sheet, evaluate_formulas=False).fillna("")
-                if 'Event Number' in song_data_df.columns and not song_data_df.empty:
-                    event_numbers = pd.to_numeric(song_data_df['Event Number'], errors='coerce').dropna()
-                    if not event_numbers.empty:
-                        event_number = int(event_numbers.max()) + 1
-                    else:
-                        event_number = 1
-                else:
-                    event_number = 1
-            except gspread.exceptions.WorksheetNotFound:
-                song_data_sheet = client.open_by_key(SPREADSHEET_ID).add_worksheet(title='Song Data', rows=1, cols=12)
-                song_data_sheet.append_row([
-                    'Event Number', 'Ranked Date', 'Album Name', 'Artist Name', 'Spotify Album ID',
-                    'Song Name', 'Spotify Song ID', 'Score', 'Placement', 'Percentile'
-                ])
-                event_number = 1
 
                 # Prepare drift data
-            drift_df = final_main_df.copy()
-            drift_df['Ranking'] = pd.to_numeric(drift_df['Ranking'], errors='coerce')
-            drift_df = drift_df[drift_df['Ranking'].notnull()]
-            drift_df = drift_df[drift_df['Ranking Status'] == 'final']
-            drift_df = drift_df[drift_df['Rank Group'].astype(str) != 'I']
-
-            song_grouped = drift_df.groupby(
-                ['Song Name', 'Artist Name', 'Spotify Song ID', 'Album Name', 'Spotify Album ID']
-            ).agg({'Ranking': 'mean'}).reset_index()
-
-            song_grouped = song_grouped.sort_values('Ranking', ascending=False).reset_index(drop=True)
-            song_grouped['Placement'] = song_grouped.index + 1
-
-            total_songs = len(song_grouped)
-            song_grouped['Percentile'] = (song_grouped['Placement'] - 1) / (
-                        total_songs - 1) * 100 if total_songs > 1 else 0
-
-            event_ranked_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-            # Append new rows, but if an error occurs after, log and continue
-            append_success = False
             try:
-                # Batch data for all rows
-                batch_data = []
-                for _, row in song_grouped.iterrows():
-                    batch_data.append([
+                # Compute the next event number
+                logging.info("Calculating the next event number...")
+                try:
+                    cursor.execute("SELECT MAX(event_number) FROM song_data;")
+                    result = cursor.fetchone()
+                    # Default event_number to 1 if no previous events exist
+                    event_number = int(result[0] or 0) + 1
+                    logging.info(f"Next event number determined: {event_number}")
+                except psycopg2.Error as e:
+                    logging.error(f"Error fetching maximum event number: {e}")
+                    event_number = 1  # Default to 1 in case of error or no prior events
+
+                # Fetch the necessary baseline data from `song_data`
+                logging.info("Fetching final song data for drift calculations...")
+                cursor.execute("""
+                    SELECT spotify_album_id AS "Spotify Album ID", artist_name AS "Artist Name", album_name AS "Album Name",
+                           song_name AS "Song Name", spotify_song_id AS "Spotify Song ID", ranking AS "Ranking",
+                           rank_group AS "Rank Group", ranking_status AS "Ranking Status"
+                    FROM song_data
+                    WHERE rank_group != 'I' AND ranking_status = 'final' AND ranking IS NOT NULL;
+                """)
+                song_data = cursor.fetchall()
+
+                # Create a `song_data_df` DataFrame for drift calculations
+                song_data_df = pd.DataFrame(song_data, columns=[desc[0] for desc in cursor.description]).fillna("")
+                logging.info("Final song data fetched and loaded into Pandas DataFrame.")
+
+                # Group by relevant columns to calculate drift
+                logging.info("Grouping song data for drift calculations...")
+                song_grouped = (
+                    song_data_df.groupby(
+                        ['Song Name', 'Artist Name', 'Spotify Song ID', 'Album Name', 'Spotify Album ID']
+                    ).agg({
+                        'Ranking': 'mean'  # Calculate mean ranking for each grouped song
+                    }).reset_index()
+                    .sort_values('Ranking', ascending=False)
+                    .reset_index(drop=True)  # Sort grouped data in descending order of ranking
+                )
+
+                # Compute placements and percentiles within the grouped data
+                total_songs = len(song_grouped)
+                logging.info(f"Total number of songs grouped: {total_songs}")
+
+                song_grouped['Placement'] = song_grouped.index + 1
+                song_grouped['Percentile'] = (
+                    (song_grouped['Placement'] - 1) / (total_songs - 1) * 100 if total_songs > 1 else 0
+                )
+
+                # Define the ranked date for this drift calculation event
+                event_ranked_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+                # Prepare batch data for insertion
+                logging.info("Preparing batch drift data for insertion...")
+                batch_data = [
+                    (
                         int(event_number),
                         event_ranked_date,
-                        album_name,
+                        row['Album Name'],
                         row['Artist Name'],
                         row['Spotify Album ID'],
                         row['Song Name'],
@@ -1579,81 +1754,111 @@ def submit_rankings():
                         round(row['Ranking'], 4),
                         int(row['Placement']),
                         round(row['Percentile'], 4)
-                    ])
+                    )
+                    for _, row in song_grouped.iterrows()
+                ]
 
-                if batch_data:
-                    song_data_sheet.append_rows(batch_data, value_input_option='USER_ENTERED')
-                    logging.info(
-                        f"Batch appended {len(batch_data)} rows to Song Data for event {event_number} ({album_name}).")
-                else:
-                    logging.info("No rows to append to Song Data.")
-                append_success = True
-                logging.info(f"Efficiently appended Song Data for event {event_number} ({album_name}).")
+                # Insert drift data into `song_data`
+                logging.info("Inserting batch drift data into the database...")
+                try:
+                    cursor.executemany("""
+                        INSERT INTO Song Data (event_number, ranked_date, album_name, artist_name, spotify_album_id,
+                                               song_name, spotify_song_id, ranking, placement, percentile)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                    """, batch_data)
+                    conn.commit()
+                    logging.info(f"Drift data for {len(batch_data)} songs successfully inserted.")
+                except psycopg2.Error as e:
+                    logging.error(f"Error inserting batch drift data: {e}")
+
             except Exception as e:
-                # Check if the error happened after at least some rows were appended
-                if append_success:
-                    logging.error(f"Error after data appended to Song Data: {e} — but data was written, continuing.")
-                else:
-                    logging.error(f"Failed to append Song Data rows: {e}")
+                logging.error(f"Error calculating and inserting drift data: {e}")
 
 
 
             # --- 5. Get "AFTER" data for the animation ---
-            averages_df_after = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
-            averages_df_after['weighted_average_score'] = pd.to_numeric(averages_df_after['weighted_average_score'],
-                                                                        errors='coerce')
-            averages_df_after.dropna(subset=['weighted_average_score'], inplace=True)
-            averages_df_after.sort_values(by='weighted_average_score', ascending=False, inplace=True)
-            averages_df_after.reset_index(drop=True, inplace=True)
+            try:
+                # --- Step 1: Fetch the "after" album averages directly from the database ---
+                logging.info("Fetching 'after' album averages for animations...")
+                cursor.execute("""
+                    SELECT album_id, album_name, artist_name, weighted_average_score, times_ranked, album_cover_url
+                    FROM Re-Ranking and Song History (Album Averages)
+                    WHERE weighted_average_score IS NOT NULL
+                    ORDER BY weighted_average_score DESC;
+                """)
+                album_averages_after = cursor.fetchall()
 
-            new_album_data = averages_df_after[averages_df_after['album_id'].astype(str) == str(album_id)]
-            if new_album_data.empty:
-                return jsonify({'status': 'error', 'message': 'Could not find album after ranking.'}), 500
+                if not album_averages_after:
+                    return jsonify({'status': 'error', 'message': 'No album averages found after ranking.'}), 500
 
-            new_score = float(new_album_data.iloc[0]['weighted_average_score'])
-            times_ranked = int(new_album_data.iloc[0]['times_ranked'])
-            new_placement_series = averages_df_after.index[averages_df_after['album_id'].astype(str) == str(album_id)]
-            new_placement = int(new_placement_series[0] + 1) if not new_placement_series.empty else 1
-            total_albums = len(averages_df_after)
-            dominant_color = get_dominant_color(album_cover_url)
-
-
-            # --- 6. Return the correct JSON for the frontend ---
-            if is_rerank:
-                return jsonify({
-                    'status': 'success',
-                    'rerank_animation_data': {
-                        'album_name': album_name, 'artist_name': artist_name, 'album_cover_url': album_cover_url,
-                        'old_score': old_score, 'new_score': new_score,
-                        'old_placement': old_placement, 'new_placement': new_placement,
-                        'total_albums': total_albums, 'times_ranked': times_ranked,
-                        'dominant_color': dominant_color
+                # Convert query results into a sorted list
+                sorted_album_averages = [
+                    {
+                        'album_id': row[0],
+                        'album_name': row[1],
+                        'artist_name': row[2],
+                        'weighted_average_score': float(row[3]),
+                        'times_ranked': int(row[4]),
+                        'album_cover_url': row[5]
                     }
-                })
-            else:
-                return jsonify({
-                    'status': 'success',
-                    'animation_data': {
-                        'album_name': album_name,
-                        'artist_name': artist_name,
-                        'album_cover_url': album_cover_url,
-                        'final_score': new_score,
-                        'final_rank': new_placement,
-                        'total_albums': total_albums,
-                        'dominant_color': dominant_color,
-                        'album_id': album_id  # <--- ADD THIS LINE
-                    }
-                })
-        
+                    for row in album_averages_after
+                ]
 
+                # --- Step 2: Find the current album's data ---
+                album_data = next((album for album in sorted_album_averages if str(album['album_id']) == str(album_id)),
+                                  None)
+                if not album_data:
+                    return jsonify(
+                        {'status': 'error', 'message': f"Could not find album {album_id} after ranking."}), 500
+
+                # Extract the new scores, placements, etc.
+                new_score = album_data['weighted_average_score']
+                times_ranked = album_data['times_ranked']
+                new_placement = sorted_album_averages.index(album_data) + 1  # Placement is 1-based
+                total_albums = len(sorted_album_averages)
+                dominant_color = get_dominant_color(album_cover_url)
+
+                # --- Step 3: Return JSON response to the frontend ---
+                if is_rerank:
+                    return jsonify({
+                        'status': 'success',
+                        'rerank_animation_data': {
+                            'album_name': album_data['album_name'],
+                            'artist_name': album_data['artist_name'],
+                            'album_cover_url': album_data['album_cover_url'],
+                            'old_score': old_score,
+                            'new_score': new_score,
+                            'old_placement': old_placement,
+                            'new_placement': new_placement,
+                            'total_albums': total_albums,
+                            'times_ranked': times_ranked,
+                            'dominant_color': dominant_color
+                        }
+                    })
+                else:
+                    return jsonify({
+                        'status': 'success',
+                        'animation_data': {
+                            'album_name': album_data['album_name'],
+                            'artist_name': album_data['artist_name'],
+                            'album_cover_url': album_data['album_cover_url'],
+                            'final_score': new_score,
+                            'final_rank': new_placement,
+                            'total_albums': total_albums,
+                            'dominant_color': dominant_color,
+                            'album_id': album_id
+                        }
+                    })
+
+            except Exception as e:
+                logging.critical(f"\n🔥 CRITICAL ERROR in /submit_rankings (Final Animation Section): {e}",
+                                 exc_info=True)
     except Exception as e:
-        logging.critical(f"\n🔥 CRITICAL ERROR in /submit_rankings: {e}", exc_info=True)
-        return jsonify({'status': 'error', 'message': f"An unexpected error occurred: {e}"}), 500
+        logging.critical(f"Error")
+    return jsonify({'status': 'error', 'message': f"An unexpected error occurred: {e}"}), 500
 
 def get_album_data(artist_name, album_name, album_id):
-    import pandas as pd
     import json
-
 
     def format_seconds(seconds):
         h = seconds // 3600
@@ -1664,250 +1869,139 @@ def get_album_data(artist_name, album_name, album_id):
         else:
             return f"{m}:{s:02}"
 
-    # Load dataframes
-    main_df = get_as_dataframe(client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)).fillna("")
-
-    averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
-
-
-    # Clean for matching (album names may have case/space differences)
-    album_name_clean = album_name.strip().lower()
-    artist_name_clean = artist_name.strip().lower()
-
-    # Find the album row
-    album_row = averages_df[
-        (averages_df['album_id'].astype(str) == str(album_id)) &
-        (averages_df['album_name'].str.strip().str.lower() == album_name_clean) &
-        (averages_df['artist_name'].str.strip().str.lower() == artist_name_clean)
-        ]
-    if album_row.empty:
-        return None
-    album_row = album_row.iloc[0]
-    album_id = album_row['album_id']
-    album_cover_url = album_row.get("album_cover_url", "")
-
-    # Sort all albums by score to assign global ranks
-    averages_df = averages_df.sort_values(by='weighted_average_score', ascending=False).reset_index(drop=True)
-    placement_series = averages_df.index[averages_df['album_id'].astype(str) == str(album_id)]
-    global_album_rank = int(placement_series[0] + 1) if not placement_series.empty else None
-
-    # Get all songs for this album
-    album_songs_df = main_df[
-        (main_df['Album Name'].str.strip().str.lower() == album_name_clean) &
-        (main_df['Artist Name'].str.strip().str.lower() == artist_name_clean) &
-        (main_df['Ranking Status'].astype(str).str.lower() == 'final')  # <-- add this filter
-        ].copy()
-    actual_songs_df = album_songs_df[album_songs_df['Rank Group'] != "I"].copy()
-    interlude_songs_df = album_songs_df[album_songs_df['Rank Group'] == "I"].copy()
-    actual_songs_df['Ranking'] = pd.to_numeric(actual_songs_df['Ranking'], errors='coerce')
-    actual_songs_df = actual_songs_df[actual_songs_df['Ranking'].notnull()]
-
-
-    release_date = None
-    album_length = ""
-    album_length_sec = 0
     try:
-        album_info = load_album_data(sp, album_id)
-        track_order_map = {}
-        if album_info and 'songs' in album_info:
-            for i, song in enumerate(album_info['songs']):
-                song_name = song['song_name'].strip().lower()
-                track_order_map[song_name] = i + 1
+        # Ensure clean inputs for matching
+        album_name_clean = album_name.strip().lower()
+        artist_name_clean = artist_name.strip().lower()
 
-        album_songs_df['track_order'] = album_songs_df['Song Name'].str.strip().str.lower().map(track_order_map)
+        # --- Step 1: Fetch album metadata and statistics ---
+        cursor.execute("""
+            SELECT album_id, album_name, artist_name, weighted_average_score, average_score, times_ranked,
+                   release_date, album_cover_url, rerank_history
+            FROM Re-Ranking and Song History (Album Averages)
+            WHERE LOWER(album_name) = %s AND LOWER(artist_name) = %s AND album_id = %s;
+        """, (album_name_clean, artist_name_clean, album_id))
+        album_row = cursor.fetchone()
 
-        if album_songs_df['track_order'].isnull().any():
-            if 'Position In Group' in album_songs_df.columns:
-                album_songs_df['track_order'] = album_songs_df['track_order'].fillna(
-                    album_songs_df['Position In Group'])
-            else:
-                album_songs_df['track_order'] = album_songs_df['track_order'].fillna(
-                    pd.Series(range(1, len(album_songs_df) + 1), index=album_songs_df.index))
+        if not album_row:
+            logging.error(f"Album not found: {artist_name_clean}, {album_name_clean}, ID: {album_id}")
+            return None
 
-        album_songs_df = album_songs_df.sort_values('track_order')
+        album_data_processed = {
+            'album_name': album_row[1],
+            'artist_name': album_row[2],
+            'album_score': float(album_row[3]),
+            'avg_song_score': float(album_row[4]),
+            'global_album_rank': None,  # Will compute later
+            'times_ranked': int(album_row[5]),
+            'release_date': album_row[6] or "Unknown",
+            'album_cover_url': album_row[7],
+            'album_ranking_timeline': json.loads(album_row[8]) if album_row[8] else []
+        }
 
-        release_date = album_info.get('release_date', None)
-        # Album length calculation from Spotify...
-        if album_info.get('songs'):
-            total_duration_ms = 0
-            for song in album_info['songs']:
-                if 'duration_ms' in song:
-                    total_duration_ms += int(song['duration_ms'])
-            album_length_sec = total_duration_ms // 1000
-            album_length = format_seconds(album_length_sec)
-        if not album_cover_url and album_info.get('album_cover_url'):
-            album_cover_url = album_info.get('album_cover_url')
-    except Exception:
-        pass
+        # --- Step 2: Sort album for global ranking ---
+        cursor.execute("""
+            SELECT album_id, weighted_average_score
+            FROM Re-Ranking and Song History (Album Averages)
+            WHERE weighted_average_score IS NOT NULL
+            ORDER BY weighted_average_score DESC;
+        """)
+        global_ranking = cursor.fetchall()
+        for rank, album in enumerate(global_ranking, start=1):
+            if str(album[0]) == str(album_id):
+                album_data_processed['global_album_rank'] = rank
+                break
 
-    # ---- ADD THIS Fallback for Release Date ----
-    if not release_date or release_date == "":
-        # Try album_row
-        release_date = (
-                album_row.get('release_date', "") or
-                album_row.get('Release_Date', "") or
-                album_row.get('releaseDate', "")
-        )
-        # Try release date lookup from artist page logic
-        if not release_date:
-            release_dates_map = get_album_release_dates(sp, [album_id])
-            release_date = release_dates_map.get(album_id, "")  # Use spreadsheet value if present
+        # --- Step 3: Fetch song-level statistics ---
+        cursor.execute("""
+            SELECT song_name, spotify_song_id, duration, ranking, rank_group, ranked_date
+            FROM Song Data
+            WHERE LOWER(album_name) = %s AND LOWER(artist_name) = %s AND spotify_album_id = %s;
+        """, (album_name_clean, artist_name_clean, album_id))
+        song_rows = cursor.fetchall()
 
-    # Fallback album length calculation from your main sheet if not found above
-    if not album_length or album_length_sec == 0:
-        album_songs_df['Duration (ms)'] = pd.to_numeric(album_songs_df.get('Duration (ms)', 0), errors='coerce').fillna(0)
-        total_duration_ms = album_songs_df['Duration (ms)'].sum()
-        album_length_sec = int(total_duration_ms // 1000)
-        album_length = format_seconds(album_length_sec) if album_length_sec else ""
+        song_data = []
+        song_scores = []
+        top_3_songs = []
+        lowest_song = None
 
-    # Song stats
-    album_songs_df['Ranking'] = pd.to_numeric(album_songs_df['Ranking'], errors='coerce')
-    album_songs_df = album_songs_df[album_songs_df['Ranking'].notnull()]
+        # Process song rows for statistics
+        logging.info("Processing song-level data...")
+        for song in song_rows:
+            song_name = song[0]
+            spotify_song_id = song[1]
+            duration = int(song[2]) if song[2] else 0
+            formatted_duration = format_seconds(duration // 1000)
+            score = float(song[3]) if song[3] else None
+            rank_group = song[4]
+            ranked_date = song[5]
 
-    avg_song_score = actual_songs_df['Ranking'].mean() if not actual_songs_df.empty else 0
-    median_song_score = actual_songs_df['Ranking'].median() if not actual_songs_df.empty else 0
-    std_song_score = actual_songs_df['Ranking'].std() if not actual_songs_df.empty else 0
+            # Exclude "interludes" (Rank Group == "I") from averages
+            if rank_group != "I" and score is not None:
+                song_scores.append(score)
 
-    # Top/lowest 3 songs
-    top_3_songs = actual_songs_df.sort_values('Ranking', ascending=False).head(3)[['Song Name', 'Ranking']].to_dict(
-        'records')
-    for song in top_3_songs:
-        song['title'] = song.pop('Song Name')
-        song['score'] = song.pop('Ranking')
-    lowest_row = actual_songs_df.sort_values('Ranking', ascending=True).head(1)
-    lowest_song = {'title': lowest_row.iloc[0]['Song Name'],
-                   'score': lowest_row.iloc[0]['Ranking']} if not lowest_row.empty else None
+            song_data.append({
+                'song_name': song_name,
+                'spotify_song_id': spotify_song_id,
+                'formatted_duration': formatted_duration,
+                'ranking': score,
+                'rank_group': rank_group,
+                'ranked_date': ranked_date,
+            })
 
-    most_improved_song = {'title': '', 'delta': 0}
-    worst_improved_song = None
-    max_delta = float('-inf')
-    min_delta = float('inf')
-    for song_name, group in album_songs_df.groupby('Song Name'):
-        group_sorted = group.sort_values('Ranked Date')
-        if len(group_sorted) > 1:
-            first_rank = group_sorted.iloc[0]['Ranking']
-            last_rank = group_sorted.iloc[-1]['Ranking']
-            delta = last_rank - first_rank
-            if delta > max_delta:
-                max_delta = delta
-                most_improved_song = {'title': song_name, 'delta': delta}
-            if delta < min_delta:
-                min_delta = delta
-                worst_improved_song = {'title': song_name, 'delta': delta}
-    if 'Duration (ms)' in album_songs_df.columns:
-        album_songs_df['duration_ms'] = pd.to_numeric(album_songs_df['Duration (ms)'], errors='coerce').fillna(180000)
-    elif 'duration_ms' in album_songs_df.columns:
-        album_songs_df['duration_ms'] = pd.to_numeric(album_songs_df['duration_ms'], errors='coerce').fillna(180000)
-    else:
-        album_songs_df['duration_ms'] = 180000  # fallback: 3min per song
-    album_songs_df['duration_sec'] = album_songs_df['duration_ms'] / 1000
+        # --- Statistics on Songs ---
+        logging.info("Calculating song-level statistics...")
+        avg_song_score = sum(song_scores) / len(song_scores) if song_scores else 0
+        median_song_score = sorted(song_scores)[len(song_scores) // 2] if song_scores else 0
+        std_song_score = (sum((x - avg_song_score) ** 2 for x in song_scores) / len(song_scores)) ** 0.5 if song_scores else 0
 
-    # Sort by Position In Group or track number, fallback to index
+        # Top 3 songs
+        top_3_songs = sorted(song_data, key=lambda x: x['ranking'] or 0, reverse=True)[:3]
+        top_3_songs = [{'title': song['song_name'], 'score': song['ranking']} for song in top_3_songs]
 
-    # Calculate song start and midpoint times
-    song_starts = []
-    current_time = 0
-    for idx, row in album_songs_df.iterrows():
-        song_starts.append(current_time)
-        duration_sec = row['duration_sec'] or 0
-        current_time += duration_sec
-    all_songs_df = main_df.copy()
-    all_songs_df['Ranking'] = pd.to_numeric(all_songs_df['Ranking'], errors='coerce')
-    all_songs_df = all_songs_df[all_songs_df['Ranking'].notnull()]
-    all_songs_df = all_songs_df.sort_values('Ranking', ascending=False).reset_index(drop=True)
-    all_songs_df['global_rank'] = all_songs_df.index + 1
-    album_songs = []
-    for (idx, row), start_sec in zip(album_songs_df.iterrows(), song_starts):
-        is_interlude = (row.get('Rank Group', row.get('Rank Group', "")) == "I")
-        song_name = row['Song Name']
-        track_number = int(row.get('Position In Group', idx + 1))
-        # Find global rank for this song (and artist to be safe)
-        song_match = all_songs_df[
-            (all_songs_df['Song Name'] == song_name) &
-            (all_songs_df['Artist Name'].str.strip().str.lower() == artist_name_clean)
-            ]
-        global_rank = int(song_match.iloc[0]['global_rank']) if not song_match.empty else None
+        # Lowest ranked song
+        if song_scores:
+            lowest_song_score = min(song_scores)
+            lowest_song = next(({'title': x['song_name'], 'score': x['ranking']} for x in song_data if x['ranking'] == lowest_song_score), None)
 
-        # Delta in the last 7 days (your logic)
-        history = album_songs_df[
-            (album_songs_df['Song Name'] == song_name)
-        ].sort_values('Ranked Date')
-        delta_7d = 0.0
-        score_history = []
-        if len(history) > 1:
-            last_7d = history[history['Ranked Date'] >= (pd.Timestamp.now() - pd.Timedelta(days=7))]
-            old = history[history['Ranked Date'] < (pd.Timestamp.now() - pd.Timedelta(days=7))]
-            delta_7d = (last_7d['Ranking'].mean() if not last_7d.empty else row['Ranking']) - (
-                old['Ranking'].mean() if not old.empty else row['Ranking'])
-            score_history = list(zip(history['Ranked Date'].astype(str), history['Ranking']))
+        # Most improved song logic
+        most_improved_song = {
+            'title': '',
+            'delta': 0
+        }
+        logging.info("Processing song ranking deltas (improvement)...")
+        for song_name, group in pd.DataFrame(song_data).groupby("song_name"):
+            group = group.sort_values("ranked_date")
+            if len(group) > 1:
+                delta = group.iloc[-1]['ranking'] - group.iloc[0]['ranking']
+                if delta > most_improved_song['delta']:
+                    most_improved_song = {'title': song_name, 'delta': delta}
 
-        album_songs.append({
-            'track_number': int(row['track_order']),
-            'title': song_name,
-            'score': row['Ranking'],
-            'delta_7d': delta_7d,
-            'score_history_str': "; ".join([f"{d}: {s:.2f}" for d, s in score_history]),
-            'start_min': start_sec/60,
-            'length': row['duration_sec'],
-            'global_rank': global_rank,
-            'is_interlude': is_interlude,
+        # --- Step 4: Album Length ---
+        album_length_sec = sum([row['duration'] // 1000 for row in song_data])
+        album_length = format_seconds(album_length_sec)
+
+        # --- Step 5: Return Combined Results ---
+        album_data_processed.update({
+            'album_length': album_length,
+            'album_length_sec': album_length_sec,
+            'avg_song_score': avg_song_score,
+            'median_song_score': median_song_score,
+            'std_song_score': std_song_score,
+            'top_3_songs': top_3_songs,
+            'lowest_song': lowest_song,
+            'most_improved_song': most_improved_song,
+            'album_songs': song_data
         })
-    artist_songs_df = main_df[
-        (main_df['Artist Name'].str.strip().str.lower() == artist_name_clean)
-    ]
-    artist_songs_df['Ranking'] = pd.to_numeric(artist_songs_df['Ranking'], errors='coerce')
-    artist_actual_songs_df = artist_songs_df[artist_songs_df['Rank Group'] != "I"].copy()
-    artist_actual_songs_df = artist_actual_songs_df[artist_actual_songs_df['Ranking'].notnull()]
-    artist_avg_song_score = artist_actual_songs_df['Ranking'].mean() if not artist_actual_songs_df.empty else 0
 
-    main_df['Ranking'] = pd.to_numeric(main_df['Ranking'], errors='coerce')
-    global_actual_songs_df = main_df[main_df['Rank Group'] != "I"].copy()
-    global_actual_songs_df = global_actual_songs_df[global_actual_songs_df['Ranking'].notnull()]
-    global_avg_song_score = global_actual_songs_df['Ranking'].mean() if not global_actual_songs_df.empty else 0
+        return album_data_processed
 
-    # Album ranking timeline
-    rerank_history = album_row.get('rerank_history', '[]')
-    try:
-        timeline = json.loads(rerank_history)
-    except Exception:
-        timeline = []
-    album_ranking_timeline = [{'date': x['date'], 'rank': x.get('placement')} for x in timeline if 'date' in x]
-    print("Album songs times:")
-    for song in album_songs:
-        print(song['title'], song['start_min'], song['score'])
-    # Calculate last song's start in minutes (already stored)
-    last_song_start_min = album_songs[-1]['start_min']
-    # Calculate last song's duration in minutes
-    last_song_duration_min = album_songs_df.iloc[-1]['duration_sec'] / 60 if not album_songs_df.empty else 0
-    # The end of the album in minutes
-    last_song_end_min = last_song_start_min + last_song_duration_min
-
-
-
-    album_data = {
-        'album_name': album_row['album_name'],
-        'artist_name': album_row['artist_name'],
-        'album_cover_url': album_cover_url,
-        'release_date': release_date or "Unknown",  # Provide something always
-        'album_length': album_length or "",
-        'album_length_sec': album_length_sec or 0,
-        'album_score': album_row.get('weighted_average_score', 0),
-        'avg_song_score': avg_song_score,
-        'median_song_score': median_song_score,
-        'std_song_score': std_song_score,  # Set as appropriate or remove if not needed
-        'top_3_songs': top_3_songs,
-        'lowest_song': lowest_song,
-        'most_improved_song': most_improved_song,
-        'worst_improved_song': worst_improved_song,
-        'artist_avg_song_score': artist_avg_song_score,
-        'global_avg_song_score': global_avg_song_score,
-        'album_ranking_timeline': album_ranking_timeline,
-        'album_ranking_delta': 0,
-        'last_song_end_min':last_song_end_min,
-        "global_album_rank": global_album_rank,
-        'album_songs': album_songs,
-    }
-    return album_data
+    except psycopg2.Error as e:
+        logging.error(f"Database error: {e}")
+        return {'status': 'error', 'message': str(e)}
+    except Exception as e:
+        logging.error(f"Unexpected error: {e}")
+        return {'status': 'error', 'message': str(e)}
 @app.route("/search_albums", methods=["GET"])
 def search_albums():
     """
@@ -1915,30 +2009,37 @@ def search_albums():
     Accepts ?q=search_term and returns up to 10 albums with: album_id, album_name, artist_name, album_cover_url
     """
     query = request.args.get("q", "").strip().lower()
+
     if not query or len(query) < 2:
-        return jsonify([])  # Empty for short/no query
+        # Return empty JSON array if the query is too short or empty
+        return jsonify([])
 
-    # Load album averages df
-    all_albums_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
-    all_albums_df = all_albums_df.dropna(subset=["album_id", "album_name", "artist_name"])
+    try:
+        # Perform case-insensitive substring search using SQL's ILIKE operator
+        cursor.execute("""
+            SELECT album_id, album_name, artist_name, album_cover_url
+            FROM Re-Ranking and Song History (Album Averages)
+            WHERE LOWER(album_name) LIKE %s OR LOWER(artist_name) LIKE %s
+            LIMIT 10;
+        """, (f"%{query}%", f"%{query}%"))  # Search for the query in album_name or artist_name
 
-    # Match by album_name or artist_name substring (case insensitive)
-    mask = (
-        all_albums_df["album_name"].astype(str).str.lower().str.contains(query)
-        | all_albums_df["artist_name"].astype(str).str.lower().str.contains(query)
-    )
-    results = all_albums_df[mask].head(10)  # Limit to top 10 results
+        album_results = cursor.fetchall()
 
-    albums = []
-    for _, row in results.iterrows():
-        albums.append({
-            "album_id": str(row["album_id"]),
-            "album_name": row["album_name"],
-            "artist_name": row["artist_name"],
-            "album_cover_url": row.get("album_cover_url", ""),
-        })
-    return jsonify(albums)
-from urllib.parse import quote_plus
+        # Map the query results into a JSON response
+        albums = [
+            {
+                "album_id": str(album[0]),
+                "album_name": album[1],
+                "artist_name": album[2],
+                "album_cover_url": album[3] or "",  # Use an empty string if album_cover_url is null
+            }
+            for album in album_results
+        ]
+        return jsonify(albums)
+
+    except psycopg2.Error as e:
+        logging.error(f"Database error in /search_albums: {e}")
+        return jsonify([])  # Return an empty JSON array on error
 
 @app.route('/compare')
 def compare_page():
@@ -1955,121 +2056,198 @@ def prelim_success():
         dominant_color=dominant_color
     )
 from flask import request, jsonify
-
+def format_seconds(seconds):
+    """
+    Converts seconds into hh:mm:ss or mm:ss format.
+    """
+    h = seconds // 3600
+    m = (seconds % 3600) // 60
+    s = seconds % 60
+    if h > 0:
+        return f"{h}:{m:02}:{s:02}"  # Format as hh:mm:ss
+    else:
+        return f"{m}:{s:02}"         # Format as mm:ss
 @app.route("/compare_albums", methods=["GET"])
 def compare_albums():
+    """
+    Compares up to 4 albums based on their statistics and song scores.
+    """
     try:
-        album_ids = request.args.getlist("album_ids")
+        album_ids = request.args.getlist("album_ids")  # Fetch album ids from the query
         print("Compare called with:", album_ids)
-        all_data = []
+
+        # Restrict to up to 4 albums
+        album_ids = album_ids[:4]
+        if not album_ids:
+            return jsonify({"error": "No album IDs provided"}), 400
+
+        # Colors for graphs/charts
         colors = ["#1DB954", "#e74c3c", "#3498db", "#ffd700"]
 
-        averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
-        print("Averages DF shape:", averages_df.shape)
-        for i, album_id in enumerate(album_ids[:4]):
-            album_row = averages_df[averages_df['album_id'].astype(str) == str(album_id)]
-            if album_row.empty:
-                print(f"Album ID not found: {album_id}")
-                continue
-            album_row = album_row.iloc[0]
-            artist_name = album_row['artist_name']
-            album_name = album_row['album_name']
+        # --- Step 1: Fetch Album Data ---
+        logging.info("Fetching album data for comparison...")
+        cursor.execute("""
+            SELECT a.album_id, a.album_name, a.artist_name, a.weighted_average_score, a.average_score, a.times_ranked,
+                   a.release_date, a.album_cover_url, a.std_dev,
+                   s.song_name, s.ranking, s.duration AS song_duration, s.rank_group, s.spotify_song_id
+            FROM Re-Ranking and Song History (Album Averages) a
+            LEFT JOIN Song Data s ON a.spotify_album_id = s.spotify_album_id
+            WHERE a.album_id = ANY(%s)
+        """, (album_ids,))
+        query_results = cursor.fetchall()
 
-            album_data = get_album_data(artist_name, album_name, album_id)
-            if not album_data:
-                print(f"get_album_data failed for: {album_name} ({album_id})")
+        # Organize album data into a dictionary
+        albums = {}
+        for row in query_results:
+            album_id = str(row[0])
+
+            if album_id not in albums:
+                albums[album_id] = {
+                    "album_id": row[0],
+                    "album_name": row[1],
+                    "artist_name": row[2],
+                    "album_score": float(row[3]),
+                    "avg_song_score": float(row[4]),
+                    "std_dev": row[8],
+                    "times_ranked": int(row[5]),
+                    "release_date": row[6] or "Unknown",
+                    "album_cover_url": row[7] or "",
+                    "songs": []
+                }
+
+            # Add each song's details to the "songs" list for the album
+            song_data = {
+                "song_name": row[9],
+                "score": float(row[10]) if row[10] else None,
+                "duration": int(row[11]) if row[11] else 0,
+                "rank_group": row[12],
+                "spotify_song_id": row[13]
+            }
+            albums[album_id]["songs"].append(song_data)
+
+        # --- Step 2: Prepare Data for Each Album ---
+        all_data = []
+        for i, album_id in enumerate(album_ids):
+            album = albums.get(album_id)
+            if not album:
+                logging.warning(f"Album {album_id} not found in the database.")
                 continue
 
-            # --- Fix: Calculate each song's start_min ---
-            # Assume album_data['album_songs'] is a list of dicts with 'length' (as "min:sec" string or seconds int)
+            # --- Calculate song stats ---
             songs_with_start = []
             cumulative_seconds = 0
-            for song in album_data['album_songs']:
-                # If length is a string "3:22"
-                if isinstance(song['length'], str) and ':' in song['length']:
-                    mins, secs = map(int, song['length'].split(":"))
-                    song_seconds = mins * 60 + secs
-                else:
-                    # If it's already in seconds
-                    song_seconds = int(song['length'])
+            main_songs = []  # Only include non-interlude songs for graphs and stats
+            for song in album["songs"]:
+                if song["rank_group"] != "I":  # Exclude interludes
+                    main_songs.append(song)
 
+                # Calculate `start_min` for all songs
                 start_min = cumulative_seconds / 60
-                # Add start_min to song dict
-                song_with_start = song.copy()
-                song_with_start['start_min'] = start_min
-                songs_with_start.append(song_with_start)
-                cumulative_seconds += song_seconds
+                songs_with_start.append({
+                    **song,
+                    "start_min": start_min
+                })
+                cumulative_seconds += song["duration"]
 
-            # Filter out interludes for graph and stats
-            main_songs = [song for song in songs_with_start if not song.get('is_interlude', False)]
-
-            # Runtime graph points: only main songs
+            # Prepare runtime graph points
             points = [
                 {
-                    "x": song['start_min'],
-                    "y": song['score'],
-                    "song": song['title'],
-                    "album": album_data['album_name'],
+                    "x": song["start_min"],
+                    "y": song["score"],
+                    "song": song["song_name"],
+                    "album": album["album_name"],
                 }
-                for song in main_songs
+                for song in songs_with_start if song["rank_group"] != "I" and song["score"] is not None
             ]
 
-            # Boxplot data: only main songs
-            song_scores = [song['score'] for song in main_songs]
+            # Prepare box plot data
+            song_scores = [song["score"] for song in main_songs if song["score"] is not None]
 
-            # Best/worst song: only main songs
-            best_song = max(main_songs, key=lambda s: s['score']) if main_songs else None
-            worst_song = min(main_songs, key=lambda s: s['score']) if main_songs else None
+            # Find best and worst songs
+            best_song = max(main_songs, key=lambda s: s["score"], default=None)
+            worst_song = min(main_songs, key=lambda s: s["score"], default=None)
 
-            # Package everything for frontend
+            # Append the data for this album
             all_data.append({
                 "id": album_id,
-                "name": album_data['album_name'],
-                "artist": album_data['artist_name'],
-                "album_cover_url": album_data['album_cover_url'],
-                "release_date": album_data['release_date'],
-                "album_score": album_data['album_score'],
-                "avg_song_score": album_data['avg_song_score'],
-                "placement": album_data['global_album_rank'],
-                "std_dev": album_data['std_song_score'],
-                "length": album_data['album_length'],
+                "name": album["album_name"],
+                "artist": album["artist_name"],
+                "album_cover_url": album["album_cover_url"],
+                "release_date": album["release_date"],
+                "album_score": album["album_score"],
+                "avg_song_score": album["avg_song_score"],
+                "placement": None,  # Could add placement in global rank later
+                "std_dev": album["std_dev"],
+                "length": format_seconds(cumulative_seconds),
                 "color": colors[i % len(colors)],
                 "points": points,
-                "album_length_sec": album_data['album_length_sec'],
+                "album_length_sec": cumulative_seconds,
                 "song_scores": song_scores,
-                "best_song": {"title": best_song['title'], "score": best_song['score']} if best_song else {"title": "", "score": None},
-                "worst_song": {"title": worst_song['title'], "score": worst_song['score']} if worst_song else {"title": "", "score": None},
+                "best_song": {
+                    "title": best_song["song_name"],
+                    "score": best_song["score"]
+                } if best_song else {
+                    "title": "", "score": None
+                },
+                "worst_song": {
+                    "title": worst_song["song_name"],
+                    "score": worst_song["score"]
+                } if worst_song else {
+                    "title": "", "score": None
+                },
             })
-        print("Compare result:", all_data)
+
+        # Return comparison data
+        logging.info("Comparison data prepared successfully.")
         return jsonify({"albums": all_data})
+
+    except psycopg2.Error as e:
+        logging.error(f"Database error in /compare_albums: {e}")
+        return jsonify({"error": "Database error occurred. Please try again later."}), 500
     except Exception as e:
-        print(f"Error in /compare_albums: {e}")
+        logging.error(f"Error in /compare_albums: {e}")
         return jsonify({"error": str(e)}), 500
 @app.route('/rerank_success')
 def rerank_success():
-    # Get all the data passed from the redirect
-    album_name = request.args.get('album_name')
-    artist_name = request.args.get('artist_name')
-    album_cover_url = request.args.get('album_cover_url')
-    old_score = float(request.args.get('old_score', 0))
-    new_score = float(request.args.get('new_score', 0))
-    old_placement = int(request.args.get('old_placement', 1))
-    new_placement = int(request.args.get('new_placement', 1))
-    total_albums = int(request.args.get('total_albums', 1))
-    times_ranked = int(request.args.get('times_ranked', 2))
-    dominant_color = request.args.get('dominant_color', '#121212')
+    """
+    Render a rerank success page.
+    """
+    try:
+        # Fetch and validate query parameters
+        album_name = request.args.get('album_name', 'Unknown Album')
+        artist_name = request.args.get('artist_name', 'Unknown Artist')
+        album_cover_url = request.args.get('album_cover_url', '')
+        old_score = float(request.args.get('old_score', 0))
+        new_score = float(request.args.get('new_score', 0))
+        old_placement = int(request.args.get('old_placement', 1))
+        new_placement = int(request.args.get('new_placement', 1))
+        total_albums = int(request.args.get('total_albums', 1))
+        times_ranked = int(request.args.get('times_ranked', 2))
+        dominant_color = request.args.get('dominant_color', '#121212')
 
-    # Determine colors for the scores
-    old_score_color = 'green' if old_score >= 7 else 'yellow' if old_score >= 4 else 'red'
-    new_score_color = 'green' if new_score >= 7 else 'yellow' if new_score >= 4 else 'red'
+        # Determine score colors based on thresholds
+        def get_score_color(score):
+            if score >= 7:
+                return 'green'
+            elif score >= 4:
+                return 'yellow'
+            else:
+                return 'red'
 
-    return render_template(
-        'rerank_success.html',
-        album_name=album_name, artist_name=artist_name, album_cover_url=album_cover_url,
-        old_score=old_score, new_score=new_score, old_placement=old_placement,
-        new_placement=new_placement, total_albums=total_albums, times_ranked=times_ranked,
-        dominant_color=dominant_color, old_score_color=old_score_color, new_score_color=new_score_color
-    )
+        old_score_color = get_score_color(old_score)
+        new_score_color = get_score_color(new_score)
+
+        # Render the rerank success page
+        return render_template(
+            'rerank_success.html',
+            album_name=album_name, artist_name=artist_name, album_cover_url=album_cover_url,
+            old_score=old_score, new_score=new_score, old_placement=old_placement,
+            new_placement=new_placement, total_albums=total_albums, times_ranked=times_ranked,
+            dominant_color=dominant_color, old_score_color=old_score_color, new_score_color=new_score_color
+        )
+    except Exception as e:
+        logging.error(f"Error in `rerank_success`: {e}")
+        return redirect(url_for('error_page'))  # Fallback to an error page
 
 @app.route('/ranking_success')
 def ranking_success():
@@ -2107,13 +2285,26 @@ def ranking_success():
     )
 @app.route('/search', methods=['POST'])
 def search_artist():
-    artist_name = request.form.get('artist_name')
-    if artist_name:
-        # Redirect to the main artist dashboard
-        return redirect(url_for('artist_page_v2', artist_name=artist_name))
-    else:
-        flash("Please enter an artist name.")
-        return redirect(url_for('profile'))
+    """
+    Handle form submission for artist search and redirect appropriately.
+    """
+    try:
+        artist_name = request.form.get('artist_name', '').strip()
+
+        if artist_name:
+            # Redirect to artist page (assuming route is `artist_page_v2`)
+            logging.info(f"Redirecting to artist page for {artist_name}.")
+            return redirect(url_for('artist_page_v2', artist_name=artist_name))
+        else:
+            # Flash a warning message and redirect to the profile page
+            flash("Please enter an artist name.")
+            logging.warning("No artist name provided in search form.")
+            return redirect(url_for('profile'))
+
+    except Exception as e:
+        logging.error(f"Error in `search_artist`: {e}")
+        flash("Something went wrong. Please try again.")
+        return redirect(url_for('profile'))  # Redirect fallback
 def deduplicate_by_track_overlap(albums):
     import re
     from collections import defaultdict
@@ -2225,237 +2416,142 @@ def percentile_from_rank(rank, total):
 
 @app.route('/song/<artist_name>/<path:song_name>')
 def song_page(artist_name, song_name):
+    from urllib.parse import unquote
     import numpy as np
     import re
 
-    # Decode for URL-encoded names
-    artist_name = unquote(artist_name)
-    song_name = unquote(song_name)
-    song_name = song_name.replace('+', ' ')
-    artist_name = artist_name.replace('+', ' ')
-
-    artist_name_clean = artist_name.strip().lower()
-    song_name_clean = song_name.strip().lower()
-
-    main_df = get_as_dataframe(client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)).fillna("")
-    averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
-    for col in ['Song Name', 'Artist Name', 'Album Name']:
-        if col in main_df.columns:
-            main_df[col] = main_df[col].astype(str)
-
-    main_df['Ranking'] = pd.to_numeric(main_df['Ranking'], errors='coerce')
-
-    # Try exact match first
-    song_df = main_df[
-        (main_df['Song Name'].str.strip().str.lower() == song_name_clean)
-        & (main_df['Artist Name'].str.strip().str.lower() == artist_name_clean)
-    ]
-
-    # Optional: Try looser matching if still empty
-    if song_df.empty:
-        def normalize_song_name(name):
-            n = name.strip().lower()
-            n = re.sub(r'\s*-\s*remaster(ed)?(\s*\d+)?', '', n)
-            n = re.sub(r'\s*-\s*\d{4} mix', '', n)
-            n = n.replace('&', 'and')
-            return n
-        main_df['Song_Name_Cleaned'] = main_df['Song Name'].map(normalize_song_name)
-        search_song_name = normalize_song_name(song_name_clean)
-        song_df = main_df[
-            main_df['Song_Name_Cleaned'].str.contains(search_song_name, na=False)
-            & (main_df['Artist Name'].str.strip().str.lower() == artist_name_clean)
-        ]
-
-    if song_df.empty:
-        # For debugging: print possible matches
-        possible = main_df[
-            main_df['Artist Name'].str.strip().str.lower() == artist_name_clean
-        ]['Song Name'].unique()
-        print(f"Song not found. Artist: {artist_name_clean}, Song: {song_name_clean}")
-        print("Possible:", possible)
-        abort(404, f"Song not found. Did you mean one of: {', '.join(possible[:5])}...")
-
-    rep = song_df.iloc[0]
-    album_name = rep['Album Name']
-    album_id = rep.get('Spotify Album ID', None)
-    album_cover_url = ""
-    song_length = "?"
-    track_number = "?"
-
-    # --- ALBUM RELEASE DATE LOGIC ---
-    release_date = ""
-    album_name_clean = album_name.strip().lower()
-    album_row = None
-    if album_id and 'album_id' in averages_df.columns:
-        album_row = averages_df[averages_df['album_id'].astype(str) == str(album_id)]
-    if (album_row is None or album_row.empty) and all(col in averages_df.columns for col in ['album_name', 'artist_name']):
-        album_row = averages_df[
-            (averages_df['album_name'].str.strip().str.lower() == album_name_clean) &
-            (averages_df['artist_name'].str.strip().str.lower() == artist_name_clean)
-        ]
-    if album_row is not None and not album_row.empty:
-        album_row = album_row.iloc[0]
-        release_date = (
-            album_row.get('release_date', "") or
-            album_row.get('Release_Date', "") or
-            album_row.get('releaseDate', "")
-        )
-    if not release_date and album_id:
-        try:
-            release_dates_map = get_album_release_dates(sp, [album_id])
-            release_date = release_dates_map.get(album_id, "")
-        except Exception:
-            pass
-    if not release_date:
-        release_date = rep.get('release_date', '') or rep.get('Release Date', '')
-
-    # -- Get album info and album song list (for track number and album art) --
-    album_song_list = []
-    got_album_info = False
-    if album_id:
-        try:
-            album_info = load_album_data(sp, album_id)
-            if album_info:
-                got_album_info = True
-                album_cover_url = album_info.get('album_cover_url', '') or album_cover_url
-                album_song_list = album_info['songs'] if 'songs' in album_info else []
-        except Exception as e:
-            print("Error loading album data:", e)
-
-    # Find this song in the album song list (from Spotify)
-    if album_song_list:
-        for i, song in enumerate(album_song_list):
-            if song['song_name'].strip().lower() == song_name_clean:
-                track_number = i + 1
-                duration_sec = int(song.get('duration_ms', 0)) // 1000 if song.get('duration_ms') else None
-                if duration_sec:
-                    m = duration_sec // 60
-                    s = duration_sec % 60
-                    song_length = f"{m}:{s:02}"
-                break
-
-    # Fallbacks if not found via Spotify
-    if track_number == "?" or not song_length or song_length == "?":
-        album_songs_df = main_df[
-            (main_df['Album Name'].str.strip().str.lower() == album_name.strip().lower()) &
-            (main_df['Artist Name'].str.strip().str.lower() == artist_name_clean)
-        ].copy()
-        if track_number == "?":
-            if 'Position In Group' in album_songs_df.columns:
-                pos_row = album_songs_df[
-                    album_songs_df['Song Name'].str.strip().str.lower() == song_name_clean
-                ]
-                if not pos_row.empty:
-                    track_number = pos_row.iloc[0].get('Position In Group', '?')
-            else:
-                album_songs_df = album_songs_df.reset_index(drop=True)
-                for idx, row in album_songs_df.iterrows():
-                    if row['Song Name'].strip().lower() == song_name_clean:
-                        track_number = idx + 1
-                        break
-        if not song_length or song_length == "?":
-            duration_sec = None
-            for dur_col in ['duration_sec', 'duration_ms', 'Duration (ms)']:
-                if dur_col in rep and rep[dur_col]:
-                    try:
-                        if 'ms' in dur_col:
-                            duration_sec = int(float(rep[dur_col])) // 1000
-                        else:
-                            duration_sec = int(float(rep[dur_col]))
-                        break
-                    except Exception:
-                        duration_sec = None
-            if duration_sec:
-                m = duration_sec // 60
-                s = duration_sec % 60
-                song_length = f"{m}:{s:02}"
-        album_cover_url = rep.get('album_cover_url', '') or album_cover_url
-
-    # Timeline data (only for events where the song is ranked)
     try:
-        song_data_df = get_as_dataframe(client.open_by_key(SPREADSHEET_ID).worksheet("Song Data")).fillna("")
-        drift_df = song_data_df[
-            (song_data_df['Song Name'].str.strip().str.lower() == song_name_clean) &
-            (song_data_df['Artist Name'].str.strip().str.lower() == artist_name_clean)
-            ].copy()
-        drift_df = drift_df.sort_values('Event Number', key=lambda s: s.astype(int))
-        # These lists will be the same length; only events where the song exists
-        timeline_event_numbers = drift_df['Event Number'].astype(int).tolist()
-        timelines_scores = drift_df['Score'].astype(float).tolist()
-        timeline_placements = drift_df['Placement'].astype(int).tolist()
-        timeline_percentiles = drift_df['Percentile'].astype(float).tolist()
-        print(timeline_event_numbers)
+        # Decode and normalize the artist and song names
+        artist_name = unquote(artist_name).replace('+', ' ').strip().lower()
+        song_name = unquote(song_name).replace('+', ' ').strip().lower()
+
+        # --- Step 1: Fetch Song Data ---
+        logging.info(f"Fetching song data for artist: {artist_name}, song: {song_name}")
+        cursor.execute("""
+            SELECT s.song_name, s.spotify_song_id, s.ranking, s.rank_group, s.ranked_date, s.placement, s.percentile,
+                   a.album_name, a.album_id, a.release_date, a.album_cover_url
+            FROM song_data s
+            LEFT JOIN album_averages a ON s.spotify_album_id = a.spotify_album_id
+            WHERE LOWER(s.song_name) = %s AND LOWER(s.artist_name) = %s;
+        """, (song_name, artist_name))
+        song_results = cursor.fetchall()
+
+        if not song_results:
+            logging.warning(f"No match for artist: {artist_name}, song: {song_name}")
+            abort(404, f"Song not found for artist: {artist_name}, song: {song_name}")
+
+        # Parse song and album data
+        song_df = [
+            {
+                "song_name": row[0],
+                "spotify_song_id": row[1],
+                "ranking": float(row[2]) if row[2] else None,
+                "rank_group": row[3],
+                "ranked_date": row[4],
+                "placement": row[5],
+                "percentile": float(row[6]) if row[6] else None,
+                "album_name": row[7],
+                "album_id": row[8],
+                "release_date": row[9],
+                "album_cover_url": row[10]
+            }
+            for row in song_results
+        ]
+
+        # Use the first song entry as the main representative
+        rep = song_df[0]
+        album_name = rep["album_name"]
+        album_id = rep["album_id"]
+        album_cover_url = rep["album_cover_url"] or ""
+        release_date = rep["release_date"] or "Unknown"
+
+        # --- Step 2: Fetch Global and Artist Rankings ---
+        logging.info(f"Calculating rankings for artist: {artist_name}, song: {song_name}")
+        cursor.execute("""
+            WITH artist_songs AS (
+                SELECT song_name, artist_name, AVG(ranking) AS avg_ranking
+                FROM song_data
+                WHERE LOWER(artist_name) = %s AND ranking IS NOT NULL
+                GROUP BY song_name, artist_name
+            )
+            SELECT s.song_name, s.artist_name, s.avg_ranking, RANK() OVER (ORDER BY s.avg_ranking DESC) AS universal_rank
+            FROM artist_songs s;
+        """, (artist_name,))
+        ranking_results = cursor.fetchall()
+
+        # Parse global and artist rankings
+        global_rank_data = [
+            {"song_name": row[0], "artist_name": row[1], "average_ranking": row[2], "global_rank": row[3]}
+            for row in ranking_results
+        ]
+        song_global_rank = next(
+            (rank["global_rank"] for rank in global_rank_data if rank["song_name"].lower() == song_name), "N/A"
+        )
+        total_songs = len(global_rank_data)
+
+        # Calculate artist-specific rank
+        artist_rank_data = [
+            rank for rank in global_rank_data if rank["artist_name"].lower() == artist_name
+        ]
+        artist_rank = next(
+            (rank["global_rank"] for rank in artist_rank_data if rank["song_name"].lower() == song_name), "N/A"
+        )
+
+        # --- Step 3: Timeline Data ---
+        logging.info("Fetching timeline data for song.")
+        cursor.execute("""
+            SELECT event_number, ranked_date, score, placement, percentile
+            FROM song_data
+            WHERE LOWER(song_name) = %s AND LOWER(artist_name) = %s
+            ORDER BY event_number ASC;
+        """, (song_name, artist_name))
+        timeline_results = cursor.fetchall()
+
+        timeline_event_numbers = [row[0] for row in timeline_results]
+        timeline_scores = [row[2] for row in timeline_results]
+        timeline_placements = [row[3] for row in timeline_results]
+        timeline_percentiles = [row[4] for row in timeline_results]
+
+        # --- Step 4: Histogram Data ---
+        logging.info("Preparing histogram data.")
+        bins = np.arange(0.5, 10.5, 0.5)
+        histogram_counts, _ = np.histogram(
+            [song["ranking"] for song in song_df if song["ranking"] is not None],
+            bins=bins
+        )
+        histogram_bins = [f"{b:.1f}" for b in bins[:-1]]
+
+        # --- Step 5: Render the Page ---
+        return render_template(
+            "song_page.html",
+            song_title=rep["song_name"],
+            artist_name=artist_name,
+            album_name=album_name,
+            album_cover_url=album_cover_url,
+            album_link=f"/artist/{artist_name}/album/{album_name}/{album_id}",
+            track_number="N/A",  # Could be added with further SQL queries for track numbers
+            song_length="N/A",  # Could fetch duration from Spotify data
+            release_date=release_date,
+            times_ranked=len(song_results),
+            highest_score=max([song["ranking"] for song in song_df if song["ranking"] is not None], default=None),
+            lowest_score=min([song["ranking"] for song in song_df if song["ranking"] is not None], default=None),
+            song_global_rank=song_global_rank,
+            song_percentile="N/A",  # Could be added
+            artist_rank=artist_rank,
+            timeline_dates=[],
+            timeline_scores=timeline_scores,
+            histogram_bins=histogram_bins,
+            histogram_counts=histogram_counts.tolist(),
+            current_score=timeline_scores[-1] if timeline_scores else None,
+            timeline_event_numbers=timeline_event_numbers,
+            timeline_placements=timeline_placements,
+            timeline_percentiles=timeline_percentiles,
+            timelines_scores=timeline_scores
+        )
+
     except Exception as e:
-        print(f"Error loading Song Data drift timeline: {e}")
-        timeline_event_numbers, timelines_scores, timeline_placements, timeline_percentiles = [], [], [], []
-
-    # Timeline for the detailed song_df (main sheet, not Song Data)
-    song_df_sorted = song_df.sort_values('Ranked Date')
-    timeline_dates = song_df_sorted['Ranked Date'].tolist()
-    timeline_scores = song_df_sorted['Ranking'].tolist()
-    current_score = timeline_scores[-1] if timeline_scores else None
-
-    # Global rank and artist rank logic (unchanged)
-    all_songs = main_df.copy()
-    all_songs = all_songs[all_songs['Ranking'].notnull()]
-    all_songs = all_songs.groupby(['Song Name', 'Artist Name']).agg({'Ranking':'mean'}).reset_index()
-    all_songs = all_songs.sort_values('Ranking', ascending=False).reset_index(drop=True)
-    all_songs['Universal Rank'] = all_songs.index + 1
-    total_songs = all_songs.shape[0]
-    this_song_row = all_songs[
-        (all_songs['Song Name'].str.lower() == song_name_clean) &
-        (all_songs['Artist Name'].str.lower() == artist_name_clean)
-    ]
-    if not this_song_row.empty:
-        song_global_rank = int(this_song_row['Universal Rank'].values[0])
-        song_percentile = percentile_from_rank(song_global_rank, total_songs)
-    else:
-        song_global_rank = "N/A"
-        song_percentile = "N/A"
-
-    # Artist rank (within artist)
-    artist_songs = all_songs[all_songs['Artist Name'].str.lower() == artist_name_clean]
-    artist_songs = artist_songs.sort_values('Ranking', ascending=False).reset_index(drop=True)
-    artist_songs['Artist Rank'] = artist_songs.index + 1
-    this_artist_song = artist_songs[
-        artist_songs['Song Name'].str.lower() == song_name_clean
-    ]
-    if not this_artist_song.empty:
-        artist_rank = int(this_artist_song['Artist Rank'].values[0])
-    else:
-        artist_rank = "N/A"
-
-    # Histogram
-    bins = np.arange(0.5, 10.5, 0.5)
-    histogram_counts, bin_edges = np.histogram(song_df['Ranking'].dropna(), bins=bins)
-    histogram_bins = [f"{b:.1f}" for b in bins[:-1]]
-
-    return render_template(
-        "song_page.html",
-        song_title=song_name,
-        artist_name=artist_name,
-        album_name=album_name,
-        album_cover_url=album_cover_url,
-        album_link=f"/artist/{artist_name}/album/{album_name}/{album_id}",
-        track_number=track_number,
-        song_length=song_length,
-        release_date=release_date,
-        times_ranked=song_df.shape[0],
-        highest_score=song_df['Ranking'].max(),
-        lowest_score=song_df['Ranking'].min(),
-        song_global_rank=song_global_rank,
-        song_percentile=song_percentile,
-        artist_rank=artist_rank,
-        timeline_dates=timeline_dates,
-        timeline_scores=timeline_scores,
-        histogram_bins=histogram_bins,
-        histogram_counts=histogram_counts.tolist(),
-        current_score=current_score,
-        timeline_event_numbers=timeline_event_numbers,
-        timeline_placements=timeline_placements,
-        timeline_percentiles=timeline_percentiles,
-        timelines_scores=timelines_scores
-    )
+        logging.error(f"Error in /song endpoint: {e}")
+        abort(500, description="An error occurred while processing the song page.")
 
 def is_live_album(album_tracks):
     NON_LIVE_TERMS = {'remaster', 'remastered', 'mix', 'mono', 'edit', 'version'}
@@ -2483,6 +2579,14 @@ def delete_album():
     return jsonify(success=True)
 @app.route("/load_albums_by_artist", methods=["GET", "POST"])
 def load_albums_by_artist_route():
+    """
+    This route loads albums for a given artist, filters out live and duplicate albums,
+    calculates rerank statuses, and groups album editions for front-end rendering.
+    """
+    import re
+    from datetime import datetime, timedelta
+    import json
+
     artist_name = request.form.get("artist_name") or request.args.get("artist_name")
 
     if not artist_name:
@@ -2490,208 +2594,275 @@ def load_albums_by_artist_route():
         return redirect(url_for('index'))
 
     logging.info(f"\n--- LOADING ALBUM LIST FOR ARTIST: {artist_name} ---")
+
     try:
-        albums_from_spotify = get_albums_by_artist(sp, artist_name)
+        # --- Step 1: Fetch Albums from the Database ---
+        cursor.execute("""
+            SELECT a.album_id, a.album_name, a.artist_name, a.spotify_album_id, a.release_date,
+                   a.album_cover_url, a.score_history, a.times_ranked, a.last_ranked_date,
+                   pa.prelim_rank, pa.paused
+            FROM album_averages a
+            LEFT JOIN prelim_album_ranks pa ON a.album_id = pa.album_id
+            WHERE LOWER(a.artist_name) = %s;
+        """, [artist_name.strip().lower()])
+        album_metadata_results = cursor.fetchall()
 
-        # Fetch tracks and filter out live albums
-        filtered_albums = []
-        for album_data in albums_from_spotify:
-            full_name = album_data.get("name")
-            album_id_spotify = album_data.get("id")
-            try:
-                tracks = sp.album_tracks(album_id_spotify)['items']
-                if is_live_album(tracks):
-                    continue  # Skip "live" albums
-                album_data['tracks'] = tracks
-                filtered_albums.append(album_data)
-            except Exception as e:
-                logging.warning(f"Could not fetch tracks for {full_name}: {e}")
-
-        # Remove compilations by track overlap
-        studio_albums = deduplicate_by_track_overlap(filtered_albums)
-        # Add this after deduplication:
-        from album_blocklist import load_blocklist_for_artist
-
-        blocklist = load_blocklist_for_artist(artist_name)
-        studio_albums = [a for a in studio_albums if a['id'] not in blocklist]
-
-        try:
-            album_averages_df = get_album_averages_df(client, SPREADSHEET_ID, "Album Averages")
-        except Exception as e:
-            logging.error(f"Error loading Album Averages DataFrame: {e}", exc_info=True)
-            flash(f"Error loading album averages data: {e}", "error")
-            return redirect(url_for('index'))
-
-        prelim_ranked_albums_ids = set()
-        try:
-            prelim_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(PRELIM_SHEET_NAME)
-            prelim_sheet_data = get_as_dataframe(prelim_sheet, evaluate_formulas=False).fillna("")
-            if not prelim_sheet_data.empty and 'artist_name' in prelim_sheet_data.columns:
-                current_artist_prelim_ranks = prelim_sheet_data[
-                    prelim_sheet_data["artist_name"].astype(str).str.strip().str.lower() == artist_name.strip().lower()
-                    ]
-                for _, row in current_artist_prelim_ranks.iterrows():
-                    album_id_p = str(row.get('album_id', '')).strip()
-                    prelim_rank_value = row.get('prelim_rank')
-                    if album_id_p and str(prelim_rank_value).strip() not in ["", "0", "0.0", "None"]:
-                        prelim_ranked_albums_ids.add(album_id_p)
-        except gspread.exceptions.WorksheetNotFound:
-            logging.warning(f"Sheet '{PRELIM_SHEET_NAME}' not found. Cannot check for paused albums.")
-        except Exception as e:
-            logging.error(f"Error loading preliminary ranks: {e}", exc_info=True)
-
-        # Create a dictionary for quick lookup of averages/times ranked
+        # Parse album metadata from query results
         album_metadata = {}
-        if not album_averages_df.empty:
-            for _, row in album_averages_df.iterrows():
-                album_id_from_sheet = str(row.get("album_id", "")).strip()
-                if album_id_from_sheet:
-                    album_metadata[album_id_from_sheet] = row.to_dict()
+        for row in album_metadata_results:
+            album_id = str(row[0]).strip()
+            album_metadata[album_id] = {
+                "album_id": album_id,
+                "album_name": row[1],
+                "artist_name": row[2],
+                "spotify_album_id": row[3],
+                "release_date": row[4],
+                "album_cover_url": row[5],
+                "score_history": row[6],
+                "times_ranked": row[7],
+                "last_ranked_date": row[8],
+                "prelim_rank": row[9],
+                "paused": row[10],
+            }
 
+        # --- Step 2: Filter and Deduplicate Albums ---
+        # Fetch albums and tracks for the artist (assuming a tracks table exists)
+        cursor.execute("""
+            SELECT t.spotify_album_id, t.track_name
+            FROM album_tracks t
+            JOIN album_averages a ON t.spotify_album_id = a.spotify_album_id
+            WHERE LOWER(a.artist_name) = %s;
+        """, [artist_name.strip().lower()])
+        album_tracks = cursor.fetchall()
+
+        # Map album tracks for processing
+        album_tracks_map = {}
+        artist_albums = set()
+        for row in album_tracks:
+            album_id = row[0]
+            track_name = row[1]
+            if album_id not in album_tracks_map:
+                album_tracks_map[album_id] = []
+            album_tracks_map[album_id].append({"name": track_name.strip()})
+            artist_albums.add(album_id)
+
+        # Filter out live albums
+        filtered_albums = [
+            album_metadata[album_id]
+            for album_id, tracks in album_tracks_map.items()
+            if not is_live_album(tracks) and album_id in album_metadata
+        ]
+
+        # Deduplicate by track overlap
+        unique_albums = deduplicate_by_track_overlap(filtered_albums)
+
+        # --- Step 3: Enrich Data with Rerank and Streak Status ---
         grouped_albums = {}
         today = datetime.now()
-        for album_data in studio_albums:  # <--- USE studio_albums HERE!
-            full_name = album_data.get("name")
-            album_id_spotify = album_data.get("id")
+        for album_data in unique_albums:
+            album_id = album_data["album_id"]
+            metadata = album_metadata.get(album_id, {})
 
-            # Create a "base name" by removing phrases in parentheses like (Deluxe), (Remastered), etc.
-            base_name = full_name
-            base_name = re.sub(r'[\s\-]*(\[[^\]]*\]|\([^\)]*\))[\s\-]*$', '', base_name).strip()
-            while re.search(r'(\[[^\]]*\]|\([^\)]*\))[\s\-]*$', base_name):
-                base_name = re.sub(r'[\s\-]*(\[[^\]]*\]|\([^\)]*\))[\s\-]*$', '', base_name).strip()
-
-            # Get stats for this specific edition
-            metadata = album_metadata.get(album_id_spotify, {})
-            has_prelim_ranks = album_id_spotify in prelim_ranked_albums_ids
-            rerank_status = 'none'
-            if metadata.get('last_ranked_date') and pd.notna(metadata.get('last_ranked_date')):
-                last_ranked_date = pd.to_datetime(metadata['last_ranked_date'])
-                times_ranked = int(metadata.get('times_ranked', 0))
+            # Calculate rerank status
+            rerank_status = "none"
+            last_ranked_date = metadata.get("last_ranked_date")
+            if last_ranked_date:
+                times_ranked = int(metadata.get("times_ranked", 0))
+                last_ranked_date = pd.to_datetime(last_ranked_date)
                 days_to_add = 45 if times_ranked > 1 else 15
-                next_rerank_date = last_ranked_date + pd.Timedelta(days=days_to_add)
+                next_rerank_date = last_ranked_date + timedelta(days=days_to_add)
 
                 if next_rerank_date < today:
-                    rerank_status = 'overdue'
+                    rerank_status = "overdue"
                 elif (next_rerank_date - today).days <= 5:
-                    rerank_status = 'due'
+                    rerank_status = "due"
 
-            streak_status = 'none'
-            if metadata:
+            # Calculate streak status
+            streak_status = "none"
+            history = metadata.get("score_history")
+            if history:
                 try:
-                    history = json.loads(metadata.get('score_history', '[]'))
+                    history = json.loads(history)
                     streak_status = calculate_streak(history)
-                except (json.JSONDecodeError, TypeError, ValueError) as e:
-                    logging.warning(f"Could not calculate streak for {metadata.get('album_id')}: {e}")
-                    streak_status = 'none'
+                except (json.JSONDecodeError, TypeError):
+                    logging.warning(f"Could not calculate streak for album: {album_id}")
 
-            edition_data = {
-                "id": album_id_spotify,
-                "full_name": full_name,
-                "image": album_data.get("image"),
+            # Group albums by their base name (e.g., strip out "(Deluxe)" suffixes)
+            base_name = re.sub(r'[\s\-]*(\[[^\]]*\]|\([^\)]*\))[\s\-]*$', '', metadata.get("album_name", "")).strip()
+            grouped_albums.setdefault(base_name, []).append({
+                "id": album_id,
+                "full_name": metadata.get("album_name"),
+                "image": metadata.get("album_cover_url"),
                 "average_score": metadata.get("average_score"),
                 "weighted_average_score": metadata.get("weighted_average_score"),
                 "times_ranked": metadata.get("times_ranked"),
                 "last_ranked_date": metadata.get("last_ranked_date"),
-                "has_prelim_ranks": has_prelim_ranks,
+                "has_prelim_ranks": metadata.get("prelim_rank") not in [None, "", "0", "None"],
                 "rerank_status": rerank_status,
-                "streak_status": streak_status
-            }
+                "streak_status": streak_status,
+            })
 
-            if base_name not in grouped_albums:
-                grouped_albums[base_name] = []
-            grouped_albums[base_name].append(edition_data)
-
+        # --- Step 4: Render the Template ---
         return render_template("select_album.html", artist_name=artist_name, grouped_albums=grouped_albums)
 
     except Exception as e:
-        logging.error(f"Error in load_albums_by_artist_route for {artist_name}: {e}", exc_info=True)
+        logging.error(f"Error in load_albums_by_artist_route for artist {artist_name}: {e}", exc_info=True)
         flash("Could not load album list for that artist.", "error")
-        return redirect(url_for('index'))
+        return redirect(url_for("profile"))
 
 @app.route("/ranking_page")
 def ranking_page():
-    sheet_rows = load_google_sheet_data()
-    group_bins = group_ranked_songs(sheet_rows)
-    return render_template("album.html", group_bins=group_bins)
+    """
+    Route to load the ranking page for albums.
+    Loads ranked songs grouped into bins for display.
+    """
+    try:
+        logging.info("Fetching ranked songs for the ranking page...")
+
+        # Step 1: Fetch all ranked songs and statistics from the database
+        cursor.execute("""
+            SELECT s.song_id, s.song_name, s.artist_name, s.album_name,
+                   s.ranking, s.rank_group, s.spotify_album_id, a.album_cover_url
+            FROM Song Data s
+            LEFT JOIN album_averages a ON s.spotify_album_id = a.spotify_album_id
+            WHERE s.ranking IS NOT NULL
+            ORDER BY s.ranking DESC;
+        """)
+        ranked_songs = cursor.fetchall()
+
+        # Step 2: Group songs into rank bins
+        group_bins = {f"{i / 2:.1f}": [] for i in range(1, 21)}  # Rank groups for 0.5 to 10.0
+        group_bins['I'] = {'excellent': [], 'average': [], 'bad': []}  # Special group 'I'
+
+        for row in ranked_songs:
+            song_data = {
+                'song_id': row[0],
+                'song_name': row[1],
+                'artist_name': row[2],
+                'album_name': row[3],
+                'ranking': row[4],
+                'rank_group': row[5],
+                'spotify_album_id': row[6],
+                'album_cover_url': row[7],
+            }
+
+            rank_group = str(song_data['rank_group']).strip()
+            if rank_group == 'I':
+                score = song_data['ranking']
+                category = 'average'
+                if score == 3.0:
+                    category = 'excellent'
+                elif score == 1.0:
+                    category = 'bad'
+                group_bins['I'][category].append(song_data)
+            elif rank_group in group_bins:
+                group_bins[rank_group].append(song_data)
+
+        # Step 3: Render the page
+        return render_template("album.html", group_bins=group_bins)
+
+    except Exception as e:
+        logging.error(f"Error loading ranking page: {e}", exc_info=True)
+        flash("An error occurred while loading the ranking page.", "error")
+        return redirect(url_for('profile'))
 
 
 @app.route("/view_album", methods=["POST", "GET"])
 def view_album():
-    global sp
+    """
+    View an album's metadata and rankings, replacing Google Sheets logic with Supabase SQL queries.
+    """
     try:
         album_id = request.form.get("album_id") or request.args.get("album_id")
         if not album_id:
             flash("Missing album ID.", "warning")
             return redirect(url_for('index'))
 
-        print(f"\n--- VIEW ALBUM START (Album ID: {album_id}) ---")
+        logging.info(f"--- VIEW ALBUM START (Album ID: {album_id}) ---")
 
-        # 1. Fetch all necessary data upfront
-        album_data = load_album_data(sp, album_id)
-        main_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
-        all_final_ranks_df = get_as_dataframe(main_sheet, evaluate_formulas=False).fillna("")
-        album_averages_df = get_album_averages_df(client, SPREADSHEET_ID, album_averages_sheet_name)
+        # 1. Fetch Album Metadata from Database
+        cursor.execute("""
+            SELECT album_name, artist_name, album_cover_url, release_date, score_history,
+                   times_ranked, last_ranked_date
+            FROM Re-Ranking and Song History (Album Averages)
+            WHERE album_id = %s;
+        """, (album_id,))
+        album_metadata = cursor.fetchone()
+        if not album_metadata:
+            flash(f"No album found for ID {album_id}.", "warning")
+            return redirect(url_for('index'))
 
-        is_rerank_mode = False
-        if not album_averages_df.empty and 'album_id' in album_averages_df.columns:
-            album_stats = album_averages_df[album_averages_df['album_id'].astype(str) == str(album_id)]
-            if not album_stats.empty and album_stats.iloc[0]['times_ranked'] > 0:
-                is_rerank_mode = True
+        album_data = {
+            'album_name': album_metadata[0],
+            'artist_name': album_metadata[1],
+            'album_cover_url': album_metadata[2] or "",
+            'release_date': album_metadata[3] or "Unknown",
+            'score_history': json.loads(album_metadata[4]) if album_metadata[4] else [],
+            'times_ranked': album_metadata[5] or 0,
+            'last_ranked_date': album_metadata[6]
+        }
 
-        print(f"DEBUG: Re-rank mode for '{album_data['album_name']}': {is_rerank_mode}")
+        is_rerank_mode = album_data['times_ranked'] > 0
+        logging.info(f"DEBUG: Re-rank mode for album '{album_data['album_name']}': {is_rerank_mode}")
 
-        # In view_album function
-        # FIX #2: Add .copy() to prevent SettingWithCopyWarning
-        if not all_final_ranks_df.empty and 'Spotify Album ID' in all_final_ranks_df.columns:
-            other_albums_df = all_final_ranks_df[all_final_ranks_df['Spotify Album ID'] != album_id].copy()
-        else:
-            other_albums_df = pd.DataFrame()
+        # 2. Fetch All Ranked Songs from Database for This Album
+        cursor.execute("""
+            SELECT song_id, song_name, ranking, rank_group, ranked_date, percentile, placement
+            FROM Song Data
+            WHERE spotify_album_id = %s
+            ORDER BY ranking DESC;
+        """, (album_id,))
+        album_songs = cursor.fetchall()
 
-            # 2. CRITICAL: Ensure 'Ranking' column is numeric and sort the ENTIRE DataFrame.
-        if not other_albums_df.empty:
-            other_albums_df['Ranking'] = pd.to_numeric(other_albums_df['Ranking'], errors='coerce')
-            sorted_other_albums_df = other_albums_df.sort_values(by='Ranking', ascending=False)
-        else:
-            sorted_other_albums_df = pd.DataFrame()
+        album_data['songs'] = [
+            {
+                'song_id': row[0],
+                'song_name': row[1],
+                'ranking': row[2],
+                'rank_group': row[3],
+                'ranked_date': row[4],
+                'percentile': row[5],
+                'placement': row[6]
+            }
+            for row in album_songs
+        ]
 
-        album_covers_cache = {}
-        if not sorted_other_albums_df.empty:
-            unique_album_ids = [str(aid) for aid in sorted_other_albums_df['Spotify Album ID'].unique() if aid]
-            if unique_album_ids:
-                for i in range(0, len(unique_album_ids), 20):
-                    batch = unique_album_ids[i:i + 20]
-                    try:
-                        albums_info = sp.albums(batch)
-                        for info in albums_info['albums']:
-                            if info and info['images']:
-                                album_covers_cache[info['id']] = info['images'][-1]['url']
-                    except Exception as e:
-                        print(f"WARNING: Could not fetch album covers batch: {e}")
+        # 3. Fetch All Ranked Songs (Global and Other Albums) for the Leaderboard
+        cursor.execute("""
+            SELECT s.song_id, s.song_name, s.ranking, s.rank_group, s.spotify_album_id, s.album_name, 
+                   s.artist_name, a.album_cover_url
+            FROM Song Data s
+            LEFT JOIN album_averages a ON s.spotify_album_id = a.spotify_album_id
+            WHERE s.spotify_album_id <> %s
+            ORDER BY s.ranking DESC;
+        """, (album_id,))
+        other_album_songs = cursor.fetchall()
 
-        # 3. Iterate through the PRE-SORTED DataFrame to build the groups.
-        rank_groups_for_js = {f"{i / 2:.1f}": [] for i in range(1, 21)}
-        rank_groups_for_js['I'] = {'excellent': [], 'average': [], 'bad': []}
+        # Cache album covers for other albums
+        album_covers_cache = {
+            row[4]: row[7] for row in other_album_songs if row[4] and row[7]
+        }
 
-        for _, row in sorted_other_albums_df.iterrows():
+        # 4. Global Rank Groups Organization
+        rank_groups_for_js = {f"{i / 2:.1f}": [] for i in range(1, 21)}  # e.g., "0.5", "1.0", ..., "10.0"
+        rank_groups_for_js['I'] = {'excellent': [], 'average': [], 'bad': []}  # Special group I
+
+        for row in other_album_songs:
             try:
-                rank_group_from_sheet = str(row.get('Rank Group', '')).strip()
-                rank_group = rank_group_from_sheet
-                try:
-                    rank_group_val = float(rank_group_from_sheet)
-                    rank_group = f"{rank_group_val:.1f}"
-                except (ValueError, TypeError):
-                    pass
+                rank_group = row[3]
+                rank_group_val = f"{float(rank_group):.1f}" if rank_group.replace('.', '', 1).isdigit() else rank_group
 
                 song_data = {
-                    'song_id': str(row.get('Spotify Song ID')),
-                    'song_name': str(row.get('Song Name')),
-                    'rank_group': rank_group,
-                    'calculated_score': float(row.get('Ranking', 0.0)),
-                    'album_id': str(row.get('Spotify Album ID', '')),
-                    'album_name': str(row.get('Album Name')),
-                    'artist_name': str(row.get('Artist Name')),
-                    'album_cover_url': album_covers_cache.get(str(row.get('Spotify Album ID', '')))
+                    'song_id': row[0],
+                    'song_name': row[1],
+                    'rank_group': rank_group_val,
+                    'calculated_score': row[2],
+                    'album_id': row[4],
+                    'album_name': row[5],
+                    'artist_name': row[6],
+                    'album_cover_url': album_covers_cache.get(row[4])
                 }
+
                 if rank_group == 'I':
                     score = song_data['calculated_score']
                     category = 'average'
@@ -2700,242 +2871,198 @@ def view_album():
                     elif score == 1.0:
                         category = 'bad'
                     rank_groups_for_js['I'][category].append(song_data)
-                elif rank_group in rank_groups_for_js:
-                    rank_groups_for_js[rank_group].append(song_data)
+                elif rank_group_val in rank_groups_for_js:
+                    rank_groups_for_js[rank_group_val].append(song_data)
+
             except Exception as e:
-                print(f"WARNING: Error parsing row for JS: {row.to_dict()} - {e}")
+                logging.warning(f"Error grouping song: {row} - {e}")
 
-        def normalize_song_name(name):
-            # Remove parentheticals and dashes, lowercase
-            name = re.sub(r'\(.*?\)', '', name)
-            name = re.sub(r'-.*$', '', name)
-            return name.strip().lower()
+        # 5. Fetch Preliminary Ranks
+        prelim_ranks = {}
+        try:
+            cursor.execute("""
+                SELECT album_id, song_id, prelim_rank
+                FROM Preliminary Ranks
+                WHERE album_id = %s;
+            """, (album_id,))
+            prelim_results = cursor.fetchall()
 
-        ranked_song_name_artist = set()
-        ranked_song_scores = {}  # <--- Add this
+            for row in prelim_results:
+                prelim_ranks[row[1]] = row[2]  # Map song_id -> prelim_rank
+        except Exception as e:
+            logging.warning(f"Error fetching preliminary ranks: {e}")
 
-        if not all_final_ranks_df.empty:
-            for _, row in all_final_ranks_df.iterrows():
-                song_name = str(row.get('Song Name', '')).strip()
-                artist_name = str(row.get('Artist Name', '')).strip()
-                if song_name and artist_name:
-                    normalized = (normalize_song_name(song_name), artist_name.lower())
-                    ranked_song_name_artist.add(normalized)
-                    ranked_song_scores[normalized] = row.get('Ranking')  # <--- Add this for score lookup
-
-        # 5. Prepare the left panel (songs for the current album)
+        # 6. Songs for Left Panel
         songs_for_left_panel = []
-        if is_rerank_mode:
-            all_final_ranks_df['Ranking'] = pd.to_numeric(all_final_ranks_df['Ranking'], errors='coerce')
-            global_leaderboard = all_final_ranks_df.sort_values(by='Ranking', ascending=False).reset_index(drop=True)
-            current_album_previous_ranks = all_final_ranks_df[all_final_ranks_df['Spotify Album ID'] == album_id]
-            for song in album_data['songs']:
-                song_id = str(song['song_id'])
-                previous_rank = "N/A"
-                global_placement_text = ""
-                song_rank_info = current_album_previous_ranks[
-                    current_album_previous_ranks['Spotify Song ID'] == song_id]
-                if not song_rank_info.empty:
-                    rank_group = song_rank_info.iloc[0].get('Rank Group')
-                    rank_value = float(song_rank_info.iloc[0].get('Ranking'))
-                    if rank_group == 'I':
-                        if rank_value == 3.0:
-                            previous_rank = 'Excellent'
-                        elif rank_value == 2.0:
-                            previous_rank = 'Average'
-                        else:
-                            previous_rank = 'Bad'
-                    else:
-                        previous_rank = f"{rank_value:.2f}"
-                    placement_series = global_leaderboard.index[global_leaderboard['Spotify Song ID'] == song_id]
-                    if not placement_series.empty:
-                        placement = int(placement_series[0] + 1)
-                        global_placement_text = get_ordinal_suffix(placement)
-                songs_for_left_panel.append({**song, 'previous_rank': previous_rank, 'global_placement': global_placement_text})
-        else:
-            # For initial ranking, load prelims and check for globally ranked songs
-            existing_prelim_ranks = {}
-            try:
-                prelim_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(PRELIM_SHEET_NAME)
-                prelim_sheet_data = get_as_dataframe(prelim_sheet, evaluate_formulas=False).fillna("")
-                if "album_id" in prelim_sheet_data.columns and not prelim_sheet_data.empty:
-                    current_album_prelims = prelim_sheet_data[
-                        prelim_sheet_data["album_id"].astype(str) == str(album_id)]
-                    for _, row in current_album_prelims.iterrows():
-                        if row.get('prelim_rank'):
-                            existing_prelim_ranks[str(row.get('song_id'))] = float(row.get('prelim_rank'))
-            except gspread.exceptions.WorksheetNotFound:
-                print(f"WARNING: Prelim sheet not found, cannot load prelim ranks.")
+        for song in album_data['songs']:
+            song_id = song['song_id']
+            song_data = {
+                **song,
+                'prelim_rank': prelim_ranks.get(song_id, ''),
+                'existing_score': song['ranking']
+            }
+            songs_for_left_panel.append(song_data)
 
-            # Check which songs are already globally ranked
-            globally_ranked_ids = set()
-            for group_key, songs in rank_groups_for_js.items():
-                if group_key == 'I':
-                    for category_songs in songs.values():
-                        for s in category_songs:
-                            globally_ranked_ids.add(s['song_id'])
-                else:
-                    for s in songs:
-                        globally_ranked_ids.add(s['song_id'])
+        album_data['songs'] = songs_for_left_panel
 
-            for song in album_data['songs']:
-                song_id = str(song['song_id'])
-                song_name = song.get('song_name', '').strip()
-                artist_name = album_data.get('artist_name', '').strip()
-                norm = (normalize_song_name(song_name), artist_name.lower())
-                already_ranked = norm in ranked_song_name_artist
-                existing_score = ranked_song_scores.get(norm, '')
+        # 7. Prepare Album Data for Template
+        album_data_for_template = {
+            **album_data,
+            'album_id': album_id,
+            'is_rerank_mode': is_rerank_mode
+        }
 
-                songs_for_left_panel.append({
-                    **song,
-                    'already_ranked': already_ranked,
-                    'existing_score': existing_score,
-                    'prelim_rank': existing_prelim_ranks.get(song_id, '')
-                })
-
-        album_data_for_template = {**album_data, 'album_id': album_id, 'songs': songs_for_left_panel,
-                                   'is_rerank_mode': is_rerank_mode}
-        print("Album ID received for ranking:", album_id)
+        logging.info(f"Album ID processed for ranking: {album_id}")
         return render_template('album.html', album=album_data_for_template, rank_groups=rank_groups_for_js)
 
     except Exception as e:
-        traceback.print_exc()
+        logging.error(f"Error in view_album: {e}", exc_info=True)
         flash(f"An unexpected error occurred: {e}", "error")
-        return redirect(url_for('index'))
+        return redirect(url_for('profile'))
 
 
 @app.route("/finalize_rankings", methods=["POST"])
 def finalize_rankings():
-    data = request.get_json()
-    if not data:
-        return "Invalid data", 400
+    """
+    Finalize the rankings for a given set of songs.
+    Replaces interactions with Google Sheets by inserting/updating into the database.
+    """
+    try:
+        data = request.get_json()  # JSON payload containing rank groups and corresponding songs
+        if not data:
+            return "Invalid data", 400
 
+        valid_ranks = {str(r) for r in [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10]}
+        for rank_group in data:
+            if str(rank_group) not in valid_ranks:
+                return f"Invalid rank group for final: {rank_group}", 400
 
+        rows_to_insert = []
+        for rank, songs in data.items():
+            for position, song_name in enumerate(songs):
+                rows_to_insert.append({
+                    "song_name": song_name,
+                    "ranking": float(rank),
+                    "position_in_group": int(position),
+                    "ranking_status": "final"
+                })
 
-    valid_ranks = {str(r) for r in [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10]}
+        # Insert rows into the `song_data` table
+        if rows_to_insert:
+            cursor.executemany("""
+                INSERT INTO song_data (song_name, ranking, position_in_group, ranking_status)
+                VALUES (%(song_name)s, %(ranking)s, %(position_in_group)s, %(ranking_status)s)
+                ON CONFLICT (song_name, ranking_status)
+                DO UPDATE SET ranking = EXCLUDED.ranking, position_in_group = EXCLUDED.position_in_group;
+            """, rows_to_insert)
+            conn.commit()
 
-    for rank_group in data:
-        if str(rank_group) not in valid_ranks:
-            return f"Invalid rank group for final: {rank_group}", 400
-    sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
-    existing_df = get_as_dataframe(sheet).fillna("")
-
-    rows_to_append = []
-    for rank, songs in data.items():
-        for position, song_name in enumerate(songs):
-            rows_to_append.append({
-                "Song Name": song_name,
-                "Ranking": rank,
-                "Position In Group": position,
-                "Ranking Status": "finalized"
-            })
-
-    if rows_to_append:
-        new_df = pd.DataFrame(rows_to_append)
-        updated_df = pd.concat([existing_df, new_df], ignore_index=True)
-        set_with_dataframe(sheet, updated_df)
-
-    return jsonify({"status": "success"}), 200
+        return jsonify({"status": "success"}), 200
+    except Exception as e:
+        logging.error(f"Error in /finalize_rankings: {e}", exc_info=True)
+        return "An error occurred while finalizing rankings.", 500
 @app.route("/get_ranked_songs")
 def get_ranked_songs():
     """
     Return a JSON array of songs already assigned to the clicked rank‐group.
-    We look first for “paused” rows in that numeric window; if none, show “final” rows.
+    Searches for paused rows first, and falls back to finalized rows.
     """
-    album_name  = request.args.get("album_name", "").strip()
+    album_name = request.args.get("album_name", "").strip()
     artist_name = request.args.get("artist_name", "").strip()
     try:
         rank = float(request.args.get("rank", "0"))
     except ValueError:
         return jsonify({'songs': []})
 
-    sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
-    # Use get_all_records (faster than get_as_dataframe) then build a small DataFrame
-    raw = sheet.get_all_records()
-    df = pd.DataFrame(raw).fillna("")
-    if df.empty:
-        return jsonify({'songs': []})
+    try:
+        # Normalize input values
+        album_key = album_name.lower()
+        artist_key = artist_name.lower()
 
-    # Normalize and convert Ranking to numeric
-    df["Album Name"]  = df["Album Name"].astype(str).str.strip().str.lower()
-    df["Artist Name"] = df["Artist Name"].astype(str).str.strip().str.lower()
-    df["Ranking"]     = pd.to_numeric(df["Ranking"], errors="coerce")
-    df["Ranking Status"] = df["Ranking Status"].fillna("")
+        # First, search for paused rows
+        cursor.execute("""
+            SELECT song_name
+            FROM song_data
+            WHERE LOWER(album_name) = %s AND LOWER(artist_name) = %s
+            AND ranking_status = 'paused'
+            AND ranking BETWEEN %s AND %s;
+        """, (album_key, artist_key, rank - 0.25, rank + 0.25))
+        paused_songs = [row[0] for row in cursor.fetchall()]
 
-    album_key  = album_name.lower()
-    artist_key = artist_name.lower()
+        # If no paused rows, fall back to finalized rows
+        if not paused_songs:
+            cursor.execute("""
+                SELECT song_name
+                FROM song_data
+                WHERE LOWER(album_name) = %s AND LOWER(artist_name) = %s
+                AND ranking_status = 'final'
+                AND ranking BETWEEN %s AND %s;
+            """, (album_key, artist_key, rank - 0.25, rank + 0.25))
+            paused_songs = [row[0] for row in cursor.fetchall()]
 
-    # First, try to find any “paused” rows whose Ranking sits within [rank−0.25, rank+0.25]
-    mask_paused = (
-        (df["Album Name"] == album_key) &
-        (df["Artist Name"] == artist_key) &
-        (df["Ranking Status"] == "paused") &
-        (df["Ranking"] >= (rank - 0.25)) &
-        (df["Ranking"] <= (rank + 0.25))
-    )
-    songs = df.loc[mask_paused, "Song Name"].tolist()
-
-    # If none in paused, fall back to finalized
-    if not songs:
-        mask_final = (
-            (df["Album Name"] == album_key) &
-            (df["Artist Name"] == artist_key) &
-            (df["Ranking Status"] == "final") &
-            (df["Ranking"] >= (rank - 0.25)) &
-            (df["Ranking"] <= (rank + 0.25))
-        )
-        songs = df.loc[mask_final, "Song Name"].tolist()
-
-    return jsonify({'songs': songs})
+        return jsonify({'songs': paused_songs})
+    except Exception as e:
+        logging.error(f"Error in /get_ranked_songs: {e}", exc_info=True)
+        return jsonify({'songs': []}), 500
 @app.route("/save_album", methods=["POST"])
 def save_album():
-    status = request.form.get("Ranking Status")
-    if status != "paused":
-        return "Only paused rankings can be saved here.", 400
+    """
+    Save paused rankings for an album. Replaces Google Sheets logic with database queries (Supabase SQL).
+    """
+    try:
+        # Step 1: Validate Ranking Status
+        status = request.form.get("Ranking Status")
+        if status != "paused":
+            return "Only paused rankings can be saved here.", 400
 
-    album_name = request.form.get("album_name")
-    artist_name = request.form.get("artist_name")
-    prelim_ranks = {key.replace("prelim_rank_", ""): float(value)
-                    for key, value in request.form.items() if key.startswith("prelim_rank_")}
+        # Step 2: Parse Request Data
+        album_name = request.form.get("album_name")
+        artist_name = request.form.get("artist_name")
+        prelim_ranks = {key.replace("prelim_rank_", ""): float(value)
+                        for key, value in request.form.items() if key.startswith("prelim_rank_")}
 
-    sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
-    df_existing = get_as_dataframe(sheet, evaluate_formulas=True).fillna("")
+        if not album_name or not artist_name or not prelim_ranks:
+            return "Missing album name, artist name, or preliminary ranks.", 400
 
-    # Normalize keys for filtering
-    album_key = album_name.strip().lower()
-    artist_key = artist_name.strip().lower()
-    df_existing["Album Name"] = df_existing["Album Name"].str.strip().str.lower()
-    df_existing["Artist Name"] = df_existing["Artist Name"].str.strip().str.lower()
+        logging.info(f"Saving paused rankings for album='{album_name}', artist='{artist_name}'.")
 
-    # Remove existing paused rows for this album and artist
-    mask = ~(
-        (df_existing["Album Name"] == album_key) &
-        (df_existing["Artist Name"] == artist_key) &
-        (df_existing["Ranking Status"] == "paused")
-    )
-    df_filtered = df_existing[mask]
+        # Normalize keys and prepare SQL-safe inputs
+        album_name = album_name.strip()
+        artist_name = artist_name.strip()
+        prelim_ranks = [
+            {
+                "album_name": album_name,
+                "artist_name": artist_name,
+                "song_name": song_name,
+                "ranking": rank,
+                "ranking_status": "paused",
+                "ranked_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "rank_group": ""  # Preliminary rows have no rank group
+            }
+            for song_name, rank in prelim_ranks.items()
+        ]
 
-    # Create new paused rows with prelim ranks
-    new_rows = []
-    for song_name, rank in prelim_ranks.items():
-        new_rows.append({
-            "Album Name": album_name,
-            "Artist Name": artist_name,
-            "Song Name": song_name,
-            "Ranking": rank,
-            "Ranking Status": "paused",
-            "Ranked Date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "rank_group": ""  # empty because preliminary
-        })
+        # Step 3: Remove Existing Paused Rows for This Album and Artist
+        cursor.execute("""
+            DELETE FROM song_data
+            WHERE LOWER(album_name) = %s
+              AND LOWER(artist_name) = %s
+              AND ranking_status = 'paused';
+        """, (album_name.lower(), artist_name.lower()))
+        conn.commit()
 
-    df_new = pd.DataFrame(new_rows)
-    df_updated = pd.concat([df_filtered, df_new], ignore_index=True)
+        # Step 4: Insert New Paused Rows
+        cursor.executemany("""
+            INSERT INTO song_data (album_name, artist_name, song_name, ranking, ranking_status, ranked_date, rank_group)
+            VALUES (%(album_name)s, %(artist_name)s, %(song_name)s, %(ranking)s, %(ranking_status)s, %(ranked_date)s, %(rank_group)s);
+        """, prelim_ranks)
+        conn.commit()
 
-    # Clear sheet and write updated df
-    sheet.clear()
-    set_with_dataframe(sheet, df_updated)
+        return "Paused rankings saved successfully."
 
-    return "Paused rankings saved successfully."
+    except Exception as e:
+        logging.error(f"Error saving paused rankings for album '{album_name}', artist '{artist_name}': {e}", exc_info=True)
+        return "An error occurred while saving paused rankings.", 500
 
 
 if __name__ == "__main__":
