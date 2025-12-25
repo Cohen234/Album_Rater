@@ -21,11 +21,20 @@ import logging
 
 # Import functions from spotify_logic after all core imports
 from spotify_logic import get_albums_by_artist, extract_album_id
+import os
 import psycopg2
 
-DATABASE_URL = os.environ.get("SUPABASE_DATABASE_URL")
-conn = psycopg2.connect(DATABASE_URL)
-cursor = conn.cursor()
+DATABASE_URL = os.getenv("SUPABASE_DATABASE_URL")  # Your Session Pooler connection string
+
+try:
+    conn = psycopg2.connect(
+        DATABASE_URL,
+        sslmode="require"  # Forces SSL for the connection
+    )
+    cursor = conn.cursor()
+    print("Successfully connected to the database.")
+except Exception as e:
+    print(f"Failed to connect to the database: {e}")
 # --- Google Sheets Setup ---
 
 # --- Flask App Initialization ---
