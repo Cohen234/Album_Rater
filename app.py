@@ -115,7 +115,7 @@ def calculate_score_value(position, total_songs, rank_group_val):
     return round(new_score, 6)
 
 def get_album_averages_df():
-    cursor.execute("SELECT * FROM Re-Ranking and Song History (Album Averages);")
+    cursor.execute('SELECT * FROM "Re-Ranking and Song History (Album Averages)";')
     albums_data = cursor.fetchall()
     albums_df = pd.DataFrame(albums_data, columns=[desc[0] for desc in cursor.description])
 
@@ -194,12 +194,12 @@ def profile_page():
     user_name = "Cohen Callaway"
     try:
         # Load main song/album dataframes
-        cursor.execute("SELECT * FROM Song Data;")
+        cursor.execute('SELECT * FROM "Song Data";')
         songs_df = pd.DataFrame(cursor.fetchall(), columns=[desc[0] for desc in cursor.description]).fillna("")
 
         albums_df = get_album_averages_df()
 
-        cursor.execute("SELECT * FROM Preliminary Ranks;")
+        cursor.execute('SELECT * FROM "Preliminary Ranks";')
         prelim_df = pd.DataFrame(cursor.fetchall(), columns=[desc[0] for desc in cursor.description]).fillna("")
     except psycopg2.Error as e:
         logging.error(f"Database error occurred: {e}")
@@ -472,9 +472,9 @@ def get_dominant_color(image_url):
 @app.route("/api/find_album")
 def api_find_album():
     album_name = request.args.get("album_name", "").strip().lower()
-    cursor.execute("SELECT * FROM Re-Ranking and Song History (Album Averages);")
+    cursor.execute('SELECT * FROM "Re-Ranking and Song History (Album Averages)";')
     album_data = cursor.fetchall()
-    cursor.execute("SELECT * FROM Re-Ranking and Song History (Album Averages) WHERE LOWER(album_name) = %s;", (album_name,))
+    cursor.execute('SELECT * FROM "Re-Ranking and Song History (Album Averages)" WHERE LOWER(album_name) = %s;', (album_name,))
     row = cursor.fetchall()
     if row:
         r = row.iloc[0]
@@ -546,7 +546,7 @@ def merge_album_with_rankings(album_tracks, sheet_rows, artist_name):
 
 def load_google_sheet_data():
     # This function uses `client`, so it must be defined after `client` is initialized
-    cursor.execute("SELECT * FROM Song Data;")
+    cursor.execute('SELECT * FROM "Song Data";')
     song_data = cursor.fetchall()
     return pd.DataFrame(song_data, columns=[desc[0] for desc in cursor.description])
 
@@ -615,10 +615,10 @@ def artist_page_v2(artist_name):
         logging.info(f"--- Loading Artist Stats Page for: {artist_name} ---")
 
         # 1. --- Load All Base Data ---
-        cursor.execute("SELECT * FROM Song Data;")
+        cursor.execute('SELECT * FROM "Song Data";')
         songs_data = cursor.fetchall()
         all_songs_df = pd.DataFrame(songs_data, columns=[desc[0] for desc in cursor.description]).fillna("")
-        cursor.execute("SELECT * FROM Re-Ranking and Song History (Album Averages);")
+        cursor.execute('SELECT * FROM "Re-Ranking and Song History (Album Averages)";')
         album_data = cursor.fetchall()
         all_albums_df = pd.DataFrame(album_data, columns=[desc[0] for desc in cursor.description])
 
@@ -1106,7 +1106,7 @@ def album_page(artist_name, album_name, album_id):
 
     try:
         # Query album data from `album_averages` table
-        cursor.execute("SELECT * FROM Re-Ranking and Song History (Album Averages) WHERE album_id = %s;", (album_id,))
+        cursor.execute('SELECT * FROM "Re-Ranking and Song History (Album Averages)" WHERE album_id = %s;', (album_id,))
         album_data_row = cursor.fetchone()
 
         if not album_data_row:
@@ -1157,12 +1157,12 @@ def get_album_stats(album_id):
         logging.info(f"Received album_id: {album_id}")
         # 1. Load data
         # Fetch song-level data from `song_data` table
-        cursor.execute("SELECT * FROM Song Data;")
+        cursor.execute('SELECT * FROM "Song Data";')
         main_data = cursor.fetchall()
         main_df = pd.DataFrame(main_data, columns=[desc[0] for desc in cursor.description]).fillna("")
 
         # Fetch album averages data from `album_averages`
-        cursor.execute("SELECT * FROM Re-Ranking and Song History (Album Averages);")
+        cursor.execute('SELECT * FROM "Re-Ranking and Song History (Album Averages)";')
         averages_data = cursor.fetchall()
         averages_df = pd.DataFrame(averages_data, columns=[desc[0] for desc in cursor.description]).fillna("")
 
@@ -1324,7 +1324,7 @@ def submit_rankings():
                 return jsonify({'status': 'error', 'message': 'No preliminary ranks to save.'}), 400
 
             try:
-                cursor.execute("SELECT * FROM Preliminary Ranks;")
+                cursor.execute('SELECT * FROM "Preliminary Ranks";')
                 prelim_data = cursor.fetchall()
                 prelim_df = pd.DataFrame(prelim_data, columns=[desc[0] for desc in cursor.description]).fillna("")
             except psycopg2.Error as e:
@@ -1348,7 +1348,7 @@ def submit_rankings():
             final_prelim_df = pd.concat([prelim_df, pd.DataFrame(new_prelim_rows)], ignore_index=True)
             cursor.executemany(
                 """
-                INSERT INTO Preliminary Ranks (album_id, album_name, artist_name, album_cover_url, song_id, song_name, prelim_rank, timestamp)
+                INSERT INTO 'Preliminary Ranks' (album_id, album_name, artist_name, album_cover_url, song_id, song_name, prelim_rank, timestamp)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (album_id, song_id) DO UPDATE SET
                     prelim_rank = EXCLUDED.prelim_rank, timestamp = EXCLUDED.timestamp;
@@ -1373,7 +1373,7 @@ def submit_rankings():
             old_score = 0
             old_placement = 0
             if is_rerank:
-                cursor.execute("SELECT * FROM Re-Ranking and Song History (Album Averages);")
+                cursor.execute('SELECT * FROM "Re-Ranking and Song History (Album Averages)";')
                 averages_data = cursor.fetchall()
                 averages_df_before = pd.DataFrame(averages_data, columns=[desc[0] for desc in cursor.description])
 
@@ -1382,7 +1382,7 @@ def submit_rankings():
                     old_score = old_album_data.iloc[0]['weighted_average_score']
                     # Sort to find old placement
                     cursor.execute(
-                        "SELECT album_id, weighted_average_score FROM Re-Ranking and Song History (Album Averages) ORDER BY weighted_average_score DESC;"
+                        "SELECT album_id, weighted_average_score FROM 'Re-Ranking and Song History (Album Averages)' ORDER BY weighted_average_score DESC;"
                     )
                     averages_sorted_data = cursor.fetchall()
                     averages_sorted_df = pd.DataFrame(
@@ -1399,7 +1399,7 @@ def submit_rankings():
                         old_placement = 1  # Default placement if no data is found
 
             # --- 4. Update Google Sheets with New Final Rankings ---
-            cursor.execute("SELECT * FROM Song Data;")
+            cursor.execute('SELECT * FROM "Song Data";')
             main_data = cursor.fetchall()
             main_df = pd.DataFrame(main_data, columns=[desc[0] for desc in cursor.description]).fillna("")
 
@@ -1429,7 +1429,7 @@ def submit_rankings():
 
                 cursor.execute(
                     """
-                    INSERT INTO Song Data (album_name, artist_name, spotify_album_id, song_name, ranking, duration_ms, ranking_status, ranked_date, position_in_group, rank_group, spotify_song_id)
+                    INSERT INTO 'Song Data' (album_name, artist_name, spotify_album_id, song_name, ranking, duration_ms, ranking_status, ranked_date, position_in_group, rank_group, spotify_song_id)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (spotify_song_id) DO UPDATE SET
                         ranking = EXCLUDED.ranking,
@@ -1456,7 +1456,7 @@ def submit_rankings():
             try:
                 # Fetch necessary data for recalculations
                 cursor.execute(
-                    "SELECT spotify_album_id, AVG(ranking) AS average_score FROM Song Data WHERE rank_group != 'I' GROUP BY spotify_album_id;")
+                    "SELECT spotify_album_id, AVG(ranking) AS average_score FROM 'Song Data' WHERE rank_group != 'I' GROUP BY spotify_album_id;")
                 averages = cursor.fetchall()
 
                 for album_id, avg_score in averages:
@@ -1481,7 +1481,7 @@ def submit_rankings():
             # Query valid song data from the database
             cursor.execute("""
                 SELECT spotify_album_id, ranking, duration_ms
-                FROM Song Data
+                FROM 'Song Data'
                 WHERE rank_group != 'I' AND ranking IS NOT NULL AND duration_ms IS NOT NULL;
             """)
             valid_song_data = cursor.fetchall()
@@ -1499,7 +1499,7 @@ def submit_rankings():
             if not df_for_calc_no_interludes.empty:
                 cursor.execute("""
                     SELECT spotify_album_id, AVG(ranking) AS simple_average
-                    FROM Song Data
+                    FROM 'Song Data'
                     WHERE rank_group != 'I'
                     GROUP BY spotify_album_id;
                 """)
@@ -1507,14 +1507,14 @@ def submit_rankings():
                 cursor.execute("""
                     SELECT spotify_album_id, 
                            SUM(ranking * duration_ms) / SUM(duration_ms) AS weighted_average
-                    FROM Song Data
+                    FROM 'Song Data'
                     WHERE rank_group != 'I' AND duration_ms > 0
                     GROUP BY spotify_album_id;
                 """)
                 weighted_averages = pd.DataFrame(cursor.fetchall(), columns=['Spotify Album ID', 'Weighted Average'])
                 cursor.execute("""
                     SELECT spotify_album_id
-                    FROM Re-Ranking and Song History (Album Averages)
+                    FROM 'Re-Ranking and Song History (Album Averages)'
                     ORDER BY weighted_average_score DESC;
                 """)
                 sorted_album_ids = [row[0] for row in cursor.fetchall()]
@@ -1523,7 +1523,7 @@ def submit_rankings():
 
                 cursor.execute("""
                         SELECT spotify_album_id, album_name, artist_name
-                        FROM Song Data
+                        FROM 'Song Data'
                         GROUP BY spotify_album_id, album_name, artist_name;
                     """)
                 album_info_map = {
@@ -1539,7 +1539,7 @@ def submit_rankings():
                         # Fetch current album values
                         cursor.execute("""
                             SELECT weighted_average_score, times_ranked, score_history, average_score
-                            FROM Re-Ranking and Song History (Album Averages) WHERE album_id = %s;
+                            FROM 'Re-Ranking and Song History (Album Averages)' WHERE album_id = %s;
                         """, (album_id_to_update,))
                         album_data = cursor.fetchone()
 
@@ -1558,7 +1558,7 @@ def submit_rankings():
 
                             # Update the database values for the album
                             cursor.execute("""
-                                UPDATE Re-Ranking and Song History (Album Averages)
+                                UPDATE 'Re-Ranking and Song History (Album Averages)'
                                 SET score_history = %s, average_score = %s, weighted_average_score = %s, 
                                     times_ranked = %s, last_ranked_date = %s
                                 WHERE album_id = %s;
@@ -1576,7 +1576,7 @@ def submit_rankings():
                             if album_id_to_update == album_id and is_rerank:
                                 cursor.execute("""
                                     SELECT rerank_history
-                                    FROM Re-Ranking and Song History (Album Averages)
+                                    FROM 'Re-Ranking and Song History (Album Averages)'
                                     WHERE album_id = %s;
                                 """, (album_id,))
                                 result = cursor.fetchone()
@@ -1592,7 +1592,7 @@ def submit_rankings():
 
                                 updated_rerank_history = json.dumps(rerank_history)
                                 cursor.execute("""
-                                    UPDATE Re-Ranking and Song History (Album Averages)
+                                    UPDATE 'Re-Ranking and Song History (Album Averages)'
                                     SET rerank_history = %s
                                     WHERE album_id = %s;
                                 """, (updated_rerank_history, album_id))
@@ -1607,7 +1607,7 @@ def submit_rankings():
                                         'score': weighted_averages[album_id_to_update]
                                     }]
                                     cursor.execute("""
-                                        INSERT INTO Re-Ranking and Song History (Album Averages) (
+                                        INSERT INTO 'Re-Ranking and Song History (Album Averages)' (
                                             album_id, album_name, artist_name, average_score, weighted_average_score,
                                             original_weighted_score, previous_weighted_score, times_ranked, 
                                             last_ranked_date, rerank_history, score_history, album_cover_url
@@ -1641,7 +1641,7 @@ def submit_rankings():
                     cursor.execute("""
                             SELECT event_number, ranked_date, album_name, artist_name, spotify_album_id,
                                    song_name, spotify_song_id, ranking, placement, percentile
-                            FROM Song Data
+                            FROM 'Song Data'
                         """)
                     song_data = cursor.fetchall()
                     song_data_df = pd.DataFrame(song_data, columns=[desc[0] for desc in cursor.description]).fillna("")
@@ -1663,7 +1663,7 @@ def submit_rankings():
 
                     # Compute the next event number
                     logging.info("Calculating the next event number...")
-                    cursor.execute("SELECT MAX(event_number) FROM Song Data;")
+                    cursor.execute("SELECT MAX(event_number) FROM 'Song Data';")
                     result = cursor.fetchone()
                     event_number = int(result[0] or 0) + 1
 
@@ -1772,7 +1772,7 @@ def submit_rankings():
                 logging.info("Inserting batch drift data into the database...")
                 try:
                     cursor.executemany("""
-                        INSERT INTO Song Data (event_number, ranked_date, album_name, artist_name, spotify_album_id,
+                        INSERT INTO 'Song Data' (event_number, ranked_date, album_name, artist_name, spotify_album_id,
                                                song_name, spotify_song_id, ranking, placement, percentile)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
                     """, batch_data)
@@ -1792,7 +1792,7 @@ def submit_rankings():
                 logging.info("Fetching 'after' album averages for animations...")
                 cursor.execute("""
                     SELECT album_id, album_name, artist_name, weighted_average_score, times_ranked, album_cover_url
-                    FROM Re-Ranking and Song History (Album Averages)
+                    FROM 'Re-Ranking and Song History (Album Averages)'
                     WHERE weighted_average_score IS NOT NULL
                     ORDER BY weighted_average_score DESC;
                 """)
@@ -1888,7 +1888,7 @@ def get_album_data(artist_name, album_name, album_id):
         cursor.execute("""
             SELECT album_id, album_name, artist_name, weighted_average_score, average_score, times_ranked,
                    release_date, album_cover_url, rerank_history
-            FROM Re-Ranking and Song History (Album Averages)
+            FROM 'Re-Ranking and Song History (Album Averages)'
             WHERE LOWER(album_name) = %s AND LOWER(artist_name) = %s AND album_id = %s;
         """, (album_name_clean, artist_name_clean, album_id))
         album_row = cursor.fetchone()
@@ -1912,7 +1912,7 @@ def get_album_data(artist_name, album_name, album_id):
         # --- Step 2: Sort album for global ranking ---
         cursor.execute("""
             SELECT album_id, weighted_average_score
-            FROM Re-Ranking and Song History (Album Averages)
+            FROM 'Re-Ranking and Song History (Album Averages)'
             WHERE weighted_average_score IS NOT NULL
             ORDER BY weighted_average_score DESC;
         """)
@@ -1925,7 +1925,7 @@ def get_album_data(artist_name, album_name, album_id):
         # --- Step 3: Fetch song-level statistics ---
         cursor.execute("""
             SELECT song_name, spotify_song_id, duration, ranking, rank_group, ranked_date
-            FROM Song Data
+            FROM 'Song Data'
             WHERE LOWER(album_name) = %s AND LOWER(artist_name) = %s AND spotify_album_id = %s;
         """, (album_name_clean, artist_name_clean, album_id))
         song_rows = cursor.fetchall()
@@ -2028,7 +2028,7 @@ def search_albums():
         # Perform case-insensitive substring search using SQL's ILIKE operator
         cursor.execute("""
             SELECT album_id, album_name, artist_name, album_cover_url
-            FROM Re-Ranking and Song History (Album Averages)
+            FROM 'Re-Ranking and Song History (Album Averages)'
             WHERE LOWER(album_name) LIKE %s OR LOWER(artist_name) LIKE %s
             LIMIT 10;
         """, (f"%{query}%", f"%{query}%"))  # Search for the query in album_name or artist_name
@@ -2100,8 +2100,8 @@ def compare_albums():
             SELECT a.album_id, a.album_name, a.artist_name, a.weighted_average_score, a.average_score, a.times_ranked,
                    a.release_date, a.album_cover_url, a.std_dev,
                    s.song_name, s.ranking, s.duration AS song_duration, s.rank_group, s.spotify_song_id
-            FROM Re-Ranking and Song History (Album Averages) a
-            LEFT JOIN Song Data s ON a.spotify_album_id = s.spotify_album_id
+            FROM 'Re-Ranking and Song History (Album Averages)' a
+            LEFT JOIN 'Song Data' s ON a.spotify_album_id = s.spotify_album_id
             WHERE a.album_id = ANY(%s)
         """, (album_ids,))
         query_results = cursor.fetchall()
@@ -2733,7 +2733,7 @@ def ranking_page():
         cursor.execute("""
             SELECT s.song_id, s.song_name, s.artist_name, s.album_name,
                    s.ranking, s.rank_group, s.spotify_album_id, a.album_cover_url
-            FROM Song Data s
+            FROM 'Song Data' s
             LEFT JOIN album_averages a ON s.spotify_album_id = a.spotify_album_id
             WHERE s.ranking IS NOT NULL
             ORDER BY s.ranking DESC;
@@ -2794,7 +2794,7 @@ def view_album():
         cursor.execute("""
             SELECT album_name, artist_name, album_cover_url, release_date, score_history,
                    times_ranked, last_ranked_date
-            FROM Re-Ranking and Song History (Album Averages)
+            FROM 'Re-Ranking and Song History (Album Averages)'
             WHERE album_id = %s;
         """, (album_id,))
         album_metadata = cursor.fetchone()
@@ -2818,7 +2818,7 @@ def view_album():
         # 2. Fetch All Ranked Songs from Database for This Album
         cursor.execute("""
             SELECT song_id, song_name, ranking, rank_group, ranked_date, percentile, placement
-            FROM Song Data
+            FROM 'Song Data'
             WHERE spotify_album_id = %s
             ORDER BY ranking DESC;
         """, (album_id,))
@@ -2841,7 +2841,7 @@ def view_album():
         cursor.execute("""
             SELECT s.song_id, s.song_name, s.ranking, s.rank_group, s.spotify_album_id, s.album_name, 
                    s.artist_name, a.album_cover_url
-            FROM Song Data s
+            FROM 'Song Data' s
             LEFT JOIN album_averages a ON s.spotify_album_id = a.spotify_album_id
             WHERE s.spotify_album_id <> %s
             ORDER BY s.ranking DESC;
@@ -2892,7 +2892,7 @@ def view_album():
         try:
             cursor.execute("""
                 SELECT album_id, song_id, prelim_rank
-                FROM Preliminary Ranks
+                FROM 'Preliminary Ranks'
                 WHERE album_id = %s;
             """, (album_id,))
             prelim_results = cursor.fetchall()
