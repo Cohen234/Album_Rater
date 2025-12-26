@@ -191,7 +191,7 @@ def profile_page():
         conn = get_db_connection()
         cursor = conn.cursor()
         # Load main song/album dataframes
-        cursor.execute('SELECT * FROM "Song Data";')
+        cursor.execute('SELECT * FROM "Current Positions";')
         songs_df = pd.DataFrame(cursor.fetchall(), columns=[desc[0] for desc in cursor.description]).fillna("")
 
         albums_df = get_album_averages_df()
