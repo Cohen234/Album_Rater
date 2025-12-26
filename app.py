@@ -2713,6 +2713,7 @@ def load_albums_by_artist_route():
         for album in filtered_albums:
             album_id = album['album_id']
             album['tracks'] = album_tracks_map.get(album_id, [])
+            album['id'] = album_id
 
         # Deduplicate by track overlap
         unique_albums = deduplicate_by_track_overlap(filtered_albums)
