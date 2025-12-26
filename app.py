@@ -2679,8 +2679,8 @@ def load_albums_by_artist_route():
             for album_id, album_data in album_metadata.items():
                 album_data['release_date'] = release_dates_map.get(album_id)
         for album_data in album_metadata.values():
-            if album_data['release_date'] is not None:
-                album_data['release_date'] = pd.to_datetime(album_data['release_date'], errors='coerce')
+            # Keep as string for deduplication
+            album_data['release_date'] = release_dates_map.get(album_data['album_id'])
 
         # --- Step 2: Filter and Deduplicate Albums ---
         # Fetch albums and tracks for the artist (assuming a tracks table exists)
