@@ -24,19 +24,12 @@ from spotify_logic import get_albums_by_artist, extract_album_id
 import os
 import psycopg2
 
-DATABASE_URL = os.getenv("SUPABASE_DATABASE_URL")  # Your Session Pooler connection string
-
-try:
-    conn = psycopg2.connect(
-        DATABASE_URL,
-        sslmode="require"  # Forces SSL for the connection
+def get_db_connection():
+    return psycopg2.connect(
+        os.environ["SUPABASE_DATABASE_URL"],
+        sslmode="require"
     )
-    cursor = conn.cursor()
-    print("Successfully connected to the database.")
-except Exception as e:
-    print(f"Failed to connect to the database: {e}")
-# --- Google Sheets Setup ---
-print(f"DATABASE_URL: {DATABASE_URL}")
+
 
 # --- Flask App Initialization ---
 app = Flask(__name__)
@@ -115,6 +108,8 @@ def calculate_score_value(position, total_songs, rank_group_val):
     return round(new_score, 6)
 
 def get_album_averages_df():
+    conn = get_db_connection()
+    cursor = conn.cursor()
     cursor.execute('SELECT * FROM "Re-Ranking and Song History (Album Averages)";')
     albums_data = cursor.fetchall()
     albums_df = pd.DataFrame(albums_data, columns=[desc[0] for desc in cursor.description])
@@ -193,6 +188,8 @@ import numpy as np
 def profile_page():
     user_name = "Cohen Callaway"
     try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
         # Load main song/album dataframes
         cursor.execute('SELECT * FROM "Song Data";')
         songs_df = pd.DataFrame(cursor.fetchall(), columns=[desc[0] for desc in cursor.description]).fillna("")
@@ -472,6 +469,8 @@ def get_dominant_color(image_url):
 @app.route("/api/find_album")
 def api_find_album():
     album_name = request.args.get("album_name", "").strip().lower()
+    conn = get_db_connection()
+    cursor = conn.cursor()
     cursor.execute('SELECT * FROM "Re-Ranking and Song History (Album Averages)";')
     album_data = cursor.fetchall()
     cursor.execute('SELECT * FROM "Re-Ranking and Song History (Album Averages)" WHERE LOWER(album_name) = %s;', (album_name,))
@@ -545,6 +544,8 @@ def merge_album_with_rankings(album_tracks, sheet_rows, artist_name):
     return merged_tracks
 
 def load_google_sheet_data():
+    conn = get_db_connection()
+    cursor = conn.cursor()
     # This function uses `client`, so it must be defined after `client` is initialized
     cursor.execute('SELECT * FROM "Song Data";')
     song_data = cursor.fetchall()
@@ -613,7 +614,8 @@ def artist_page_v2(artist_name):
 
     try:
         logging.info(f"--- Loading Artist Stats Page for: {artist_name} ---")
-
+        conn = get_db_connection()
+        cursor = conn.cursor()
         # 1. --- Load All Base Data ---
         cursor.execute('SELECT * FROM "Song Data";')
         songs_data = cursor.fetchall()
@@ -1105,6 +1107,8 @@ def album_page(artist_name, album_name, album_id):
     album_name = unquote(album_name)
 
     try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
         # Query album data from `album_averages` table
         cursor.execute('SELECT * FROM "Re-Ranking and Song History (Album Averages)" WHERE album_id = %s;', (album_id,))
         album_data_row = cursor.fetchone()
@@ -1155,6 +1159,8 @@ def get_album_stats(album_id):
     from album_blocklist import get_visible_studio_albums_for_artist, load_blocklist_for_artist
     try:
         logging.info(f"Received album_id: {album_id}")
+        conn = get_db_connection()
+        cursor = conn.cursor()
         # 1. Load data
         # Fetch song-level data from `song_data` table
         cursor.execute('SELECT * FROM "Song Data";')
@@ -1324,6 +1330,8 @@ def submit_rankings():
                 return jsonify({'status': 'error', 'message': 'No preliminary ranks to save.'}), 400
 
             try:
+                conn = get_db_connection()
+                cursor = conn.cursor()
                 cursor.execute('SELECT * FROM "Preliminary Ranks";')
                 prelim_data = cursor.fetchall()
                 prelim_df = pd.DataFrame(prelim_data, columns=[desc[0] for desc in cursor.description]).fillna("")
@@ -1346,6 +1354,8 @@ def submit_rankings():
             } for p in prelim_ranks_from_js]
 
             final_prelim_df = pd.concat([prelim_df, pd.DataFrame(new_prelim_rows)], ignore_index=True)
+            conn = get_db_connection()
+            cursor = conn.cursor()
             cursor.executemany(
                 """
                 INSERT INTO 'Preliminary Ranks' (album_id, album_name, artist_name, album_cover_url, song_id, song_name, prelim_rank, timestamp)
@@ -1373,6 +1383,8 @@ def submit_rankings():
             old_score = 0
             old_placement = 0
             if is_rerank:
+                conn = get_db_connection()
+                cursor = conn.cursor()
                 cursor.execute('SELECT * FROM "Re-Ranking and Song History (Album Averages)";')
                 averages_data = cursor.fetchall()
                 averages_df_before = pd.DataFrame(averages_data, columns=[desc[0] for desc in cursor.description])
@@ -1399,6 +1411,8 @@ def submit_rankings():
                         old_placement = 1  # Default placement if no data is found
 
             # --- 4. Update Google Sheets with New Final Rankings ---
+            conn = get_db_connection()
+            cursor = conn.cursor()
             cursor.execute('SELECT * FROM "Song Data";')
             main_data = cursor.fetchall()
             main_df = pd.DataFrame(main_data, columns=[desc[0] for desc in cursor.description]).fillna("")
@@ -1883,6 +1897,8 @@ def get_album_data(artist_name, album_name, album_id):
         # Ensure clean inputs for matching
         album_name_clean = album_name.strip().lower()
         artist_name_clean = artist_name.strip().lower()
+        conn = get_db_connection()
+        cursor = conn.cursor()
 
         # --- Step 1: Fetch album metadata and statistics ---
         cursor.execute("""
@@ -2025,6 +2041,8 @@ def search_albums():
         return jsonify([])
 
     try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
         # Perform case-insensitive substring search using SQL's ILIKE operator
         cursor.execute("""
             SELECT album_id, album_name, artist_name, album_cover_url
@@ -2096,6 +2114,8 @@ def compare_albums():
 
         # --- Step 1: Fetch Album Data ---
         logging.info("Fetching album data for comparison...")
+        conn = get_db_connection()
+        cursor = conn.cursor()
         cursor.execute("""
             SELECT a.album_id, a.album_name, a.artist_name, a.weighted_average_score, a.average_score, a.times_ranked,
                    a.release_date, a.album_cover_url, a.std_dev,
@@ -2437,6 +2457,8 @@ def song_page(artist_name, song_name):
 
         # --- Step 1: Fetch Song Data ---
         logging.info(f"Fetching song data for artist: {artist_name}, song: {song_name}")
+        conn = get_db_connection()
+        cursor = conn.cursor()
         cursor.execute("""
             SELECT s.song_name, s.spotify_song_id, s.ranking, s.rank_group, s.ranked_date, s.placement, s.percentile,
                    a.album_name, a.album_id, a.release_date, a.album_cover_url
@@ -2607,6 +2629,8 @@ def load_albums_by_artist_route():
 
     try:
         # --- Step 1: Fetch Albums from the Database ---
+        conn = get_db_connection()
+        cursor = conn.cursor()
         cursor.execute("""
             SELECT a.album_id, a.album_name, a.artist_name, a.spotify_album_id, a.release_date,
                    a.album_cover_url, a.score_history, a.times_ranked, a.last_ranked_date,
@@ -2728,6 +2752,8 @@ def ranking_page():
     """
     try:
         logging.info("Fetching ranked songs for the ranking page...")
+        conn = get_db_connection()
+        cursor = conn.cursor()
 
         # Step 1: Fetch all ranked songs and statistics from the database
         cursor.execute("""
@@ -2789,6 +2815,8 @@ def view_album():
             return redirect(url_for('index'))
 
         logging.info(f"--- VIEW ALBUM START (Album ID: {album_id}) ---")
+        conn = get_db_connection()
+        cursor = conn.cursor()
 
         # 1. Fetch Album Metadata from Database
         cursor.execute("""
@@ -2956,7 +2984,8 @@ def finalize_rankings():
                     "position_in_group": int(position),
                     "ranking_status": "final"
                 })
-
+        conn = get_db_connection()
+        cursor = conn.cursor()
         # Insert rows into the `song_data` table
         if rows_to_insert:
             cursor.executemany("""
@@ -2988,6 +3017,8 @@ def get_ranked_songs():
         # Normalize input values
         album_key = album_name.lower()
         artist_key = artist_name.lower()
+        conn = get_db_connection()
+        cursor = conn.cursor()
 
         # First, search for paused rows
         cursor.execute("""
@@ -3051,6 +3082,8 @@ def save_album():
             }
             for song_name, rank in prelim_ranks.items()
         ]
+        conn = get_db_connection()
+        cursor = conn.cursor()
 
         # Step 3: Remove Existing Paused Rows for This Album and Artist
         cursor.execute("""
