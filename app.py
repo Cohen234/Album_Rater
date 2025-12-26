@@ -2469,7 +2469,7 @@ def song_page(artist_name, song_name):
             SELECT s.song_name, s.spotify_song_id, s.ranking, s.rank_group, s.ranked_date, s.placement, s.percentile,
                    a.album_name, a.album_id, a.release_date, a.album_cover_url
             FROM song_data s
-            LEFT JOIN album_averages a ON s.spotify_album_id = a.spotify_album_id
+            LEFT JOIN "Current Positions" a ON s.spotify_album_id = a.spotify_album_id
             WHERE LOWER(s.song_name) = %s AND LOWER(s.artist_name) = %s;
         """, (song_name, artist_name))
         song_results = cursor.fetchall()
@@ -2642,7 +2642,7 @@ def load_albums_by_artist_route():
                    a.album_cover_url, a.score_history, a.times_ranked, a.last_ranked_date,
                    pa.prelim_rank, pa.paused
             FROM "Current Positions" a
-            LEFT JOIN prelim_album_ranks pa ON a.album_id = pa.album_id
+            LEFT JOIN "Preliminary Ranks" pa ON a.album_id = pa.album_id
             WHERE LOWER(a.artist_name) = %s;
         """, [artist_name.strip().lower()])
         album_metadata_results = cursor.fetchall()
@@ -2670,7 +2670,7 @@ def load_albums_by_artist_route():
         cursor.execute("""
             SELECT t.spotify_album_id, t.track_name
             FROM "Current Positions" t
-            JOIN album_averages a ON t.spotify_album_id = a.spotify_album_id
+            JOIN "Current Positions"" a ON t.spotify_album_id = a.spotify_album_id
             WHERE LOWER(a.artist_name) = %s;
         """, [artist_name.strip().lower()])
         album_tracks = cursor.fetchall()
@@ -2766,7 +2766,7 @@ def ranking_page():
             SELECT s.song_id, s.song_name, s.artist_name, s.album_name,
                    s.ranking, s.rank_group, s.spotify_album_id, a.album_cover_url
             FROM "Current Positions" s
-            LEFT JOIN album_averages a ON s.spotify_album_id = a.spotify_album_id
+            LEFT JOIN "Current Positions" a ON s.spotify_album_id = a.spotify_album_id
             WHERE s.ranking IS NOT NULL
             ORDER BY s.ranking DESC;
         """)
@@ -2876,7 +2876,7 @@ def view_album():
             SELECT s.song_id, s.song_name, s.ranking, s.rank_group, s.spotify_album_id, s.album_name, 
                    s.artist_name, a.album_cover_url
             FROM "Current Positions" s
-            LEFT JOIN album_averages a ON s.spotify_album_id = a.spotify_album_id
+            LEFT JOIN "Current Positions" a ON s.spotify_album_id = a.spotify_album_id
             WHERE s.spotify_album_id <> %s
             ORDER BY s.ranking DESC;
         """, (album_id,))
