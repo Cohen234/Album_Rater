@@ -2742,7 +2742,7 @@ def load_albums_by_artist_route():
     except Exception as e:
         logging.error(f"Error in load_albums_by_artist_route for artist {artist_name}: {e}", exc_info=True)
         flash("Could not load album list for that artist.", "error")
-        return redirect(url_for("profile"))
+        return redirect(url_for("profile.html"))
 
 @app.route("/ranking_page")
 def ranking_page():
