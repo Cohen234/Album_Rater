@@ -2635,7 +2635,7 @@ def load_albums_by_artist_route():
             SELECT a.album_id, a.album_name, a.artist_name, a.spotify_album_id, a.release_date,
                    a.album_cover_url, a.score_history, a.times_ranked, a.last_ranked_date,
                    pa.prelim_rank, pa.paused
-            FROM 'Current Position' a
+            FROM 'Current Positions' a
             LEFT JOIN prelim_album_ranks pa ON a.album_id = pa.album_id
             WHERE LOWER(a.artist_name) = %s;
         """, [artist_name.strip().lower()])
@@ -2663,7 +2663,7 @@ def load_albums_by_artist_route():
         # Fetch albums and tracks for the artist (assuming a tracks table exists)
         cursor.execute("""
             SELECT t.spotify_album_id, t.track_name
-            FROM 'Current Position' t
+            FROM 'Current Positions' t
             JOIN album_averages a ON t.spotify_album_id = a.spotify_album_id
             WHERE LOWER(a.artist_name) = %s;
         """, [artist_name.strip().lower()])
