@@ -2758,7 +2758,8 @@ def load_albums_by_artist_route():
                 "average_score": metadata.get("average_score"),
                 "weighted_average_score": metadata.get("weighted_average_score"),
                 "times_ranked": metadata.get("times_ranked"),
-                "last_ranked_date": metadata.get("last_ranked_date"),
+                "last_ranked_date": metadata.get("last_ranked_date").strftime('%Y-%m-%d') if metadata.get("last_ranked_date") else None,
+
                 "has_prelim_ranks": metadata.get("prelim_rank") not in [None, "", "0", "None"],
                 "rerank_status": rerank_status,
                 "streak_status": streak_status,
