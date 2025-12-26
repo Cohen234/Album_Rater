@@ -2638,13 +2638,24 @@ def load_albums_by_artist_route():
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT a.album_id, a.album_name, a.artist_name, a.spotify_album_id, a.release_date,
-                   a.album_cover_url, a.score_history, a.times_ranked, a.last_ranked_date,
-                   pa.prelim_rank, pa.paused
-            FROM "Current Positions" a
-            LEFT JOIN "Preliminary Ranks" pa ON a.album_id = pa.album_id
+            SELECT
+                a.album_id,
+                a.album_name,
+                a.artist_name,
+                a.album_id AS spotify_album_id,
+                NULL AS release_date,
+                a.album_cover_url,
+                a.score_history,
+                a.times_ranked,
+                a.last_ranked_date,
+                pa.prelim_rank,
+                pa.paused
+            FROM "Re-Ranking and Song History (Album Averages)" a
+            LEFT JOIN "Preliminary Ranks" pa
+                ON a.album_id = pa.album_id
             WHERE LOWER(a.artist_name) = %s;
         """, [artist_name.strip().lower()])
+
         album_metadata_results = cursor.fetchall()
 
         # Parse album metadata from query results
