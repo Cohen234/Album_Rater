@@ -2673,6 +2673,14 @@ def load_albums_by_artist_route():
                 "last_ranked_date": row[8],
                 "prelim_rank": row[9]
             }
+        album_ids = [album_data['album_id'] for album_data in album_metadata.values()]
+        if album_ids:
+            release_dates_map = get_album_release_dates(sp, album_ids)
+            for album_id, album_data in album_metadata.items():
+                album_data['release_date'] = release_dates_map.get(album_id)
+        for album_data in album_metadata.values():
+            if album_data['release_date'] is not None:
+                album_data['release_date'] = pd.to_datetime(album_data['release_date'], errors='coerce')
 
         # --- Step 2: Filter and Deduplicate Albums ---
         # Fetch albums and tracks for the artist (assuming a tracks table exists)
@@ -2685,7 +2693,6 @@ def load_albums_by_artist_route():
             WHERE LOWER(cp."Artist Name") = %s;
         """, [artist_name.strip().lower()])
         album_tracks = cursor.fetchall()
-
         # Map album tracks for processing
         album_tracks_map = {}
         artist_albums = set()
