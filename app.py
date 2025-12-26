@@ -203,7 +203,7 @@ def profile_page():
         prelim_df = pd.DataFrame(cursor.fetchall(), columns=[desc[0] for desc in cursor.description]).fillna("")
     except psycopg2.Error as e:
         logging.error(f"Database error occurred: {e}")
-        return render_template("error.html", message="Database connection error. Please try again later.")
+        return print("Error")
 
     # --- Standardization ---
     def std_cols(df):
