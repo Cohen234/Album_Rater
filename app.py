@@ -36,6 +36,7 @@ try:
 except Exception as e:
     print(f"Failed to connect to the database: {e}")
 # --- Google Sheets Setup ---
+print(f"DATABASE_URL: {DATABASE_URL}")
 
 # --- Flask App Initialization ---
 app = Flask(__name__)
