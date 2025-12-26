@@ -2764,6 +2764,7 @@ def load_albums_by_artist_route():
                 "rerank_status": rerank_status,
                 "streak_status": streak_status,
             })
+            logging.debug(f"Grouped Albums: {grouped_albums}")
 
         # --- Step 4: Render the Template ---
         return render_template("select_album.html", artist_name=artist_name, grouped_albums=grouped_albums)
