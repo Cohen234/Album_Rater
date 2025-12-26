@@ -2717,6 +2717,7 @@ def load_albums_by_artist_route():
 
         # Deduplicate by track overlap
         unique_albums = deduplicate_by_track_overlap(filtered_albums)
+        logging.debug(f"Grouped Albums: {unique_albums}")
 
         # --- Step 3: Enrich Data with Rerank and Streak Status ---
         grouped_albums = {}
