@@ -2648,7 +2648,7 @@ def load_albums_by_artist_route():
                 a.score_history,
                 a.times_ranked,
                 a.last_ranked_date,
-                pa.prelim_rank,
+                pa.prelim_rank
             FROM "Re-Ranking and Song History (Album Averages)" a
             LEFT JOIN "Preliminary Ranks" pa
                 ON a.album_id = pa.album_id
@@ -2671,7 +2671,7 @@ def load_albums_by_artist_route():
                 "score_history": row[6],
                 "times_ranked": row[7],
                 "last_ranked_date": row[8],
-                "prelim_rank": row[9],
+                "prelim_rank": row[9]
             }
 
         # --- Step 2: Filter and Deduplicate Albums ---
