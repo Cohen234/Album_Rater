@@ -23,7 +23,12 @@ import logging
 from spotify_logic import get_albums_by_artist, extract_album_id
 import os
 import psycopg2
+import logging
 
+logging.basicConfig(
+    level=logging.DEBUG,  # Set logging level to DEBUG
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
 def get_db_connection():
     return psycopg2.connect(
         os.environ["SUPABASE_DATABASE_URL"],
