@@ -2710,6 +2710,9 @@ def load_albums_by_artist_route():
             for album_id, tracks in album_tracks_map.items()
             if not is_live_album(tracks) and album_id in album_metadata
         ]
+        for album in filtered_albums:
+            album_id = album['album_id']
+            album['tracks'] = album_tracks_map.get(album_id, [])
 
         # Deduplicate by track overlap
         unique_albums = deduplicate_by_track_overlap(filtered_albums)
