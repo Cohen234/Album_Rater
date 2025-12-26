@@ -2668,10 +2668,12 @@ def load_albums_by_artist_route():
         # --- Step 2: Filter and Deduplicate Albums ---
         # Fetch albums and tracks for the artist (assuming a tracks table exists)
         cursor.execute("""
-            SELECT t.spotify_album_id, t.track_name
-            FROM "Current Positions" t
-            JOIN "Current Positions"" a ON t.spotify_album_id = a.spotify_album_id
-            WHERE LOWER(a.artist_name) = %s;
+            SELECT "Spotify Album ID" AS spotify_album_id, "Album Name" AS album_name, "Artist Name" AS artist_name,
+                   "Spotify Album ID", "Rank Group", "Ranking Status", "Ranked Date",
+                   pa.prelim_rank, pa.album_cover_url
+            FROM "Current Positions" cp
+            LEFT JOIN "Preliminary Ranks" pa ON cp."Spotify Album ID" = pa.album_id
+            WHERE LOWER(cp."Artist Name") = %s;
         """, [artist_name.strip().lower()])
         album_tracks = cursor.fetchall()
 
